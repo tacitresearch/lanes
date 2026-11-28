@@ -5,9 +5,9 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes
 
 /-! `Lanes.Http.serve` with `K` actors, each a counter: request `n` goes to actor `n % K`, which
-counts it and answers. `benchMany [port] [K] [spin] [io=N] [workers=N] [parallel=on|auto|off]`:
+counts it and answers. `benchMany [port] [K] [spin] [io=N] [workers=N]`:
 each step first mixes a hash `spin` times, to stand for an actor whose step costs something;
-`io`, `workers` and `parallel` as for `benchLanes`. -/
+`io` and `workers` as for `benchLanes`. -/
 
 open Lanes Lanes.Http
 
@@ -43,13 +43,6 @@ def bridge (n : Nat) : Bridge (sig n) where
 def option (args : List String) (key : String) : Option Nat :=
   args.findSome? fun a => (a.dropPrefix? (key ++ "=")).bind (·.toString.toNat?)
 
-/-- `parallel=off`, `on` or `auto`; `on` when not given, as `workers=N` alone always meant. -/
-def parallel (args : List String) : Runtime.Parallel :=
-  match args.findSome? (·.dropPrefix? "parallel=") |>.map (·.toString) with
-  | some "off" => .off
-  | some "auto" => .auto
-  | _ => .on
-
 def main (args : List String) : IO Unit := do
   let positional := args.filter (!·.contains '=')
   let port := (positional.head? >>= String.toNat?).getD 8094
@@ -58,7 +51,7 @@ def main (args : List String) : IO Unit := do
   let config : Http.ServerConfig :=
     { port := port.toUInt16, ioThreads := (option args "io").getD 0 }
   let runtimeConfig : Runtime.Config :=
-    { workers := (option args "workers").getD 1, parallel := parallel args }
+    { workers := (option args "workers").getD 1 }
   let server ← (Http.serve (many (actors - 1) work) (bridge (actors - 1)) config runtimeConfig).block
   IO.println s!"listening on {server.port.getD 0}"
   (← IO.getStdout).flush

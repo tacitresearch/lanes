@@ -4,15 +4,23 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Data.Codec
 public import Lanes.Data.Enum
 
 /-!
 `lanes_data structure …` and `lanes_data inductive …` declare a type and derive from the same
 text what Lean's own deriving handlers cannot give an application that imports only `Std`:
-`Codable` (a codec, by `Codec.struct%` or `Codec.sum%`), `Enum`, and `LawfulBEq` (a `BEq` field
-by field, with its law, for a structure holding a function on an `Enum` type). Every other class
-in the `deriving` clause goes to Lean.
+
+- `ToJson` and `FromJson`, together, with `LawfulJson` and `NonNullJson`: a `Json.Codec` built
+  from the pieces of `Lanes/Lib/Encoding/Json/Derive.lean`, whose laws give the round trip;
+- `Enum`;
+- `LawfulBEq`: a `BEq` field by field, with its law, for a structure holding a function on an
+  `Enum` type;
+- a `TableOf`, for a structure, from a `table` line after `deriving`: the columns of
+  `Lanes/Db/Columns.lean`, whose laws give the round trip.
+
+Every other class in the `deriving` clause goes to Lean. The code a command writes names
+`Lanes.Json` and `Lanes.Db`, which this file does not import: a file that derives them imports
+them, as `import Lanes` does.
 
 A deriving handler needs `Lean.Elab`, which an application must not link, and a macro sees only
 syntax: so the declaration is written inside the command, which reads the fields from it.
@@ -29,13 +37,22 @@ namespace Lanes
   complete b := h b ▸ List.mem_map_of_mem (Enum.complete (g b))
 
 syntax lanesDataField :=
-  ppLine (docComment)? ident " : " term (" := " term)?
+  ppLine (docComment)? atomic(ident " : ") term (" := " term)?
 syntax lanesDataArgs := " (" ident+ " : " term (" := " term)? ")"
 syntax lanesDataCtor := ppLine (docComment)? "| " rawIdent lanesDataArgs*
 syntax lanesDataDeriving := ppLine "deriving " ident,+
+/-- A secondary index of a table, on some of its fields. -/
+declare_syntax_cat lanesDataIndex (behavior := symbol)
+/-- `index byOwner on owner, title`. -/
+syntax ppLine &"index" ident (str)? &"on" ident,+ : lanesDataIndex
+/-- `unique index byEmail on email`: no two rows have the same values in these fields. -/
+syntax ppLine &"unique" &"index" ident (str)? &"on" ident,+ : lanesDataIndex
+/-- `table todos key id`: the table `todos`, whose primary key is these fields. -/
+syntax lanesDataTable := ppLine &"table" ident (str)? &"key" ident,+ lanesDataIndex*
 
 syntax (name := lanesDataStructure) (docComment)? "lanes_data " "structure " ident
-  bracketedBinder* " where" manyIndent(lanesDataField) (lanesDataDeriving)? : command
+  bracketedBinder* " where" manyIndent(lanesDataField) (lanesDataDeriving)? (lanesDataTable)? :
+  command
 
 syntax (name := lanesDataInductive) (docComment)? "lanes_data " "inductive " ident
   bracketedBinder* " where" lanesDataCtor* (lanesDataDeriving)? : command
@@ -66,20 +83,57 @@ meta def classBinders (cls : Name) (xs : Array Ident) :
     MacroM (Array (TSyntax `Lean.Parser.Term.bracketedBinder)) :=
   xs.mapM fun x => `(bracketedBinder| [$(mkIdent cls) $x])
 
-meta def productType (ts : Array (TSyntax `term)) : MacroM (TSyntax `term) :=
-  match ts.toList.reverse with
-  | [] => `(Unit)
-  | last :: rest => rest.foldlM (fun acc t => `($t × $acc)) last
+/-- Variables for the values of `xs`, named apart from every constant: a value bound to a name
+that is also a constructor's would be read as the constructor in a pattern. -/
+meta def fresh (xs : Array Ident) : MacroM (Array (TSyntax `term)) :=
+  xs.mapM fun x => return mkIdent (← Macro.addMacroScope x.getId)
 
-meta def sumType (ts : Array (TSyntax `term)) : MacroM (TSyntax `term) :=
-  match ts.toList.reverse with
-  | [] => `(Empty)
-  | last :: rest => rest.foldlM (fun acc t => `($t ⊕ $acc)) last
+/-- `(a, b, c)` as nested pairs, as a term or a pattern; `()` when empty. -/
+meta def tuple (xs : Array (TSyntax `term)) : MacroM (TSyntax `term) :=
+  match xs.toList.reverse with
+  | [] => `(())
+  | last :: rest => rest.foldlM (fun acc x => `(($x, $acc))) last
 
-meta def splitDeriving (classes : Array Ident) : Array Ident × Array Name :=
-  classes.foldl (init := (#[], #[])) fun (lean, ours) c =>
-    if [`Codable, `Enum, `LawfulBEq].contains c.getId then (lean, ours.push c.getId)
-    else (lean.push c, ours)
+/-- The parts of a nested pair `x` of `n` parts: `x.1`, `x.2.1`, …, `x.2.….2`. -/
+meta def parts (x : TSyntax `term) : Nat → MacroM (Array (TSyntax `term))
+  | 0 => pure #[]
+  | 1 => pure #[x]
+  | n + 2 => do return #[← `($x.1)] ++ (← parts (← `($x.2)) (n + 1))
+
+/-- `f a (f b c)`, or `unit` when empty. -/
+meta def nest (f : TSyntax `term → TSyntax `term → MacroM (TSyntax `term)) (unit : TSyntax `term)
+    (xs : Array (TSyntax `term)) : MacroM (TSyntax `term) :=
+  match xs.toList.reverse with
+  | [] => pure unit
+  | last :: rest => rest.foldlM (fun acc x => f x acc) last
+
+meta def productType (ts : Array (TSyntax `term)) : MacroM (TSyntax `term) := do
+  nest (fun t acc => `($t × $acc)) (← `(Unit)) ts
+
+meta def sumType (ts : Array (TSyntax `term)) : MacroM (TSyntax `term) := do
+  nest (fun t acc => `($t ⊕ $acc)) (← `(Empty)) ts
+
+/-- The `k`th of `n` alternatives as nested `Sum.inl`/`Sum.inr` around `x`. -/
+meta def inject (k n : Nat) (x : TSyntax `term) : MacroM (TSyntax `term) := do
+  let inner ← if k + 1 == n then pure x else `(Sum.inl $x)
+  (List.range k).foldlM (fun acc _ => `(Sum.inr $acc)) inner
+
+meta def nameString (x : Ident) : String :=
+  x.getId.eraseMacroScopes.toString (escape := false)
+
+/-- `createdAt` as `created_at`: the name PostgreSQL takes as it is. -/
+meta def snake (s : String) : String :=
+  String.ofList <| s.toList.foldr (init := []) fun c acc =>
+    if c.isUpper then '_' :: c.toLower :: acc else c :: acc
+
+meta def splitDeriving (classes : Array Ident) : MacroM (Array Ident × Array Name) :=
+  classes.foldlM (init := (#[], #[])) fun (lean, ours) c => do
+    match c.getId with
+    | `TableOf => Macro.throwErrorAt c "lanes_data: a table is declared by a line after \
+        `deriving`: `table todos key id`, then `index byOwner on owner` lines"
+    | n =>
+      if [`ToJson, `FromJson, `Enum, `LawfulBEq].contains n then return (lean, ours.push n)
+      else return (lean.push c, ours)
 
 meta def leanDeriving (T : Ident) (classes : Array Ident) : MacroM (Array (TSyntax `command)) :=
   if classes.isEmpty then pure #[] else do
@@ -87,25 +141,96 @@ meta def leanDeriving (T : Ident) (classes : Array Ident) : MacroM (Array (TSynt
       ⟨mkNode `Lean.Parser.Command.derivingClass #[mkNullNode, c]⟩
     return #[← `(deriving instance $[$classes],* for $T:ident)]
 
-/-- `T.codec`, taking a codec for each type parameter, and the `Codable` instance from it. -/
-meta def codable (T : Ident) (p : Params) (body : TSyntax `term) :
+/-- Whether to derive JSON: both classes, or neither. -/
+meta def wantsJson (ours : Array Name) : MacroM Bool := do
+  match ours.contains `ToJson, ours.contains `FromJson with
+  | true, true => return true
+  | false, false => return false
+  | _, _ => Macro.throwError "lanes_data: `ToJson` and `FromJson` are derived together, with \
+      the law that one reads back what the other writes"
+
+meta def strings (xs : Array String) : MacroM (TSyntax `term) := do
+  let lits := xs.map Syntax.mkStrLit
+  `(([$[$lits],*] : List String))
+
+/-- That the names are distinct, by `decide` on the list, which holds no variable. -/
+meta def distinct (xs : Array String) : MacroM (TSyntax `term) := do
+  `((show List.Nodup $(← strings xs) by decide))
+
+/-- That no name of `xs` is one of `ys`. -/
+meta def apart (xs ys : Array String) : MacroM (TSyntax `term) := do
+  `((show (List.all $(← strings xs) fun t => !List.contains $(← strings ys) t) = true by decide))
+
+set_option hygiene false in
+/-- An object of the fields `(name, type)`, as `Json.Fields`. -/
+meta def jsonFields (fields : Array (Ident × TSyntax `term)) : MacroM (TSyntax `term) := do
+  let each ← fields.mapM fun (x, t) =>
+    `((Lanes.Json.Fields.field $(Syntax.mkStrLit (nameString x)) (β := $t)))
+  nest (fun f acc => `(Lanes.Json.Fields.pair $f $acc)) (← `(Lanes.Json.Fields.unit)) each
+
+set_option hygiene false in
+/-- `T.jsonCodec`, and the instances made from it. A type parameter needs the JSON classes, and
+`NonNullJson` if a field's type mentions `Option`. -/
+meta def json (T : Ident) (p : Params) (types : Array (TSyntax `term)) (codec : TSyntax `term) :
     MacroM (Array (TSyntax `command)) := do
-  let codecs ← p.types.mapM fun x =>
-    return mkIdent (← Macro.addMacroScope (x.getId.appendBefore "codec"))
-  let codecBinders ← (p.types.zip codecs).mapM fun (x, c) =>
-    `(bracketedBinder| ($c : Lanes.Codec $x))
-  let args := p.args
-  let applied ← `($T $args*)
-  let name := mkIdentFrom T (T.getId ++ `codec)
-  let body ← (p.types.zip codecs).foldrM (init := body) fun (x, c) acc =>
-    `(letI : Lanes.Codable $x := ⟨$c⟩; $acc)
-  let defaults := p.types.map fun _ => (mkIdent ``Lanes.Codable.codec : TSyntax `term)
-  let instBinders ← classBinders ``Lanes.Codable p.types
-  let defBinders := p.binders ++ codecBinders
-  let instBinders := p.binders ++ instBinders
-  return #[← `(def $name $defBinders:bracketedBinder* : Lanes.Codec $applied := $body),
-    ← `(instance $instBinders:bracketedBinder* : Lanes.Codable $applied :=
-        ⟨$name $defaults*⟩)]
+  let pargs := p.args
+  let applied ← `($T $pargs*)
+  let name := mkIdentFrom T (T.getId ++ `jsonCodec)
+  let mentions (x : Ident) (t : TSyntax `term) : Bool :=
+    (t.raw.find? (·.getId == x.getId)).isSome
+  let optional := p.types.filter fun x =>
+    types.any fun t => mentions x t && (t.raw.find? (·.getId == `Option)).isSome
+  let ctx := p.binders ++ (← classBinders `Lanes.ToJson p.types)
+    ++ (← classBinders `Lanes.FromJson p.types) ++ (← p.types.mapM fun x =>
+      `(bracketedBinder| [Lanes.LawfulJson $x]))
+    ++ (← optional.mapM fun x => `(bracketedBinder| [Lanes.NonNullJson $x]))
+  return #[← `(def $name $ctx:bracketedBinder* : Lanes.Json.Codec $applied := $codec),
+    ← `(instance $ctx:bracketedBinder* : Lanes.ToJson $applied := ⟨($name).toJson⟩),
+    ← `(instance $ctx:bracketedBinder* : Lanes.FromJson $applied := ⟨($name).fromJson?⟩),
+    ← `(instance $ctx:bracketedBinder* : Lanes.LawfulJson $applied :=
+        ⟨($name).fromJson?_toJson⟩),
+    ← `(instance $ctx:bracketedBinder* : Lanes.NonNullJson $applied :=
+        ⟨($name).toJson_ne_null⟩)]
+
+set_option hygiene false in
+meta def structJson (fields : Array (Ident × TSyntax `term)) : MacroM (TSyntax `term) := do
+  let names := fields.map (·.1)
+  let r := mkIdent (← Macro.addMacroScope `r)
+  let x := mkIdent (← Macro.addMacroScope `x)
+  let projections ← names.mapM fun f => `($r.$f:ident)
+  let values ← parts x names.size
+  `(Lanes.Json.Codec.object
+      (Lanes.Json.Fields.map $(← jsonFields fields) (fun $r => $(← tuple projections))
+        (fun $x => { $[$names:ident := $values],* }) (fun _ => rfl))
+      $(← distinct (names.map nameString)))
+
+set_option hygiene false in
+meta def sumJson (T : Ident) (ctors : Array Ident) (fieldss : Array (Array (Ident × TSyntax `term))) :
+    MacroM (TSyntax `term) := do
+  let n := ctors.size
+  if n == 0 then Macro.throwError "lanes_data: JSON needs at least one constructor"
+  let alts ← (ctors.zip fieldss).mapM fun (ctor, fields) => do
+    `(Lanes.Json.Alts.ctor $(Syntax.mkStrLit (nameString ctor)) $(← jsonFields fields)
+        $(← distinct (fields.map (nameString ·.1))))
+  let tags := ctors.map nameString
+  let mut sum := alts[n - 1]!
+  for k in (List.range (n - 1)).reverse do
+    sum ← `(Lanes.Json.Alts.sum $(alts[k]!) $sum $(← apart #[tags[k]!] (tags.extract (k + 1) n)))
+  let mut cases : Array (TSyntax `term) := #[]
+  let mut backs : Array (TSyntax `term) := #[]
+  let t := mkIdent (← Macro.addMacroScope `t)
+  for k in [0:n] do
+    let ctor := mkIdent (T.getId ++ ctors[k]!.getId)
+    let vars ← fresh (fieldss[k]!.map (·.1))
+    let injected ← inject k n (← tuple vars)
+    cases := cases.push (← if vars.isEmpty then pure injected else `(fun $vars* => $injected))
+    let values ← parts t vars.size
+    backs := backs.push (← `(fun $t => $ctor $values*))
+  let back ← nest (fun f acc => `(Sum.elim $f $acc)) (← `(fun x => nomatch x)) backs
+  let casesOn := mkIdent (T.getId ++ `casesOn)
+  `(Lanes.Json.Codec.ofAlts
+      (Lanes.Json.Alts.map $sum (fun x => $casesOn:ident (motive := fun _ => _) x $cases*) $back
+        (by intro x; cases x <;> rfl)))
 
 meta def conjunction (cs : Array (TSyntax `term)) : MacroM (TSyntax `term) :=
   match cs.toList with
@@ -159,6 +284,59 @@ meta def ctorBinder (g : TSyntax `Lanes.lanesDataArgs) :
   | `(lanesDataArgs| ($xs* : $t := $d)) => `(bracketedBinder| ($xs* : $t := $d))
   | _ => Macro.throwUnsupported
 
+/-- The position of field `x` among the columns. -/
+meta def position (columns : Array Ident) (x : Ident) : MacroM Nat :=
+  match columns.findIdx? (·.getId == x.getId) with
+  | some k => pure k
+  | none => Macro.throwErrorAt x s!"lanes_data: the structure has no field `{x.getId}`"
+
+set_option hygiene false in
+/-- The table a `table` line declares, and its indexes, each `table.index`. The columns are
+the key's fields, then the others in their order. A name in PostgreSQL is the Lean name in
+`snake_case`, and an index's starts with its table's, since PostgreSQL names indexes per schema;
+a string after the Lean name gives another. -/
+meta def table (T : Ident) (p : Params) (fields : Array (Ident × TSyntax `term))
+    (clause : TSyntax `Lanes.lanesDataTable) : MacroM (Array (TSyntax `command)) := do
+  let `(lanesDataTable| table $name $[$sql]? key $keys,* $indexes*) := clause
+    | Macro.throwUnsupported
+  unless p.args.isEmpty do
+    Macro.throwErrorAt clause "lanes_data: a table's type has no parameters"
+  let keys := keys.getElems
+  for k in keys do discard <| position (fields.map (·.1)) k
+  let others := fields.filter fun (x, _) => !keys.any (·.getId == x.getId)
+  let columns := keys.filterMap (fun k => fields.find? (·.1.getId == k.getId)) ++ others
+  let names := columns.map (·.1)
+  let sqlName := sql.map (·.getString) |>.getD (snake (nameString name))
+  let mut cmds := #[]
+  let mut idents := #[]
+  for i in indexes do
+    let (u, idx, isql, on) ← match i with
+      | `(lanesDataIndex| index $idx $[$isql]? on $on,*) => pure (false, idx, isql, on)
+      | `(lanesDataIndex| unique index $idx $[$isql]? on $on,*) => pure (true, idx, isql, on)
+      | _ => Macro.throwUnsupported
+    let positions ← on.getElems.mapM fun x => return Syntax.mkNumLit (toString (← position names x))
+    let ident := mkIdentFrom idx (name.getId ++ idx.getId)
+    let isql := isql.map (·.getString) |>.getD (sqlName ++ "_" ++ snake (nameString idx))
+    let unique ← if u then `(true) else `(false)
+    cmds := cmds.push (← `(def $ident : Lanes.Db.Index :=
+      { name := $(Syntax.mkStrLit isql), columns := [$[$positions],*], unique := $unique }))
+    idents := idents.push ident
+  let each ← columns.mapM fun (x, t) =>
+    `((Lanes.Db.Columns.column $(Syntax.mkStrLit (snake (nameString x))) (β := $t)))
+  let product ← nest (fun c acc => `(Lanes.Db.Columns.pair $c $acc)) (← `(Lanes.Db.Columns.unit))
+    each
+  let r := mkIdent (← Macro.addMacroScope `r)
+  let x := mkIdent (← Macro.addMacroScope `x)
+  let projections ← names.mapM fun f => `($r.$f:ident)
+  let values ← parts x names.size
+  let indexTerms : Array (TSyntax `term) := idents.map (⟨·.raw⟩)
+  cmds := cmds.push (← `(def $name : Lanes.Db.TableOf $T :=
+    Lanes.Db.Columns.table
+      (Lanes.Db.Columns.map $product (fun $r => $(← tuple projections))
+        (fun $x => { $[$names:ident := $values],* }) (fun _ => rfl) (fun _ => rfl))
+      $(Syntax.mkStrLit sqlName) $(Syntax.mkNumLit (toString keys.size)) [$[$indexTerms],*]))
+  return cmds
+
 end Declare
 
 open Lean Declare in
@@ -166,26 +344,24 @@ macro_rules
   | `(lanesDataStructure|
       $[$doc:docComment]? lanes_data structure $T $bs:bracketedBinder* where
         $[$[$fdocs:docComment]? $fields : $types $[:= $defaults]?]*
-        $[deriving $classes,*]?) => do
+        $[deriving $classes,*]? $[$tableClause:lanesDataTable]?) => do
     let p ← params bs
-    let (lean, ours) := splitDeriving (classes.map (·.getElems) |>.getD #[])
-    independent ours fields types
+    let (lean, ours) ← splitDeriving (classes.map (·.getElems) |>.getD #[])
+    independent (if tableClause.isSome then ours.push `TableOf else ours) fields types
     let pargs := p.args
     let applied ← `($T $pargs*)
     let decl ← `(command| $[$doc:docComment]? structure $T:ident $bs:bracketedBinder* where
       $[$[$fdocs:docComment]? $fields:ident : $types $[:= $defaults]?]*)
     let mut cmds := #[decl] ++ (← leanDeriving T lean)
-    if ours.contains `Codable then
-      let specs ← (fields.zip types).mapM fun (x, t) => do
-        return (x, ← `((Lanes.Codable.codec : Lanes.Codec $t)))
-      cmds := cmds ++ (← codable T p (← Codec.structTerm specs))
+    if ← wantsJson ours then
+      cmds := cmds ++ (← json T p types (← structJson (fields.zip types)))
     if ours.contains `Enum then
       let r := mkIdent (← Macro.addMacroScope `r)
       let projections ← fields.mapM fun f => `($r.$f:ident)
-      let values ← Codec.fresh fields
+      let values ← fresh fields
       cmds := cmds.push (← enum p applied (← productType types)
-        (← `(fun $r => $(← Codec.tuple projections)))
-        (← `(fun $(← Codec.tuple values) => { $[$fields:ident := $values],* })))
+        (← `(fun $r => $(← tuple projections)))
+        (← `(fun $(← tuple values) => { $[$fields:ident := $values],* })))
     if ours.contains `LawfulBEq then
       let a := mkIdent (← Macro.addMacroScope `a)
       let b := mkIdent (← Macro.addMacroScope `b)
@@ -204,6 +380,8 @@ macro_rules
                 intro $a:ident $b:ident h
                 change $same = true at h
                 cases $a:ident; cases $b:ident; simpa [and_assoc, Subtype.ext_iff] using h)]
+    if let some clause := tableClause then
+      cmds := cmds ++ (← table T p (fields.zip types) clause)
     return mkNullNode (cmds.map (·.raw))
 
 open Lean Declare in
@@ -212,7 +390,7 @@ macro_rules
       $[$doc:docComment]? lanes_data inductive $T $bs:bracketedBinder* where
         $[$[$cdocs:docComment]? | $ctors $argss*]* $[deriving $classes,*]?) => do
     let p ← params bs
-    let (lean, ours) := splitDeriving (classes.map (·.getElems) |>.getD #[])
+    let (lean, ours) ← splitDeriving (classes.map (·.getElems) |>.getD #[])
     let pargs := p.args
     let applied ← `($T $pargs*)
     let binders ← argss.mapM (·.mapM ctorBinder)
@@ -224,26 +402,20 @@ macro_rules
     let argTypes : Array (Array (TSyntax `term)) := fieldss.map (·.map (·.2))
     for fields in fieldss do
       independent ours (fields.map (·.1)) (fields.map (·.2))
-    if ours.contains `Codable then
-      let specs ← (ctors.zip fieldss).mapM fun (ctor, fields) => do
-        let fields ← fields.mapM fun (x, t) => do
-          return (x, ← `((Lanes.Codable.codec : Lanes.Codec $t)))
-        return (ctor, fields)
-      cmds := cmds ++ (← codable T p (← Codec.sumTerm T specs))
+    if ← wantsJson ours then
+      cmds := cmds ++ (← json T p argTypes.flatten (← sumJson T ctors fieldss))
     if ours.contains `Enum then
       let n := ctors.size
       let mut cases : Array (TSyntax `term) := #[]
       let mut backs : Array (TSyntax `term) := #[]
       for k in [0:n] do
         let ctor := mkIdent (T.getId ++ ctors[k]!.getId)
-        let vars ← Codec.fresh args[k]!
-        let injected ← Codec.inject k n (← Codec.tuple vars)
+        let vars ← fresh args[k]!
+        let injected ← inject k n (← tuple vars)
         cases := cases.push (← if vars.isEmpty then pure injected
           else `(fun $vars* => $injected))
-        backs := backs.push (← `(fun $(← Codec.tuple vars) => $ctor $vars*))
-      let back ← match backs.toList.reverse with
-        | [] => `(fun x => nomatch x)
-        | last :: rest => rest.foldlM (fun acc f => `(Sum.elim $f $acc)) last
+        backs := backs.push (← `(fun $(← tuple vars) => $ctor $vars*))
+      let back ← nest (fun f acc => `(Sum.elim $f $acc)) (← `(fun x => nomatch x)) backs
       let casesOn := mkIdent (T.getId ++ `casesOn)
       cmds := cmds.push (← enum p applied (← sumType (← argTypes.mapM productType))
         (← `(fun x => $casesOn:ident (motive := fun _ => _) x $cases*)) back)

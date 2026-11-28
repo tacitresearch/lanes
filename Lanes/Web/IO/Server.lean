@@ -34,8 +34,8 @@ models it.
 
 A request the application's `view` names is a read (`Http.View`): it never enters the system.
 It waits behind a gate of its own (`readBridge`, bounded by `ServerConfig.reads`) for a peek of
-the actors it reads, at the end of the shard's next batch (`Runtime.tryPeek`), and is answered
-from their states off the shard's thread, or `504` at its deadline. It takes an id from the same
+the actors it reads, each between two of its steps (`Runtime.tryPeek`), and is answered from
+their states off the workers' threads, or `504` at its deadline. It takes an id from the same
 table as every request.
 
 One refusal is made here: `503` when the shard's inbox is full. TLS is not handled: terminate it

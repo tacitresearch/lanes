@@ -30,7 +30,7 @@ lake exe lanes stats       # the totals no file holds: trusted lines, decisions
   `examples/rookery` runs as a job of its own. A pull
   request that changes only documentation is built and linted, and the other jobs are skipped
   (the `changes` job of `.github/workflows/ci.yml` says which files count).
-- Lake's artifact cache is on for Lanes, the examples, the integrations and generated apps
+- Lake's artifact cache is on for Lanes, the examples and generated apps
   (`enableArtifactCache` and `restoreAllArtifacts` in each lakefile; D99, section 6). Lake keeps
   each build output once, named by a hash of its content, in the toolchain's cache,
   `$ELAN_HOME/toolchains/<toolchain>/lake/cache` (`ELAN_HOME` is `~/.elan` by default;
@@ -77,8 +77,8 @@ lake exe lanes stats       # the totals no file holds: trusted lines, decisions
   reads only text.
 - Lake hashes a module's source and imports, not the files it reads with `include_str`. So each
   embedded file is an `input_dir` or `input_file` target that the module's library or executable
-  `needs` (`templates/`, `lean-toolchain` and the test keys in `lakefile.lean`; the
-  integrations' lakefiles likewise), which puts the files' hashes in the trace of every module of
+  `needs` (`templates/`, `lean-toolchain`, the test keys and Google's recorded documents in
+  `lakefile.lean`), which puts the files' hashes in the trace of every module of
   that library: an edit rebuilds them, and neither `.lake/build` nor the artifact cache serves a
   copy built from the old files. A new `include_str` adds its file the same way. After editing
   `templates/`, run `lake build lanes` (`LanesCli.New` is built again, not restored; nothing is
@@ -148,7 +148,8 @@ Mathlib or CSLib; an application may use them for its own proofs (#130), from it
 only (lint `layering`).
 Each module of `Lanes/` is in one package of `docs/decisions/D99-layered-packages.md`, and imports modules of Lanes only from its
 package and those below it: the semantics and the checker; actors, and the standard library
-beside them; the runtime; the web and PostgreSQL; the umbrella `Lanes`
+beside them; the runtime; the web; the umbrella `Lanes`, which with all below it is the core; and
+the services (`Lanes/Services/`), which may import the core, and which the core never imports
 (`LanesCli/Layers.lean` gives each file's package, lint `layering`). A definition that a lower
 layer needs moves down, or the lower layer takes it as a parameter. *Why:* executable code
 that imports the proof layer links proofs it never runs (and all of Mathlib, over 150 MB, in an
@@ -161,13 +162,15 @@ size.
 
 1.8 **Decide what belongs from first principles, not from our examples.** Lanes is a runtime and
 library people use to build software in Lean, so a piece is judged by what it gives them, not by
-whether our own examples happen to use it. For any piece, whether added, kept or removed, weigh:
-reach (would people building software in Lean want it, and what could they build with it that
-they cannot today?), cost (code, proofs, trusted lines, and concepts a newcomer must learn) and
-coupling (does it stand alone as a library piece, or does it force a design choice on the core?).
-A general piece whose reach is worth its cost stays even if no example uses it; a piece that pulls
-its design into everything else goes even if it works. Say how you weighed these in the PR when you
-add or remove something. *Why:* a library is used for things its authors did not build, and the
+whether our own examples happen to use it. For any piece, whether added, kept or removed, weigh
+its reach against its total cost. Reach: would people building software in Lean want it, and what
+could they build with it that they cannot today? Total cost: its own code, proofs, trusted lines
+and concepts a newcomer must learn, plus what it costs people who never use it (a design choice it
+forces on the core, imports, build time, rules everyone must follow). Coupling is part of the cost,
+never a merit: a low cost to non-users is necessary for an optional piece, but never sufficient. A
+general piece whose reach is worth its total cost stays even if no example uses it; a piece that
+pulls its design into everything else goes even if it works. Say how you weighed these in the PR
+when you add or remove something. *Why:* a library is used for things its authors did not build, and the
 journal showed that a feature can be finished, proved and still not worth its cost (D110).
 
 2.1 **Make illegal states unrepresentable.** A role is a sum type that carries its own data, not
@@ -220,13 +223,14 @@ with its spec and its proof (`Server.implements`).
 3.6 **One message, one atomic transition.** What must touch two actors at once goes through a
 protocol or a single owner, never shared state.
 
-3.7 **Batch at the edges.** The shell batches inputs and the handing over of outputs; `step`
-still sees one message at a time, and a theorem says the batch is unobservable
-(`Batch.run_kernel`).
+3.7 **Batch at the edges.** Adapters batch what they exchange with the outside (a connection's
+writes, a pool's queries), and a worker steps one actor on several messages in a turn; `step`
+still sees one message at a time, and each step is one event of the semantics
+(`Sched.Step.sound`).
 
 3.8 **Back-pressure, not unbounded inboxes.** The inbox is bounded (`inboxCapacity`); when it is
-full the sender is refused (`tryInput`, the server's `503`). The kernel's queue between actors
-has no bound yet (`TRUSTED.md`).
+full the sender is refused (`tryInput`, the server's `503`). The mailboxes between actors have
+no bound yet (`TRUSTED.md`).
 
 3.9 **An adapter decides nothing in IO.** It is a pure function or a system that decides, a model
 of the outside it talks to (`Outside`), and a handler that only performs (D26, D40). *Why:* every
@@ -274,24 +278,37 @@ Conventions:
 
 A module is in the directory of its concern (D62): `docs/ARCHITECTURE.md` names the directory of
 each area. A file that performs IO is in an `IO/` directory of its area and named in
-`TRUSTED.md`. Code under `Lanes/` imports `Std` only, but for the proof layer (rule 1.6).
+`TRUSTED.md`. What is a vendor's (a client, a model of its service, its fake, a preset) is a
+service, in `Lanes/Services/<Name>/`, whose README names its client, its model, its oracle and
+whether it is checked (model plus oracle) or a client only (`Lanes/Services/README.md`,
+`docs/decisions/D113-service-models.md`); a protocol (HTTP, Signature Version 4, OAuth) and the
+shape of a service (`Lanes/Outside/`) are core. Code under `Lanes/` imports `Std` only, but for
+the proof layer (rule 1.6).
 
 `import Lanes` is the API, executable code and the proof toolkit; `import Lanes.Proofs` adds the
 framework's soundness theorems (the `…Sound` modules), and `import Lanes.Semantics` the proof
-layer, which imports both. Tests and the examples' proofs import what they cite. `import
-Lanes.Testing` is the test kit, for tests only, so that no binary that serves links it.
+layer, which imports both. `import Lanes` leaves out the services: a program imports those it
+calls (`import Lanes.Services.Postgres`), and `import Lanes.Services` imports them all with their
+soundness theorems. Tests and the examples' proofs import what they cite. `import
+Lanes.Testing` is the test kit, for tests only, so that no binary that serves links it; a
+service's fake is beside it (`Lanes.Services.S3.Testing`).
 
-Declare the messages, inputs, outputs and states of a system with `lanes_data`: the ordinary
-declaration with a prefix, whose `deriving` also takes three classes Lean cannot derive without
-linking `Lean` into the binary.
+Declare the messages, inputs, outputs and states of a system, and the types of its JSON and its
+tables, with `lanes_data`: the ordinary declaration with a prefix, whose `deriving` also takes
+classes Lean cannot derive without linking `Lean` into the binary, and, for a structure, a
+`table` line.
 
 ```lean
-lanes_data structure Entry (N C : Type) where
-  term : Nat
-  /-- The node that took the command from its client. -/
-  origin : N
-  cmd : C
-  deriving DecidableEq, Repr, Hashable, Codable
+lanes_data structure Todo where
+  id : Int64
+  owner : Int64
+  title : String
+  /-- When it was done, if it was. -/
+  doneAt : Option Int64 := none
+  deriving DecidableEq, Repr, ToJson, FromJson
+  table todos key id
+    index byOwner on owner, title
+    unique index byTitle "todo_titles" on title
 
 lanes_data inductive Id (F : Type) where
   | front (f : F)
@@ -299,20 +316,25 @@ lanes_data inductive Id (F : Type) where
   deriving DecidableEq, Repr, Hashable, Enum
 ```
 
-- `Codable` gives `Entry.codec : Codec N → Codec C → Codec (Entry N C)` and an instance;
-  `Codec.of T` is the instance's codec, and its law holds by construction
-  (`Lanes/Data/Codec.lean`). Every field's type needs `Codable`: `Nat`, `Int`, `String`, `Bool`, `Unit`, `ByteArray`, `Fin n`,
-  `Option`, `List`, pairs, sums, sigma types, subtypes, `Std.ExtTreeMap`, and types declared
-  this way.
+- `ToJson, FromJson`, always together, give the instances and `LawfulJson` (what is written
+  reads back) and `NonNullJson`, by construction (`Lanes/Lib/Encoding/Json/Derive.lean`). A
+  structure is an object of its fields, named as in Lean, a field encoded as `null` left out; a
+  constructor is its name, or an object of one field, its name, holding the object of its
+  arguments. Every field's type needs the three classes, and `Option α` needs `NonNullJson α`; a
+  type parameter is given them.
+- A `table` line declares a `TableOf` (`todos`) with its laws, and each index as
+  `todos.byOwner`. The columns are the key's fields, then the others in order. Every field's type
+  is a column (`Db.ColumnOf`, `Lanes/Db/Columns.lean`): `Int64`, `ByteArray`, `String`, `Bool`,
+  or `Option` of one, nullable. PostgreSQL names are the Lean names in `snake_case`, an index's
+  prefixed by its table's (`todos_by_owner`), unless a string gives one.
 - `Enum` lists every value. `LawfulBEq` compares a structure field by field, for one that holds a
   function on an `Enum` type and so has no `DecidableEq`.
 - Arguments are `(x y : T)` or `(x : T := default)`, fields `x : T` or `x : T := default`,
   each with an optional docstring; a constructor may be a keyword (`| open`). A value with a
-  property is a subtype,
-  read back only if the property holds. A field whose type names an earlier field is refused.
-  `extends` and indices are not accepted: write those with `structure` or `inductive` and the
-  codec with `Codec.struct%` or `Codec.sum%`. A recursive type has no codec: a codec is a value,
-  and neither `lanes_data` nor the macros can define one that refers to itself.
+  property is a subtype, read back only if the property holds. A field whose type names an
+  earlier field is refused. `extends` and indices are not accepted: write those with `structure`
+  or `inductive`, and the instances with `Json.Codec` and `Db.Columns`. A recursive type has no
+  derived JSON: a codec is a value, and the command cannot define one that refers to itself.
 
 ## Proofs
 
@@ -344,9 +366,10 @@ partitions, even if only "answers `unavailable`".
 complete PASS of the checker finds bugs; a theorem is the evidence.
 
 5.9 **A parser has an oracle, and a model a recorded run.** Every parser or encoder (in
-`Lanes/Lib/`, and the protocol code of `Lanes/Web/`: the wire format, Signature Version 4, XML,
-JOSE) is compared with a reference implementation on generated inputs, and every model of an
-outside service is checked against a run recorded from a real or reference implementation; or
+`Lanes/Lib/`, and the protocol code of `Lanes/Web/` and `Lanes/Services/`: the wire format,
+Signature Version 4, JOSE, S3's XML, PostgreSQL's messages) is compared with a reference
+implementation on generated inputs, and every model of an outside service is checked against a
+run recorded from a real or reference implementation; or
 `oracles/README.md` says why not. *Why:* a proof says the code meets its spec, not that the
 spec reads the standard, or the service, as others do.
 

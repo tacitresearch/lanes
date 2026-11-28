@@ -2,7 +2,7 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Lanes.Lib.Postgres.IO.Client
+import Lanes.Services.Postgres.IO.Client
 
 /-!
 The client against a real PostgreSQL server, when one is there: `LANES_POSTGRES=host:port`

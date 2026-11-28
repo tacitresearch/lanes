@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
 import Tests.TutorialWeb.Files
+import Lanes.Services.S3
 
 /-!
 The edge of the shelf: the sign-in, the session cookie, the pages, the forms for the store and

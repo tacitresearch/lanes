@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
 import Tests.Tls
+import Lanes.Services.Postgres
 
 /-!
 The PostgreSQL client over TLS. Against `openssl s_server`, where there is an `openssl` command,

@@ -304,11 +304,11 @@ def stopTest : Async (List (String × Bool)) := do
       (← throws (rt.input (.echo 2))) && (← throws rt.idle) && (← throws (rt.state ()))),
     ("stop: tryInput refuses", !(← rt.tryInput (.echo 3))) ]
 
-def batchTest : Async (List (String × Bool)) := do
-  let rt ← Runtime.start clockSystem { batch := 0 }
+def budgetTest : Async (List (String × Bool)) := do
+  let rt ← Runtime.start clockSystem { budget := 0 }
   rt.input (.arm 1)
   rt.idle (timers := true)
-  let results := [("batch: a batch of zero still makes progress", (← rt.state ()) == 1)]
+  let results := [("budget: a budget of zero still makes progress", (← rt.state ()) == 1)]
   rt.stop
   return results
 
@@ -403,11 +403,9 @@ def dutiesTest : Async (List (String × Bool)) := do
     ("outputs: a handler that throws does not end the shard, and is not called again for that "
       ++ "output", alive == some true && (← seen.get) == #[1, 3]) ]
 
-/-! Auto: a hub fans each input out to some of 16 workers, whose steps cost a number of rounds of
-hashing. Heavy inputs to all 16 take the pace onto the pool and trivial ones to one worker take it
-back off. Each input is sent once the one before is handled, so each is a batch of its own and
-what the kernel does does not depend on how inputs arrive together: with auto its events are
-those of a shard on one worker, event for event, and so are the outputs. -/
+/-! A hub fans each input out to some of 16 actors, whose steps cost a number of rounds of
+hashing. On four workers the actors step at once; each actor's outputs are those of one worker,
+in the same order, and the trace is a run of the semantics. -/
 
 def mix : Nat → UInt64 → UInt64
   | 0, h => h
@@ -431,44 +429,27 @@ abbrev fan : System fanSig where
         (h, [.emit (i, h)]) }
   accept x := ⟨0, x⟩
 
-def shape : Event fanSig → String
-  | .input x => s!"input {x}"
-  | .deliver e => s!"deliver {e.dst} {e.msg}"
-  | .output (i, h) => s!"output {i} {h}"
-  | _ => "other"
-
-/-- The phases, each a list of inputs; the events, the outputs, and the batches run on the
-shard's thread and on the pool by the end of each phase. -/
-def fanRun (config : Runtime.Config) (phases : List (List (Nat × Nat))) :
-    Async (List String × Array (Fin 17 × UInt64) × List Runtime.Batches) := do
+/-- The outputs, and whether the trace replays through the semantics. -/
+def fanRun (config : Runtime.Config) (inputs : List (Nat × Nat)) :
+    Async (Array (Fin 17 × UInt64) × Bool) := do
   let outputs ← IO.mkRef #[]
   let rt ← Runtime.start fan { config with record := true } (fun out => outputs.modify (·.push out))
-  let mut seen := []
-  for phase in phases do
-    for x in phase do
-      rt.input x
-      rt.idle
-    seen := seen ++ [← rt.batches]
+  for x in inputs do rt.input x
+  rt.idle
+  let replayed := (← replay fan rt).isSome
   rt.stop
-  return ((← rt.trace).toList.map shape, ← outputs.get, seen)
+  return (← outputs.get, replayed)
 
-def autoTest : Async (List (String × Bool)) := do
-  let heavy := List.replicate 20 (16, 100000)
-  let trivial := List.replicate 300 (1, 0)
-  let phases := [heavy, trivial, heavy, trivial]
-  let (serialEvents, serialOut, _) ← fanRun serial phases
-  let (events, out, seen) ← fanRun { workers := 4, pace := { cheap_ns := 20000 } } phases
-  let phase := fun (k : Nat) =>
-    let now := seen.getD k {}
-    let before : Runtime.Batches := if k = 0 then {} else seen.getD (k - 1) {}
-    (now.inline - before.inline, now.pool - before.pool)
+def fanTest : Async (List (String × Bool)) := do
+  let inputs := List.replicate 20 (16, 20000) ++ List.replicate 300 (1, 0)
+  let (serialOut, serialReplayed) ← fanRun serial inputs
+  let (out, replayed) ← fanRun { workers := 4 } inputs
+  let byActor := fun (outs : Array (Fin 17 × UInt64)) (i : Fin 17) => outs.filter (·.1 == i)
   return [
-    ("auto: heavy inputs to every worker are tried on the pool, trivial ones run on one thread",
-      (phase 0).1 > 0 && (phase 0).2 > 0 && (phase 1).1 ≥ 250),
-    ("auto: the events are those of a shard on one worker",
-      events == serialEvents && events.length ≥ 3 * 640),
-    ("auto: and so are the outputs, in order",
-      out == serialOut && out.size == 2 * 20 * 16 + 2 * 300) ]
+    ("free: on four workers the trace of a fan-out is a run of the semantics",
+      replayed && serialReplayed),
+    ("free: each actor's outputs are those of one worker, in order",
+      out.size == 20 * 16 + 300 && (List.finRange 17).all fun i => byActor out i == byActor serialOut i) ]
 
 /-- A parker: an `unpark` before the `park` is kept, a timed park ends, a task and an `Async`
 are waited for on one. -/
@@ -500,18 +481,16 @@ def tests : IO (List (String × Bool)) := do
   let e ← timerTest.block
   let f ← backPressureTest.block
   let g ← stopTest.block
-  let h ← batchTest.block
+  let h ← budgetTest.block
   let i ← outputsTest.block
   let j ← busyStopTest.block
   let shaped := fun (label : String) (shape : Runtime.Config) => do
     let results := (← (flakyTest shape).block) ++ (← (bankTest shape).block)
       ++ (← (floodTest shape).block)
     return results.map fun (name, ok) => (s!"{name} ({label})", ok)
-  let w ← shaped "on 4 workers" { workers := 4, parallel := .on }
-  let u ← shaped "auto, 4 workers" { workers := 4, parallel := .auto }
-  let v ← shaped "auto trying the pool often, 4 workers"
-    { workers := 4, parallel := .auto, pace := { cheap_ns := 0, probeEvery := 1 } }
-  return a ++ b ++ c ++ d ++ e ++ f ++ g ++ h ++ i ++ j ++ w ++ u ++ v ++ (← dutiesTest.block)
-    ++ (← autoTest.block) ++ (← parkerTest)
+  let w ← shaped "on 4 workers" { workers := 4 }
+  let u ← shaped "on 2 workers, a budget of 1" { workers := 2, budget := 1 }
+  return a ++ b ++ c ++ d ++ e ++ f ++ g ++ h ++ i ++ j ++ w ++ u ++ (← dutiesTest.block)
+    ++ (← fanTest.block) ++ (← parkerTest)
 
 end Tests.Runtime

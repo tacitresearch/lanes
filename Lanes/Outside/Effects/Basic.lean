@@ -42,7 +42,7 @@ lanes_data inductive Phase where
   | succeeded
   | failed
   | canceled
-  deriving DecidableEq, Repr, Hashable, Codable, Enum
+  deriving DecidableEq, Repr, Hashable, Enum
 
 def Phase.final : Phase → Bool
   | .succeeded | .failed | .canceled => true
@@ -84,7 +84,7 @@ lanes_data inductive Answer (R St : Type) where
   | made (id : R) (state : St)
   /-- A repeat under a key refused for now, with no effect. -/
   | refused
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 def Answer.isRefused {R : Type} : Answer R St → Bool
   | .refused => true
@@ -95,7 +95,7 @@ lanes_data structure Report (R St P : Type) where
   id : R
   state : St
   params : P
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- A thing that has been seen, made by the request of slot `slot`. -/
 lanes_data structure Thing (R St P : Type) where
@@ -103,7 +103,7 @@ lanes_data structure Thing (R St P : Type) where
   slot : Nat
   params : P
   state : St
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- The requests sent whose thing nobody has seen, which may or may not exist, and the things
 seen. -/

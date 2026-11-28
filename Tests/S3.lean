@@ -4,12 +4,14 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
 import Lanes.Testing
+import Lanes.Services.S3
+import Lanes.Services.S3.Testing
 
 /-!
 The S3 client: the XML reader on ListObjectsV2 and error documents as S3 writes them, and on
 what it must refuse; the calls built for each operation and each way of naming a bucket; what a
 response means; the model of an object store; and the client against the test kit's fake S3
-(`Lanes/Testing/S3.lean`), over plain HTTP, which checks each signature as S3 would. A system
+(`Lanes/Services/S3/Testing.lean`), over plain HTTP, which checks each signature as S3 would. A system
 calling the fake through `S3.handler` is checked against the model. Nothing here calls AWS.
 -/
 
@@ -295,12 +297,12 @@ def modelTests : List (String × Bool) :=
 def tests : List (String × Bool) :=
   xmlTests ++ callTests ++ interpretTests ++ modelTests
 
-/-! ## Against the fake S3 of the test kit (`Lanes/Testing/S3.lean`) -/
+/-! ## Against the fake S3 of the test kit (`Lanes/Services/S3/Testing.lean`) -/
 
 open Lanes.Testing.S3 (Fake follow)
 
-/-! The fake's parts under the names `integrations/aws` uses for its fakes of the metadata
-service and of SES, from before the fake moved to the test kit. -/
+/-! The fake's parts under the names the AWS service's tests (`Tests/Aws/`) use for their fakes
+of the metadata service and of SES. -/
 
 export Lanes.Testing.S3 (Raw raw? answer)
 

@@ -10,24 +10,6 @@
    "inherited": false,
    "dir": "../..",
    "configFile": "lakefile.lean"
-  },
-  {
-   "type": "path",
-   "scope": "",
-   "name": "google",
-   "manifestFile": "lake-manifest.json",
-   "inherited": false,
-   "dir": "../../integrations/google",
-   "configFile": "lakefile.toml"
-  },
-  {
-   "type": "path",
-   "scope": "",
-   "name": "github",
-   "manifestFile": "lake-manifest.json",
-   "inherited": false,
-   "dir": "../../integrations/github",
-   "configFile": "lakefile.toml"
   }
  ],
  "name": "signIn",

@@ -3,8 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Videos
-import Google
-import GitHub
+import Lanes.Services.Oidc
 
 /-!
 `signIn [port]`: the site, with a provider for each of Google and GitHub whose client is in the

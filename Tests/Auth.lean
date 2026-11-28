@@ -181,7 +181,39 @@ def hashTests : List (String × Bool) :=
     ("password: two hashes of one password under two salts differ",
       stored != Stored.phc (password.hash (salt16 8).1 (salt16 8).2 "correct horse")) ]
 
+/-- Failed log-ins and sessions as rows, on the store's meaning (`Lanes/Web/Auth/Rows.lean`). -/
+def rowTests : List (String × Bool) :=
+  let fcfg : Rows.Failures.Config := { limit := 2 }
+  let scfg : Rows.Sessions.Config := { idle_s := 10, absolute_s := 100 }
+  let start : Db.Db := Db.Db.empty [(Rows.Failures.table fcfg).table, (Rows.Sessions.table scfg).table]
+  let failures := (do
+    let a ← Rows.Failures.failed fcfg "ada"
+    let b ← Rows.Failures.failed fcfg "ada"
+    let other ← Rows.Failures.locked fcfg "bob"
+    Rows.Failures.succeeded fcfg "ada"
+    let still ← Rows.Failures.locked fcfg "ada"
+    Rows.Failures.unlock fcfg "ada"
+    let after ← Rows.Failures.locked fcfg "ada"
+    pure (a.locked, b.locked, other, still, after)).run start
+  let sessions := (do
+    let opened ← Rows.Sessions.open scfg 7 "ada" 0
+    let again ← Rows.Sessions.open scfg 7 "eve" 0
+    let used ← Rows.Sessions.accepts scfg 7 5
+    let idle ← Rows.Sessions.accepts scfg 7 30
+    let _ ← Rows.Sessions.open scfg 8 "ada" 30
+    Rows.Sessions.close scfg 8
+    let closed ← Rows.Sessions.accepts scfg 8 31
+    pure (opened, again, used, idle, closed)).run start
+  [ ("auth rows: the second failure locks the account, a success leaves it locked, unlock unlocks",
+      match failures with
+      | .ok ((false, true, false, true, false), _) => true
+      | _ => false),
+    ("auth rows: a session id is taken once; a session lets in its user until idle; a closed one nobody",
+      match sessions with
+      | .ok ((true, false, some "ada", none, none), _) => true
+      | _ => false) ]
+
 def tests : List (String × Bool) :=
-  cookieTests ++ tokenTests ++ loginTests ++ hashTests
+  cookieTests ++ tokenTests ++ loginTests ++ hashTests ++ rowTests
 
 end Tests.Auth

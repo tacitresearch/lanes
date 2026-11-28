@@ -5,94 +5,101 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes
 
 /-!
-# Reminders: work that is due later, through the scheduler
+# Reminders: work that is due later, in a jobs table
 
-A reminder is a text and a time. The application keeps the reminders and leaves the rest to the
-scheduler (`Lanes.Schedule`) beside it: each reminder is a job under its own id that, at its
-time, calls a notification service with the text, retried with backoff until the service takes
-it, the attempts run out or it is cancelled. A periodic job sweeps the reminders that are over
-out of the list, which keeps it within `maxReminders`. The application schedules the sweep at
-every start, and the scheduler, which holds jobs by id, makes the second and later of those one
-job (`already`).
+A reminder is a text and a time. Each is a job of the table `reminders` (`Lanes.Db.Jobs`),
+written by the request that asks for it, due at its time; the worker
+(`Lanes/Db/Worker.lean`) posts it then to a notification service, under the job's id as the
+idempotency key, and again after a backoff until the service takes it, its attempts run out, or
+it is cancelled. Everything is in the table, so a restart loses no reminder and repeats none
+that was taken.
+
+Each request is one transaction (`handler`) of an `Action`: remind, cancel, list. No more than
+`maxReminders` reminders wait at once (`remind` counts them first). The front (`front`) holds
+nothing: it sends each request to the store under the request's own id, and answers it with
+what the store answered.
 -/
 
 namespace Reminders
 
-open Lanes
+open Lanes Lanes.Db Lanes.Db.Jobs
 
-lanes_data inductive Key where
-  | reminder (id : Nat)
-  | sweep
-  deriving DecidableEq, Repr, Hashable, Codable
+def payload : Payload String := { encode := id, decode := some, decode_encode := fun _ => rfl }
 
-lanes_data inductive Task where
-  | deliver (id : Nat) (text : String)
-  | sweep
-  deriving DecidableEq, Repr, Hashable, Codable
+def queue : Queue String := { name := "reminders", payload }
 
-/-- The service's answer to a delivery: its HTTP status. -/
-abbrev Answer := Nat
-
-lanes_data inductive Stage where
-  | waiting
-  | sent
-  /-- Given up on: the scheduler's dead letter. -/
-  | failed
-  | cancelled
-  deriving DecidableEq, Repr, Hashable, Codable
-
-lanes_data structure Reminder where
-  id : Nat
-  text : String
-  at_ms : Nat
-  stage : Stage
-  deriving DecidableEq, Repr, Hashable, Codable
-
-/-- Durable: the reminders, and the next id. -/
-lanes_data structure State where
-  reminders : List Reminder := []
-  nextId : Nat := 0
-  deriving DecidableEq, Repr, Hashable, Codable
-
-lanes_data inductive In where
-  | remind (req : Nat) (now_ms : Nat) (text : String) (in_s : Nat)
-  | cancel (req : Nat) (id : Nat)
-  | list (req : Nat)
-  | noticed (key : Key) (task : Task) (now_ms : Nat)
-  | answered (key : Key) (outcome : Schedule.Outcome Task Answer)
-  deriving DecidableEq, Repr, Hashable, Codable
-
-lanes_data inductive Out where
-  | reply (req : Nat) (reminders : List Reminder) (notice : String)
-  | schedule (now_ms : Nat) (spec : Schedule.Spec Key Task)
-  | cancel (key : Key)
-  /-- A reminder given up on after `attempts`. -/
-  | deadLetter (id : Nat) (text : String) (attempts : Nat)
-  deriving DecidableEq, Repr, Hashable, Codable
-
-def Task.size : Task → Nat
-  | .deliver _ text => text.utf8ByteSize
-  | .sweep => 0
+def schema : Schema := [queue.table]
 
 /-- Every limit is explicit (Lanes rule 2.6). -/
 structure Config where
   maxReminders : Nat := 100
   maxText_bytes : Nat := 280
-  retry : Schedule.Retry :=
-    { maxAttempts := 5, deadline_ms := 5000, base_ms := 1000, cap_ms := 60000, jitter_ms := 500 }
-  sweep_ms : Nat := 60000
+  /-- The most reminders a list shows, the latest first. -/
+  shown_max : Nat := 50
+  jobs : Jobs.Config := { attempts_max := 5, lease_ms := 30000, backoff_ms := 1000, backoff_max_ms := 60000 }
 
-/-- The scheduler beside the reminders: one job for each reminder that waits, and the sweep. -/
-def Config.scheduler (config : Config) : Schedule.Config Key Task Answer where
-  maxJobs := config.maxReminders + 1
-  maxPayload := config.maxText_bytes
-  size := Task.size
-  maxAttempts := config.retry.maxAttempts
-  ok status := 200 ≤ status && status < 300
-  jitter := Schedule.hashJitter
+inductive Action where
+  | remind (text : String) (due_ms : Int64)
+  | cancel (id : Int64)
+  | list
+  deriving DecidableEq, Repr, Hashable
 
-def sweepSpec (config : Config) : Schedule.Spec Key Task :=
-  ⟨.sweep, .sweep, .every config.sweep_ms, 0⟩
+/-- A notice, and the reminders after the request. -/
+structure Answer where
+  notice : String
+  reminders : List (Job String)
+  deriving DecidableEq, Repr, Hashable
+
+variable (config : Config)
+
+/-- The reminders waiting, at most `maxReminders`. -/
+def waiting : Txn (List (Job String)) :=
+  queue.rows.scan (queue.due Int64.maxValue config.maxReminders)
+
+def shown : Txn (List (Job String)) :=
+  queue.rows.scan { table := queue.table, order := .desc, limit := min config.shown_max Scan.limit_max }
+
+def answer (notice : String) : Txn Answer := do
+  return { notice, reminders := ← shown config }
+
+def remind (text : String) (due_ms : Int64) : Txn Answer := do
+  if text.isEmpty || config.maxText_bytes < text.utf8ByteSize then
+    answer config s!"A reminder is between 1 and {config.maxText_bytes} bytes."
+  else if config.maxReminders ≤ (← waiting config).length then
+    answer config "Too many reminders wait."
+  else
+    let id ← queue.nextId
+    discard <| queue.enqueue s!"#{id}" text due_ms
+    answer config "Scheduled."
+
+def cancel (id : Int64) : Txn Answer := do
+  match ← queue.rows.get [.int id] with
+  | some j =>
+    if ← queue.cancel j.key then answer config "Cancelled." else answer config "That reminder does not wait."
+  | none => answer config "No such reminder."
+
+def handler : Handler Action Answer
+  | .remind text due_ms => remind config text due_ms
+  | .cancel id => cancel config id
+  | .list => answer config ""
+
+/-- The store's handler: the application's transactions and the worker's. -/
+def store : Handler (Action ⊕ Req) (Answer ⊕ Ans String) := beside (handler config) (queue.handler config.jobs)
+
+/-! ## The front -/
+
+inductive In where
+  /-- A request, numbered by the server. -/
+  | request (n : Nat) (a : Action)
+  | store (reply : Db.Reply (Answer ⊕ Ans String))
+  deriving DecidableEq, Repr, Hashable
+
+inductive Out where
+  | call (c : Db.Call (Action ⊕ Req))
+  | answered (n : Nat) (a : Answer)
+  /-- The store failed the request, or its answer is not known. -/
+  | failed (n : Nat)
+  deriving DecidableEq, Repr, Hashable
 
 abbrev sig : Signature where
   Id := Unit
@@ -100,78 +107,41 @@ abbrev sig : Signature where
   In := In
   Out := Out
 
-abbrev Eff := Effect sig ()
+/-- A request goes to the store under its own number, and its answer comes back under it: the
+front keeps nothing, so a restart forgets nothing. -/
+def step : In → List (Effect sig ())
+  | .request n r => [.emit (.call ⟨n, .inl r⟩)]
+  | .store ⟨n, .committed (.inl a)⟩ => [.emit (.answered n a)]
+  | .store ⟨_, .committed (.inr _)⟩ => []
+  | .store ⟨n, _⟩ => [.emit (.failed n)]
 
-def setStage (s : State) (id : Nat) (stage : Stage) : State :=
-  { s with reminders := s.reminders.map fun r => if r.id = id then { r with stage } else r }
+def front : sig.Actor () Unit where
+  init := ()
+  step _ x := ((), step x)
 
-def reply (s : State) (req : Nat) (notice : String) : Eff := .emit (.reply req s.reminders notice)
-
-def remind (config : Config) (s : State) (req now_ms : Nat) (text : String) (in_s : Nat) :
-    State × List Eff :=
-  if text.isEmpty || config.maxText_bytes < text.utf8ByteSize then
-    (s, [reply s req s!"A reminder is between 1 and {config.maxText_bytes} bytes."])
-  else if config.maxReminders ≤ s.reminders.length then
-    (s, [reply s req "Too many reminders: wait for the next sweep."])
-  else
-    let r : Reminder := ⟨s.nextId, text, now_ms + in_s * 1000, .waiting⟩
-    let s' := { s with reminders := s.reminders ++ [r], nextId := s.nextId + 1 }
-    (s', [.emit (.schedule now_ms ⟨.reminder r.id, .deliver r.id text, .call config.retry, r.at_ms⟩),
-      reply s' req "Scheduled."])
-
-def cancel (s : State) (req id : Nat) : State × List Eff :=
-  if s.reminders.any fun r => r.id = id && r.stage = .waiting then
-    (s, [.emit (.cancel (.reminder id)), reply s req "Cancelling."])
-  else (s, [reply s req "No such reminder waits."])
-
-/-- What the scheduler says of a reminder's job. -/
-def answered (s : State) (id : Nat) : Schedule.Outcome Task Answer → State × List Eff
-  | .succeeded _ => (setStage s id .sent, [])
-  | .failed (.deliver _ text) attempts _ =>
-    (setStage s id .failed, [.emit (.deadLetter id text attempts)])
-  | .failed .sweep _ _ | .refused _ => (setStage s id .failed, [])
-  | .cancelled => (setStage s id .cancelled, [])
-  | .scheduled | .already => (s, [])
-
-/-- The sweep: reminders that are over leave the list. -/
-def sweep (s : State) : State :=
-  { s with reminders := s.reminders.filter (·.stage = .waiting) }
-
-def step (config : Config) (s : State) : In → State × List Eff
-  | .remind req now_ms text in_s => remind config s req now_ms text in_s
-  | .cancel req id => cancel s req id
-  | .list req => (s, [reply s req ""])
-  | .noticed .sweep _ _ => (sweep s, [])
-  | .noticed (.reminder _) _ _ => (s, [])
-  | .answered (.reminder id) outcome => answered s id outcome
-  | .answered .sweep _ => (s, [])
-
-def app (config : Config) : sig.Actor () State where
-  init := {}
-  step := step config
-  recover s := (s, [.emit (.schedule 0 (sweepSpec config))])
-
-abbrev reminders (config : Config) : System sig where
-  State _ := State
-  actor _ := app config
+abbrev system : System sig where
+  State _ := Unit
+  actor _ := front
   accept x := ⟨(), x⟩
-  boot := [()]
 
-/-- How the reminders use the scheduler. -/
-def use : Schedule.Use sig Key Task Answer where
-  scheduled
-    | .schedule now_ms spec => some (now_ms, spec)
+def port : Db.Port sig (Action ⊕ Req) (Answer ⊕ Ans String) where
+  call
+    | .call c => some c
     | _ => none
-  cancelled
-    | .cancel key => some key
+  reply r := .store r
+  replied
+    | .store r => some r
     | _ => none
-  notice := .noticed
-  answer := .answered
 
-/-- The reminders with the scheduler beside them. -/
-abbrev system (config : Config) := Schedule.attach (reminders config) config.scheduler use
+/-! ## The worker -/
 
-abbrev SchedIn := Schedule.Input Key Task Answer
-abbrev SchedOut := Schedule.Output Key Task Answer
+/-- The service's answer to a delivery: its HTTP status, `2xx` taken, `4xx` refused for good. -/
+def classify (status : Nat) : Verdict :=
+  if 200 ≤ status ∧ status < 300 then .ok
+  else if 400 ≤ status ∧ status < 500 then .fatal s!"refused: {status}"
+  else .retry s!"status {status}"
+
+def Config.worker (attempt_ms : Nat := 5000) : Worker.Config Nat :=
+  { jobs := config.jobs, attempt_ms, claim_ms := attempt_ms, classify }
 
 end Reminders

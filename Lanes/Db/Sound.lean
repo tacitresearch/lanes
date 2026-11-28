@@ -430,6 +430,138 @@ theorem invariant {σ : Signature} (cfg : Config) (port : Port σ Q A) {start : 
     · exact observe_holds cfg hI _ hd
     · exact hd
 
+/-! ## Properties of worlds
+
+A property of a world may speak of its calls as well as its database: of the answer a call that
+took effect will be given (`World.done`). `WorldInv` is what keeps one in every world the model
+holds, also once any call still outstanding or lost takes effect (`world_invariant`). -/
+
+/-- A property of worlds that every call taking effect, every answer and every call sent keeps. -/
+structure WorldInv (h : Handler Q A) (J : World Q A → Prop) : Prop where
+  effects : ∀ w, J w → ∀ w' ∈ w.effects h, J w'
+  answer : ∀ w r, J w → ∀ w' ∈ w.answer r, J w'
+  send : ∀ (cfg : Config) w c, J w → J (w.send cfg c)
+
+/-- `J` holds of every world of the model, with every call that may still take effect applied. -/
+def WorldHolds (h : Handler Q A) (J : World Q A → Prop) (s : State Q A) : Prop :=
+  ∀ w ∈ s.worlds, ∀ w' ∈ w.expand h w.fuel, J w'
+
+variable {J : World Q A → Prop}
+
+theorem WorldInv.expand (hJ : WorldInv h J) :
+    ∀ (fuel : Nat) (w : World Q A), J w → ∀ w' ∈ w.expand h fuel, J w' := by
+  intro fuel
+  induction fuel with
+  | zero => intro w hw w' hw'; simp only [World.expand, List.mem_singleton] at hw'; exact hw' ▸ hw
+  | succ fuel ih =>
+    intro w hw w' hw'
+    simp only [World.expand, List.mem_cons, List.mem_flatMap] at hw'
+    rcases hw' with rfl | ⟨v, hv, hw'⟩
+    · exact hw
+    · exact ih v (hJ.effects w hw v hv) w' hw'
+
+theorem WorldInv.allow (hJ : WorldInv h J) {s s' : State Q A} {r : Reply A}
+    (hs : WorldHolds h J s) (ha : s.allow h r = some s') : WorldHolds h J s' := by
+  simp only [State.allow] at ha
+  split at ha
+  · cases ha
+  · simp only [Option.some.injEq] at ha
+    subst ha
+    intro w hw w' hw'
+    have hw := mem_dedup hw
+    simp only [List.mem_flatMap] at hw
+    obtain ⟨v, hv, u, hu, hw⟩ := hw
+    exact hJ.expand _ w (hJ.answer u r (hs v hv u hu) w hw) w' hw'
+
+theorem WorldInv.observe (cfg : Config) (hJ : WorldInv h J) {s : State Q A} (c : Call Q)
+    (hs : WorldHolds h J s) : WorldHolds h J (s.observe cfg c) := by
+  intro w hw w' hw'
+  simp only [State.observe, List.mem_map] at hw
+  obtain ⟨v, hv, rfl⟩ := hw
+  exact hJ.expand _ _ (hJ.send cfg v c (hs v hv v (expand_self v _))) w' hw'
+
+/-- **Properties of worlds.** If the start's world satisfies `J`, and every call taking effect,
+every answer and every call sent keeps it, it holds of every world the model allows after every
+run, also once any call still outstanding or lost takes effect. -/
+theorem world_invariant {σ : Signature} (cfg : Config) (port : Port σ Q A) {start : Db}
+    (hJ : WorldInv h J) (hstart : J { db := start }) {events : List (Event σ)} {s : State Q A}
+    (hrun : (outside cfg h start port).after events = some s) : WorldHolds h J s := by
+  refine (outside cfg h start port).after_invariant (fun _ => True) (WorldHolds h J) ?_ ?_ ?_
+    (fun _ _ => trivial) hrun
+  · intro w hw w' hw'
+    simp only [outside, List.mem_singleton] at hw
+    subst hw
+    exact hJ.expand _ _ hstart w' hw'
+  · intro d x d' hd hx
+    simp only [outside, Option.bind_eq_some_iff] at hx
+    obtain ⟨r, -, hr⟩ := hx
+    exact hJ.allow hd hr
+  · intro d out hd _
+    simp only [outside]
+    split
+    · exact hJ.observe cfg _ hd
+    · exact hd
+
+/-- The model always keeps some world: an answer no world allows is refused. -/
+theorem worlds_ne_nil {σ : Signature} (cfg : Config) (port : Port σ Q A) {start : Db}
+    {events : List (Event σ)} {s : State Q A}
+    (hrun : (outside cfg h start port).after events = some s) : s.worlds ≠ [] := by
+  refine (outside cfg h start port).after_invariant (fun _ => True) (fun s => s.worlds ≠ []) ?_ ?_ ?_
+    (fun _ _ => trivial) hrun
+  · simp [outside]
+  · intro d x d' _ hx
+    simp only [outside, Option.bind_eq_some_iff] at hx
+    obtain ⟨r, -, hr⟩ := hx
+    simp only [State.allow] at hr
+    split at hr
+    · cases hr
+    · next hne => simp only [Option.some.injEq] at hr; subst hr; simpa using hne
+  · intro d out hd _
+    simp only [outside]
+    split
+    · simpa [State.observe] using hd
+    · exact hd
+
+/-- A world in which a committed answer comes had the call take effect with that answer, and
+has the same database. -/
+theorem World.answer_committed {w w' : World Q A} {id : Nat} {a : A}
+    (h : w' ∈ w.answer ⟨id, .committed a⟩) : (id, a) ∈ w.done ∧ w'.db = w.db := by
+  simp only [World.answer] at h
+  split at h
+  · next hc => simp at h; exact ⟨List.contains_iff_mem.mp hc, by rw [h]⟩
+  · simp at h
+
+theorem World.answer_done {w w' : World Q A} {r : Reply A} (h : w' ∈ w.answer r) :
+    ∀ p ∈ w'.done, p ∈ w.done := by
+  simp only [World.answer] at h
+  split at h <;> (try split at h) <;> (try split at h) <;> simp at h <;> subst h <;>
+    first | exact fun p hp => List.mem_of_mem_erase hp | exact fun p hp => hp
+
+omit [DecidableEq Q] [DecidableEq A] in
+theorem World.send_done (cfg : Config) (w : World Q A) (c : Call Q) :
+    (w.send cfg c).db = w.db ∧ (w.send cfg c).done = w.done := by
+  unfold World.send; split <;> exact ⟨rfl, rfl⟩
+
+omit [DecidableEq A] in
+/-- A world after a call takes effect: its database is one run of a call's transaction on the
+world's, and its answers to come are those it had, with the answer of that call if it was
+pending. -/
+theorem World.mem_effects {w w' : World Q A} (hw : w' ∈ w.effects h) :
+    (∃ c ∈ w.pending, ∃ a, (h c.request).run w.db = .ok (a, w'.db) ∧ w'.done = w.done ++ [(c.id, a)])
+      ∨ ∃ q ∈ w.lost, ∃ a, (h q).run w.db = .ok (a, w'.db) ∧ w'.done = w.done := by
+  simp only [World.effects, List.mem_append, List.mem_filterMap, Option.map_eq_some_iff] at hw
+  rcases hw with ⟨c, hc, ⟨a, db⟩, hrun, rfl⟩ | ⟨q, hq, ⟨a, db⟩, hrun, rfl⟩
+  · left
+    refine ⟨c, hc, a, ?_, rfl⟩
+    cases hr : (h c.request).run w.db with
+    | error e => simp [hr, Except.toOption] at hrun
+    | ok p => simp only [hr, Except.toOption, Option.some.injEq] at hrun; rw [hrun]
+  · right
+    refine ⟨q, hq, a, ?_, rfl⟩
+    cases hr : (h q).run w.db with
+    | error e => simp [hr, Except.toOption] at hrun
+    | ok p => simp only [hr, Except.toOption, Option.some.injEq] at hrun; rw [hrun]
+
 end Model
 
 /-! ## Rows: what a proof of `Preserves` reads off an operation -/
@@ -511,7 +643,255 @@ theorem Op.update_rows (t : Table) (row : Row) (rows : List Row) :
   · exact .inl rfl
   · exact .inr rfl
 
+/-- An insert that answered `true` added the row to rows none of which has its key. -/
+theorem Op.insert_onRows (t : Table) (row : Row) (rows : List Row)
+    (h : ((Op.insert t row).onRows rows).1 = true) :
+    ((Op.insert t row).onRows rows).2 = t.insertSorted row rows ∧ ∀ x ∈ rows, t.keyOf x ≠ t.keyOf row := by
+  simp only [Op.onRows] at h ⊢
+  split
+  · next hc => simp [hc] at h
+  · next hc =>
+    simp only [Bool.or_eq_true, not_or, Bool.not_eq_true, List.any_eq_false] at hc
+    refine ⟨rfl, fun x hx heq => ?_⟩
+    have := hc.1 x hx
+    simp [Table.hasKey, heq] at this
+
 theorem Op.delete_rows (t : Table) (key : Row) (rows : List Row) :
     ((Op.delete t key).onRows rows).2 = rows.filter (!t.hasKey key ·) := rfl
+
+
+/-! ## Unique indexes
+
+The store refuses a write that would give two rows of distinct keys the values of a unique index
+(`Table.clashes`), so a unique index stays unique under every operation on its table
+(`Op.unique_apply`). -/
+
+/-- No two rows of distinct keys have the same values in the index `i`. -/
+def Table.Unique (t : Table) (i : Index) (rows : List Row) : Prop :=
+  ∀ x ∈ rows, ∀ y ∈ rows, i.project x = i.project y → t.keyOf x = t.keyOf y
+
+theorem Table.not_clashes {t : Table} {rows : List Row} {r : Row} (h : t.clashes rows r = false)
+    {i : Index} (hi : i ∈ t.indexes) (hu : i.unique = true) :
+    ∀ x ∈ rows, i.project x = i.project r → t.keyOf x = t.keyOf r := by
+  intro x hx hp
+  simp only [Table.clashes, List.any_eq_false, Bool.and_eq_true, not_and] at h
+  by_cases hk : t.keyOf x = t.keyOf r
+  · exact hk
+  · exfalso
+    apply h i hi hu
+    rw [List.any_eq_true]
+    exact ⟨x, hx, by simp [hk, hp]⟩
+
+theorem Table.Unique.sub {t : Table} {i : Index} {rows rows' : List Row} (h : t.Unique i rows)
+    (hsub : ∀ x ∈ rows', x ∈ rows) : t.Unique i rows' :=
+  fun x hx y hy hp => h x (hsub x hx) y (hsub y hy) hp
+
+theorem Table.Unique.add {t : Table} {i : Index} {rows rows' : List Row} {r : Row} (h : t.Unique i rows)
+    (hsub : ∀ x ∈ rows', x = r ∨ x ∈ rows)
+    (hr : ∀ x ∈ rows', x ≠ r → i.project x = i.project r → t.keyOf x = t.keyOf r) : t.Unique i rows' := by
+  intro x hx y hy hp
+  rcases hsub x hx with rfl | hx' <;> rcases hsub y hy with rfl | hy'
+  · rfl
+  · by_cases hyx : y = x
+    · rw [hyx]
+    · exact (hr y hy hyx hp.symm).symm
+  · by_cases hxy : x = y
+    · rw [hxy]
+    · exact hr x hx hxy hp
+  · exact h x hx' y hy' hp
+
+theorem Table.mem_insertSorted (t : Table) (r : Row) (rows : List Row) :
+    ∀ x, x ∈ t.insertSorted r rows ↔ x = r ∨ x ∈ rows := by
+  intro x
+  rw [(t.insertSorted_perm r rows).mem_iff, List.mem_cons]
+
+/-- **A unique index stays unique.** Every operation on a table keeps each of its unique indexes
+unique: a write that would break one does nothing. -/
+theorem Op.unique_rows (o : Op) {i : Index} (hi : i ∈ o.table.indexes) (hu : i.unique = true)
+    (rows : List Row) (h : o.table.Unique i rows) : o.table.Unique i (o.onRows rows).2 := by
+  cases o with
+  | get t k => exact h
+  | scan s => exact h
+  | insert t r =>
+    simp only [Op.onRows]
+    split
+    · exact h
+    · next hc =>
+      simp only [Bool.or_eq_true, not_or, Bool.not_eq_true] at hc
+      refine h.add (fun x hx => (t.mem_insertSorted r rows x).mp hx) fun x hx hxr hp => ?_
+      rcases (t.mem_insertSorted r rows x).mp hx with rfl | hx
+      · exact absurd rfl hxr
+      · exact Table.not_clashes hc.2 hi hu x hx hp
+  | update t r =>
+    simp only [Op.onRows]
+    split
+    · exact h
+    · next hc =>
+      simp only [Bool.or_eq_true, not_or, Bool.not_eq_true] at hc
+      have hmem : ∀ x ∈ rows.map (fun x => if t.hasKey (t.keyOf r) x then r else x), x = r ∨ x ∈ rows := by
+        intro x hx
+        obtain ⟨y, hy, rfl⟩ := List.mem_map.mp hx
+        split
+        · exact .inl rfl
+        · exact .inr hy
+      exact h.add hmem fun x hx _ hp => by
+        obtain ⟨y, hy, rfl⟩ := List.mem_map.mp hx
+        by_cases hk : t.hasKey (t.keyOf r) y = true
+        · simp [hk]
+        · simp only [hk, Bool.false_eq_true, ↓reduceIte] at hp ⊢
+          exact Table.not_clashes hc.2 hi hu y hy hp
+  | upsert t r =>
+    simp only [Op.onRows]
+    split
+    · exact h
+    · next hc =>
+      simp only [Bool.not_eq_true] at hc
+      have hmem : ∀ x ∈ t.insertSorted r (t.without (t.keyOf r) rows), x = r ∨ x ∈ rows := by
+        intro x hx
+        rcases (t.mem_insertSorted r _ x).mp hx with rfl | hx
+        · exact .inl rfl
+        · exact .inr (List.mem_filter.mp hx).1
+      exact h.add hmem fun x hx hxr hp => by
+        rcases (t.mem_insertSorted r _ x).mp hx with rfl | hx
+        · exact absurd rfl hxr
+        · exact Table.not_clashes hc hi hu x (List.mem_filter.mp hx).1 hp
+  | delete t k => exact h.sub fun x hx => (List.mem_filter.mp hx).1
+
+theorem Op.unique_apply (o : Op) {db : Db} {r : o.Ret} {db' : Db} (h : o.apply db = .ok (r, db'))
+    (t : Table) (i : Index) (hi : i ∈ t.indexes) (hu : i.unique = true)
+    (ht : o.table.name = t.name → o.table = t) (hU : t.Unique i (db.rows t.name)) :
+    t.Unique i (db'.rows t.name) := by
+  rw [Op.rows_apply o h]
+  split
+  · next hw =>
+    obtain ⟨-, hn⟩ := hw
+    have := ht hn.symm
+    subst this
+    rw [← hn]
+    exact o.unique_rows hi hu _ hU
+  · exact hU
+
+/-- Every operation a transaction may ask satisfies `P`. -/
+inductive Txn.All {α : Type} (P : Op → Prop) : Txn α → Prop where
+  | pure (a : α) : Txn.All P (.pure a)
+  | abort (why : String) : Txn.All P (.abort why)
+  | op (o : Op) (k : o.Ret → Txn α) : P o → (∀ r, Txn.All P (k r)) → Txn.All P (.op o k)
+
+namespace Txn.All
+
+variable {P : Op → Prop}
+
+theorem bind {α β : Type} {t : Txn α} {f : α → Txn β} (ht : t.All P) (hf : ∀ a, (f a).All P) :
+    (t.bind f).All P := by
+  induction ht with
+  | pure a => exact hf a
+  | abort why => exact .abort why
+  | op o k hp _ ih => exact .op o _ hp ih
+
+theorem map {α β : Type} {t : Txn α} (f : α → β) (ht : t.All P) : (f <$> t).All P :=
+  bind ht fun a => .pure (f a)
+
+theorem of_reads {α : Type} {t : Txn α} (ht : t.Reads) (hP : ∀ o, o.writes = false → P o) : t.All P := by
+  induction ht with
+  | pure a => exact .pure a
+  | abort why => exact .abort why
+  | op o k hw _ ih => exact .op o k (hP o hw) ih
+
+theorem single {o : Op} (hp : P o) : (Txn.op o Txn.pure).All P := .op o _ hp fun r => .pure r
+
+theorem mono {α : Type} {t : Txn α} {Q : Op → Prop} (ht : t.All P) (h : ∀ o, P o → Q o) : t.All Q := by
+  induction ht with
+  | pure a => exact .pure a
+  | abort why => exact .abort why
+  | op o k hp _ ih => exact .op o k (h o hp) ih
+
+theorem mapM {α β : Type} (f : α → Txn β) (hf : ∀ a, (f a).All P) : ∀ xs : List α, (xs.mapM f).All P := by
+  intro xs
+  induction xs with
+  | nil => exact .pure []
+  | cons x xs ih =>
+    simp only [List.mapM_cons]
+    exact bind (hf x) fun b => bind ih fun bs => .pure _
+
+/-- What every operation keeps, a transaction of them keeps. -/
+theorem keeps {α : Type} {t : Txn α} (ht : t.All P) {I : Db → Prop}
+    (hI : ∀ o, P o → ∀ db r db', I db → o.apply db = .ok (r, db') → I db') :
+    ∀ db a db', I db → t.run db = .ok (a, db') → I db' := by
+  induction ht with
+  | pure a => intro db a' db' h hrun; simp at hrun; exact hrun.2 ▸ h
+  | abort why => intro _ _ _ _ hrun; simp at hrun
+  | op o k hp _ ih =>
+    intro db a db' h hrun
+    obtain ⟨r, db₁, ha, hk⟩ := run_op_ok_inv hrun
+    exact ih r db₁ a db' (hI o hp db r db₁ h ha) hk
+
+end Txn.All
+
+/-- A unique index of a table stays unique under every transaction whose operations on a table
+of its name are on that table. -/
+theorem Txn.All.unique {α : Type} {t : Txn α} (tbl : Table) {i : Index} (hi : i ∈ tbl.indexes)
+    (hu : i.unique = true) (ht : t.All fun o => o.table.name = tbl.name → o.table = tbl) :
+    ∀ db a db', tbl.Unique i (db.rows tbl.name) → t.run db = .ok (a, db') → tbl.Unique i (db'.rows tbl.name) :=
+  ht.keeps fun o ho _ _ _ hU ha => Op.unique_apply o ha tbl i hi hu ho hU
+
+/-! ## Every row of a table -/
+
+/-- The row a write asks to put in its table. -/
+def Op.written : Op → Option Row
+  | .insert _ r | .update _ r | .upsert _ r => some r
+  | _ => none
+
+/-- After an operation, every row of its table was there before, or is the one it wrote. -/
+theorem Op.onRows_sub (o : Op) (rows : List Row) :
+    ∀ x ∈ (o.onRows rows).2, x ∈ rows ∨ o.written = some x := by
+  intro x hx
+  cases o with
+  | get t k => exact .inl hx
+  | scan s => exact .inl hx
+  | insert t r =>
+    simp only [Op.onRows] at hx
+    split at hx
+    · exact .inl hx
+    · rcases (t.mem_insertSorted r rows x).mp hx with rfl | hx
+      · exact .inr rfl
+      · exact .inl hx
+  | update t r =>
+    simp only [Op.onRows] at hx
+    split at hx
+    · exact .inl hx
+    · obtain ⟨y, hy, rfl⟩ := List.mem_map.mp hx
+      split
+      · exact .inr rfl
+      · exact .inl hy
+  | upsert t r =>
+    simp only [Op.onRows] at hx
+    split at hx
+    · exact .inl hx
+    · rcases (t.mem_insertSorted r _ x).mp hx with rfl | hx
+      · exact .inr rfl
+      · exact .inl (List.mem_filter.mp hx).1
+  | delete t k => exact .inl (List.mem_filter.mp hx).1
+
+/-- Every row of the table that reads back is a value `P` admits. -/
+def TableOf.Every {α : Type} (t : TableOf α) (P : α → Prop) (db : Db) : Prop :=
+  ∀ x ∈ db.rows t.table.name, ∀ a, t.ofRow x = some a → P a
+
+/-- An operation on the table, or on another one, that writes only values `P` admits keeps every
+row of the table admitted. -/
+theorem TableOf.every_apply {α : Type} (t : TableOf α) {P : α → Prop} (o : Op)
+    (ht : o.table.name = t.table.name → o.table = t.table)
+    (hw : ∀ r, o.written = some r → ∀ a, t.ofRow r = some a → P a)
+    {db : Db} {r : o.Ret} {db' : Db} (h : o.apply db = .ok (r, db')) (hP : t.Every P db) :
+    t.Every P db' := by
+  intro x hx a ha
+  rw [Op.rows_apply o h] at hx
+  split at hx
+  · next hc =>
+    have := ht hc.2.symm
+    rw [← hc.2] at hx
+    rcases o.onRows_sub _ x hx with hx | hx
+    · exact hP x (hc.2 ▸ hx) a ha
+    · exact hw x hx a ha
+  · exact hP x hx a ha
 
 end Lanes.Db
