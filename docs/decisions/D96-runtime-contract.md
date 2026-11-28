@@ -599,7 +599,9 @@ These are places where a runtime's choices show up in application code:
 
 Each step keeps every application's proofs as they are, because none of them changes Layer 1.
 
-## Open questions
+## Details settled
+
+Each detail below is settled at the default it states (the owner's rule: small and reversible choices are taken at their default, and changed later if needed).
 
 Each has a default, taken unless the owner says otherwise.
 
