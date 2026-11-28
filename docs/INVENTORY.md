@@ -650,7 +650,7 @@ them by area.
 | `Journal.Disk.mend` | proved | `Journal.Disk.Torn.mend`, `Journal.Disk.Torn.mend_crash` |
 | `Journal.Disk.load` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Torn.load` and others |
 | `Journal.appendWrites` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` |
-| `Journal.saveWrites` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save`, `Journal.Disk.Holds.save_crash` |
+| `Journal.saveWrites` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save`, `Journal.Disk.Holds.save_crash` and others |
 | `Journal.memo` | spec | used only in statements |
 | `Journal.Disk.Holds` | spec | a predicate |
 | `Journal.Disk.Torn` | spec | a predicate |
@@ -700,13 +700,13 @@ them by area.
 | `Journal.header` | proved | `Journal.Disk.load_cut`, `Journal.Disk.start_foreign`, `Journal.Disk.torn_nil` and others |
 | `Journal.label` | proved | `Journal.label_zero` |
 | `Journal.named?` | proved | `Journal.Disk.start_foreign` |
-| `Journal.file` | proved | `Journal.Disk.load_cut`, `Journal.open?_cut`, `Journal.open?_file` |
+| `Journal.file` | proved | `Journal.Disk.load_cut`, `Journal.Restore.piece?_file`, `Journal.open?_cut` and others |
 | `Journal.open?` | proved | `Journal.Disk.open?_of_read`, `Journal.open?_cut`, `Journal.open?_file` |
 | `Journal.Entry.op?` | proved | through `Batch.flush`, `Batch.grown` and others: `Batch.flush_save`, `Batch.grown_eq` and others |
 | `Journal.Entry.marks` | proved | `Journal.recoverIds_handed`, `Journal.recover_handed` |
 | `Journal.ops` | proved | `Journal.recover_handed`, `Journal.recover_kernel`, `Journal.recover_outputs` and others |
-| `Journal.replay1` | proved | through `Journal.Begun.toFound`, `Journal.recover` and others: `Journal.Begun.resume_upgraded`, `Journal.Disk.Holds.load_append_crash` and others |
-| `Journal.recover` | proved | `Journal.Disk.load_cut`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.begin_torn` and others |
+| `Journal.replay1` | proved | through `Journal.Begun.toFound`, `Journal.Restore.saved` and others: `Journal.Begun.resume_upgraded`, `Journal.Disk.Holds.load_append_crash` and others |
+| `Journal.recover` | proved | `Journal.Disk.load_cut`, `Journal.Restore.journal_restores`, `Journal.Upgrade.begin_crash` and others |
 | `Journal.replay` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and others |
 | `Journal.Entry.savedAt` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` and others |
 | `Journal.since` | proved | through `Journal.Begun.load`, `Journal.Begun.toFound` and others: `Journal.Begun.resume_upgraded`, `Journal.Upgrade.begin_crash` and others |
@@ -732,13 +732,13 @@ them by area.
 | `Journal.OutputId.key` | checked | `Tests/HttpClient.lean` |
 | `Journal.journalId` | tested | `Tests/Durable.lean` |
 | `Journal.tag` | proved | `Journal.turnAll_placed`, `Journal.turn_placed` |
-| `Journal.apply?` | proved | through `Journal.ids`, `Journal.placed` and others: `Batch.run_ids`, `Journal.ids_append` and others |
+| `Journal.apply?` | proved | through `Journal.ids`, `Journal.placed` and others: `Batch.run_ids`, `Journal.Restore.journal_restores` and others |
 | `Journal.steps` | spec | used only in statements |
 | `Journal.placed` | spec | used only in statements |
-| `Journal.replayIds1` | proved | through `Journal.recoverIds`, `Journal.resumeIds`: `Journal.recoverIds_erase`, `Journal.recoverIds_handed` and others |
+| `Journal.replayIds1` | proved | through `Journal.recoverIds`, `Journal.resumeIds`: `Journal.Restore.journal_restores`, `Journal.Restore.journal_resumeIds` and others |
 | `Journal.ids` | spec | used only in statements |
-| `Journal.recoverIds` | proved | `Journal.recoverIds_erase`, `Journal.recoverIds_handed`, `Journal.recoverIds_suffix` and others |
-| `Journal.resumeIds` | proved | `Journal.resumeIds_eq_recoverIds`, `Journal.resumeIds_erase` |
+| `Journal.recoverIds` | proved | `Journal.Restore.journal_resumeIds`, `Journal.recoverIds_erase`, `Journal.recoverIds_handed` and others |
+| `Journal.resumeIds` | proved | `Journal.Restore.journal_restores`, `Journal.Restore.journal_resumeIds`, `Journal.resumeIds_eq_recoverIds` and others |
 | `Journal.erase` | spec | used only in statements |
 
 ## `Lanes/Durable/Reading.lean`
@@ -759,9 +759,9 @@ them by area.
 | `Journal.Restore.best` | tested | `Tests/Ship.lean` |
 | `Journal.Restore.chain` | tested | `Tests/Ship.lean` |
 | `Journal.Restore.plan` | tested | `Tests/Ship.lean` |
-| `Journal.Restore.piece?` | tested | `Tests/Ship.lean` |
-| `Journal.Restore.stitch` | tested | `Tests/Ship.lean` |
-| `Journal.Restore.journal` | tested | `Tests/Ship.lean` |
+| `Journal.Restore.piece?` | proved | `Journal.Restore.piece?_file` |
+| `Journal.Restore.stitch` | proved | `Journal.Restore.stitch_slice` |
+| `Journal.Restore.journal` | proved | `Journal.Restore.journal_restores`, `Journal.Restore.journal_resumeIds` |
 | `Journal.Restore.saved` | spec | used only in statements |
 
 ## `Lanes/Durable/Ship.lean`
@@ -771,21 +771,20 @@ them by area.
 | `Journal.Ship.digits` | tested | `Tests/Ship.lean` |
 | `Journal.Ship.sum` | tested | `Tests/Ship.lean` |
 | `Journal.Ship.Upload.object` | tested | `Tests/Ship.lean` |
-| `Journal.Ship.key` | none |  |
-| `Journal.Ship.snapshotOf?` | none |  |
-| `Journal.Ship.start` | tested | `Tests/Ship.lean` |
-| `Journal.Ship.shed` | tested | `Tests/Ship.lean` |
-| `Journal.Ship.enqueue` | tested | `Tests/Ship.lean` |
-| `Journal.Ship.sealWaiting` | tested | `Tests/Ship.lean` |
-| `Journal.Ship.wrote` | tested | `Tests/Ship.lean` |
-| `Journal.Ship.backoff` | tested | `Tests/Ship.lean` |
-| `Journal.Ship.answer` | tested | `Tests/Ship.lean` |
-| `Journal.Ship.step` | tested | `Tests/Ship.lean` |
-| `Journal.Ship.soonest` | tested | `Tests/Ship.lean` |
-| `Journal.Ship.sealAt` | tested | `Tests/Ship.lean` |
-| `Journal.Ship.ripen` | tested | `Tests/Ship.lean` |
-| `Journal.Ship.choose` | tested | `Tests/Ship.lean` |
-| `Journal.Ship.take` | tested | `Tests/Ship.lean` |
+| `Journal.Ship.snapshotOf?` | proved | `Journal.Ship.snapshotOf?_saveWrites` |
+| `Journal.Ship.start` | proved | `Journal.Ship.Holds.start` |
+| `Journal.Ship.shed` | proved | through `Journal.Ship.step`, `Journal.Ship.take`: `Journal.Ship.Holds.put`, `Journal.Ship.Holds.step` and others |
+| `Journal.Ship.enqueue` | proved | through `Journal.Ship.step`, `Journal.Ship.take`: `Journal.Ship.Holds.put`, `Journal.Ship.Holds.step` and others |
+| `Journal.Ship.sealWaiting` | proved | through `Journal.Ship.step`, `Journal.Ship.take`: `Journal.Ship.Holds.put`, `Journal.Ship.Holds.step` and others |
+| `Journal.Ship.wrote` | proved | through `Journal.Ship.step`: `Journal.Ship.Holds.step` |
+| `Journal.Ship.backoff` | proved | through `Journal.Ship.step`: `Journal.Ship.Holds.step` |
+| `Journal.Ship.answer` | proved | through `Journal.Ship.step`: `Journal.Ship.Holds.step` |
+| `Journal.Ship.step` | proved | `Journal.Ship.Holds.step` |
+| `Journal.Ship.soonest` | proved | through `Journal.Ship.take`: `Journal.Ship.Holds.put`, `Journal.Ship.Holds.take` |
+| `Journal.Ship.sealAt` | proved | through `Journal.Ship.take`: `Journal.Ship.Holds.put`, `Journal.Ship.Holds.take` |
+| `Journal.Ship.ripen` | proved | through `Journal.Ship.take`: `Journal.Ship.Holds.put`, `Journal.Ship.Holds.take` |
+| `Journal.Ship.choose` | proved | through `Journal.Ship.take`: `Journal.Ship.Holds.put`, `Journal.Ship.Holds.take` |
+| `Journal.Ship.take` | proved | `Journal.Ship.Holds.put`, `Journal.Ship.Holds.take` |
 | `Journal.Ship.State.idle` | tested | `Tests/Ship.lean` |
 | `Journal.Ship.Slice` | spec | a predicate |
 
@@ -799,7 +798,7 @@ them by area.
 | `Kernel.Image.Codecs.image` | proved | its type, `Codec` |
 | `Journal.savedHeader` | proved | `Journal.savedHeader_inj` |
 | `Journal.savedRecords` | proved | `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save`, `Journal.Disk.Holds.save_crash` and others |
-| `Journal.saved` | proved | `Journal.saved?_other`, `Journal.saved?_saved` |
+| `Journal.saved` | proved | `Journal.Ship.snapshotOf?_saveWrites`, `Journal.saved?_other`, `Journal.saved?_saved` |
 | `Journal.saved?` | proved | `Journal.saved?_other`, `Journal.saved?_saved` |
 
 ## `Lanes/Durable/Upgrade.lean`
@@ -3401,7 +3400,7 @@ them by area.
 | --- | --- | --- |
 | `S3.backupPut` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Backup.lean` |
 | `S3.shipped` | tested | `Tests/Oracle/Service/All.lean`, `Tests/Oracle/Service/S3Backup.lean`, `Tests/Ship.lean` |
-| `S3.listedPage` | none |  |
+| `S3.listedPage` | tested | `Tests/Ship.lean` |
 
 ## `Lanes/Web/S3/Basic.lean`
 
