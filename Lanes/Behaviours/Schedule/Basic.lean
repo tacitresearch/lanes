@@ -539,6 +539,60 @@ abbrev attach {τ : Signature} (sys : System τ) (config : Config K P A) (use : 
     System (joinSig (sig K P A) τ) :=
   (system config).join sys use.wiring
 
+/-! ### A scheduler for each entity
+
+`systemBy config owner` is a scheduler for each entity of `E`, each the scheduler's own actor,
+and `attachBy` is it beside a system: a job goes to the scheduler of the entity its key names
+(`owner`), so that the work of two entities touches no actor in common. Everything else is as
+for one scheduler; what is proved of one is proved of each (`Schedule.attachBy_within`,
+`Schedule.attachBy_held_leaves`). -/
+
+/-- The signature of a scheduler for each entity of `E`. -/
+abbrev sigBy (E K P A : Type) [DecidableEq E] [DecidableEq K] [DecidableEq P] [DecidableEq A] :
+    Signature where
+  Id := E
+  Msg _ := Schedule.Msg K P A
+  In := Input K P A
+  Out := Output K P A
+
+/-- An effect of the scheduler as an effect of the scheduler of `e`. The scheduler sends no
+message, so `send` never occurs. -/
+def Eff.at {E : Type} [DecidableEq E] (e : E) : Eff K P A → Effect (sigBy E K P A) e
+  | .send _ msg => .send e msg
+  | .emit out => .emit out
+  | .after delay_ms msg => .after delay_ms msg
+  | .cancel msg => .cancel msg
+  | .stop => .stop
+
+/-- The schedulers of the entities of `E`: a scheduling, a cancel and a reply go to the scheduler
+of the entity that `owner` names for its key. None is booted: each starts on its first message. -/
+abbrev systemBy {E : Type} [DecidableEq E] (config : Config K P A) (owner : K → E) :
+    System (sigBy E K P A) where
+  State _ := State K P
+  actor e := (actor config).mapEff fun eff => [Eff.at e eff]
+  accept
+    | .schedule now_ms spec => ⟨owner spec.key, .schedule now_ms spec⟩
+    | .cancel key => ⟨owner key, .cancel key⟩
+    | .reply key attempt reply => ⟨owner key, .reply key attempt reply⟩
+
+/-- `Use.wiring`, for a scheduler for each entity of `E`. -/
+def Use.wiringBy {τ : Signature} (E : Type) [DecidableEq E] (use : Use τ K P A) :
+    Wiring (sigBy E K P A) τ where
+  toRight
+    | .notice key payload now_ms => some (use.notice key payload now_ms)
+    | .answer key outcome => some (use.answer key outcome)
+    | .call _ | .abandon .. => none
+  toLeft out :=
+    match use.scheduled out with
+    | some (now_ms, spec) => some (.schedule now_ms spec)
+    | none => (use.cancelled out).map .cancel
+
+/-- `sys` with a scheduler for each entity beside it: the job of a key is held by the scheduler
+of `owner key`, and its word goes back to `sys` as `use` says. -/
+abbrev attachBy {τ : Signature} {E : Type} [DecidableEq E] (sys : System τ) (config : Config K P A)
+    (use : Use τ K P A) (owner : K → E) : System (joinSig (sigBy E K P A) τ) :=
+  (systemBy config owner).join sys (use.wiringBy E)
+
 /-- The attempts out at the service, and those abandoned before the service was handed them:
 outputs are handed over in any order. -/
 structure Callee (K : Type) where

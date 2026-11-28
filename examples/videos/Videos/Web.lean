@@ -23,7 +23,13 @@ upload. The bridge is where a request becomes an input and an output a response:
   size (`maxUpload_bytes`), and gets for the `<video>`'s rendition and its poster, the
   thumbnail. Video bytes go between the browser, the store and the worker; the site sees none;
 - the worker's report (`/transcoded`) is read as `Command.report` with the signature it came
-  with, which the system checks: the bridge decides nothing about it, and it needs no session.
+  with, which the system checks: the bridge decides nothing about it, and it needs no session;
+- the feed, a watch page and a channel page are reads (`read?`), never inputs: `view` answers
+  them from the states of the members they read, the owner's and the viewer's, or every
+  member's for the feed.
+
+A member is named in a link by the issuer and the subject of their identity, two path segments,
+and a video by those and its number (`whoPath`, `videoPath`).
 -/
 
 namespace Videos.Web
@@ -61,6 +67,36 @@ structure Settings where
   /-- Where the worker posts its reports: this site's `/transcoded`, as the worker reaches it. -/
   callback : String
 
+theorem Name.clean {s : String} (h : Name.valid s = true) : Segment.Clean s := by
+  simp only [Name.valid, Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true,
+    String.isEmpty_eq_false_iff, bne_iff_ne, ne_eq] at h
+  exact ⟨h.1.1.1, h.1.1.2, h.1.2⟩
+
+/-- A member in a link: the issuer, then the subject. -/
+def whoPath : Path Who where
+  print w := [w.issuer.val, w.subject.val]
+  parse
+    | i :: s :: rest =>
+      if h : Name.valid i = true ∧ Name.valid s = true then some (⟨⟨i, h.1⟩, ⟨s, h.2⟩⟩, rest)
+      else none
+    | _ => none
+  sound w rest := by simp [w.issuer.property, w.subject.property]
+  clean w s hs := by
+    simp only [List.mem_cons, List.mem_nil_iff, or_false] at hs
+    rcases hs with rfl | rfl
+    · exact Name.clean w.issuer.property
+    · exact Name.clean w.subject.property
+
+/-- A video in a link: its owner, then its number. -/
+def videoPath : Path VideoId where
+  print v := whoPath.print v.owner ++ Path.nat.print v.n
+  parse segments := do
+    let (w, rest) ← whoPath.parse segments
+    let (n, rest) ← Path.nat.parse rest
+    return (⟨w, n⟩, rest)
+  sound v rest := by simp [List.append_assoc, whoPath.sound, Path.nat.sound]
+  clean v s hs := (List.mem_append.mp hs).elim (whoPath.clean v.owner s) (Path.nat.clean v.n s)
+
 namespace Routes
 
 def home : Route Unit := .get .root
@@ -68,18 +104,18 @@ def style : Route Unit := .get (.seg "style.css")
 def script : Route Unit := .get (.seg "upload.js")
 def new : Route Unit := .get (.seg "new")
 def create : Route Unit := .post (.seg "videos")
-def uploaded : Route (Nat × Unit) := .post ("videos" /> .append .nat (.seg "uploaded"))
-def watch : Route Nat := .get ("v" /> .nat)
-def like : Route (Nat × Unit) := .post ("v" /> .append .nat (.seg "like"))
-def unlike : Route (Nat × Unit) := .post ("v" /> .append .nat (.seg "unlike"))
-def comment : Route (Nat × Unit) := .post ("v" /> .append .nat (.seg "comment"))
-def uncomment : Route (Nat × Nat × Unit) :=
-  .post ("v" /> .append .nat ("comments" /> .append .nat (.seg "delete")))
-def delete : Route (Nat × Unit) := .post ("v" /> .append .nat (.seg "delete"))
-def channel : Route Nat := .get ("c" /> .nat)
+def uploaded : Route (VideoId × Unit) := .post ("videos" /> .append videoPath (.seg "uploaded"))
+def watch : Route VideoId := .get ("v" /> videoPath)
+def like : Route (VideoId × Unit) := .post ("v" /> .append videoPath (.seg "like"))
+def unlike : Route (VideoId × Unit) := .post ("v" /> .append videoPath (.seg "unlike"))
+def comment : Route (VideoId × Unit) := .post ("v" /> .append videoPath (.seg "comment"))
+def uncomment : Route (VideoId × Nat × Unit) :=
+  .post ("v" /> .append videoPath ("comments" /> .append .nat (.seg "delete")))
+def delete : Route (VideoId × Unit) := .post ("v" /> .append videoPath (.seg "delete"))
+def channel : Route Who := .get ("c" /> whoPath)
 def signOut : Route Unit := .post (.seg "sign-out")
 def callback : Route (Slug × Unit) := .get ("sign-in" /> .append .slug (.seg "callback"))
-def retry : Route (Nat × Unit) := .post ("videos" /> .append .nat (.seg "retry"))
+def retry : Route (VideoId × Unit) := .post ("videos" /> .append videoPath (.seg "retry"))
 def transcoded : Route Unit := .post (.seg "transcoded")
 
 end Routes
@@ -94,7 +130,7 @@ def sessionHeader : String := "videos-verified-session"
 def arrivedHeader : String := "videos-arrived"
 
 /-- The key of a video's upload in the bucket. -/
-def Settings.objectKey (s : Settings) (v : VideoId) : String := s.keyPrefix ++ toString v
+def Settings.objectKey (s : Settings) (v : VideoId) : String := s.keyPrefix ++ v.code
 
 /-- The keys the worker writes: the rendition a page plays, and its thumbnail. -/
 def Settings.renditionKey (s : Settings) (v : VideoId) : String := s.objectKey v ++ ".mp4"
@@ -104,10 +140,15 @@ def Settings.thumbnailKey (s : Settings) (v : VideoId) : String := s.objectKey v
 def Settings.job (s : Settings) (r : Round) : Transcode.Job String String :=
   ⟨r.id, s.objectKey r.video, [s.renditionKey r.video, s.thumbnailKey r.video]⟩
 
+/-- A part of an identity, percent-encoded, as `VideoId.code` writes it. -/
+def name? (s : String) : Option {s : String // Name.valid s} := do
+  let s ← percentDecode s
+  if h : Name.valid s = true then some ⟨s, h⟩ else none
+
 /-- A round by its id on the wire, as `Round.id` writes it, and only so. -/
 def Round.ofId? (id : String) : Option Round := do
-  let [v, n] := id.splitOn "." | none
-  let r : Round := ⟨← v.toNat?, ← n.toNat?⟩
+  let [i, s, v, n] := id.splitOn "/" | none
+  let r : Round := ⟨⟨⟨← name? i, ← name? s⟩, ← v.toNat?⟩, ← n.toNat?⟩
   if r.id == id then some r else none
 
 /-- The report a worker's report on the wire is, for the site. -/
@@ -116,8 +157,11 @@ def reportOf? (r : Transcode.Report String String) : Option Report :=
   | .done job _ => (Round.ofId? job).map .done
   | .failed job => (Round.ofId? job).map .failed
 
-/-- A session as a token's payload and what a form token is bound to. -/
-def sessionOf (m : Member) (session : Sid) : String := s!"{m}.{session}"
+/-- A session as a token's payload and what a form token is bound to: the member's issuer and
+subject, percent-encoded, and the session, between `*`s, which a cookie may carry and an encoded
+part does not. -/
+def sessionOf (m : Member) (session : Sid) : String :=
+  s!"{percentEncode m.issuer.val}*{percentEncode m.subject.val}*{session}"
 
 /-- The token of a session's cookie, signed at `at_s`. -/
 def sessionToken (s : Settings) (m : Member) (session : Sid) (at_s : Nat) : String :=
@@ -139,8 +183,8 @@ def prepare (s : Settings) (r : Http.Request) : Http.Request :=
   { r with headers := kept ++ session.toList }
 
 def session? (r : Http.Request) : Option (Member × Sid) := do
-  match (← r.header? sessionHeader).splitOn "." with
-  | [m, session] => return (← m.toNat?, ← session.toNat?)
+  match (← r.header? sessionHeader).splitOn "*" with
+  | [i, s, session] => return (⟨← name? i, ← name? s⟩, ← session.toNat?)
   | _ => none
 
 
@@ -337,12 +381,21 @@ def WatchPage (s : Settings) (viewer : Viewer) (view : View) (at_s : Nat) : Html
       </form>
     | none => Html.empty]
 
-def FeedPage (s : Settings) (viewer : Viewer) (cards : List Card) (next : Option VideoId) : Html :=
+/-- A cursor of the feed as a query: when the video was made, then its id. -/
+def cursorQuery (c : Cursor) : String :=
+  s!"?t={c.made_s}&v={percentEncode c.video.code}"
+
+def cursor? (r : Http.Request) : Option Cursor := do
+  let t ← (← r.param? "t").toNat?
+  let [i, s, n] := (← r.param? "v").splitOn "/" | none
+  return ⟨t, ⟨⟨← name? i, ← name? s⟩, ← n.toNat?⟩⟩
+
+def FeedPage (s : Settings) (viewer : Viewer) (cards : List Card) (next : Option Cursor) : Html :=
   Layout s "Latest" viewer [
     <h1>"Latest videos"</h1>,
     Cards cards,
     match next with
-    | some id => <p><a href={Routes.home.link () ++ s!"?before={id}"}>"Older"</a></p>
+    | some c => <p><a href={Routes.home.link () ++ cursorQuery c}>"Older"</a></p>
     | none => Html.empty]
 
 /-- What a video not ready waits for, and the button that moves it on, if one does. -/
@@ -459,21 +512,21 @@ def reportInput (id : ReqId) (r : Http.Request) : Except Http.Response Input :=
     .ok (.request (.report id report ((r.header? Transcode.signatureHeader).getD "")) (arrived r))
   | none => bad "not a report"
 
-/-- The requests that change nothing: the feed, a watch page and a channel page, each under any
-id. They are answered from the site's state (`view`) and never journalled. -/
-def read? (r : Http.Request) : Option (ReqId → Command) :=
+/-- The requests that change nothing: the feed, a watch page and a channel page. They are
+answered from the members' states (`view`) and never journalled. -/
+def read? (r : Http.Request) : Option Read :=
   dispatch [
-    Routes.home.handle fun () r id => .feed id (session? r) ((r.param? "before").bind String.toNat?),
-    Routes.watch.handle fun v r id => .watch id (session? r) v,
-    Routes.channel.handle fun whom r id => .channel id (session? r) whom
+    Routes.home.handle fun () r => .feed (session? r) (cursor? r),
+    Routes.watch.handle fun v r => .watch (session? r) v,
+    Routes.channel.handle fun whom r => .channel (session? r) whom
   ] r
 
+/-- A request as an input. A read is not one: `view` answers it, and the bridge finds no page
+for it. -/
 def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response Input :=
   let ask (c : Command) : Except Http.Response Input := .ok (.request c (arrived r))
   if !r.bodyWithin s.maxBody_bytes then .error (Http.Response.text "too large\n" 413)
-  else match read? r with
-  | some c => ask (c id)
-  | none =>
+  else
     (dispatch [
       Routes.style.handle fun () _ => .error (Http.Response.ofText "text/css" style),
       Routes.script.handle fun () _ => .error (Http.Response.ofText "text/javascript" script),
@@ -494,13 +547,15 @@ def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response
       Routes.retry.handle fun (v, ()) r => signedIn s r fun m session => ask (.retry id m session v),
       Routes.transcoded.handle fun () r => reportInput id r,
       Routes.callback.handle fun _ r => match OAuth.identity? r with
-        | some who => ask (.signIn id who.issuer who.subject (channelName who))
+        | some who =>
+          if h : Name.valid who.issuer = true ∧ Name.valid who.subject = true then
+            ask (.signIn id ⟨⟨who.issuer, h.1⟩, ⟨who.subject, h.2⟩⟩ (channelName who))
+          else bad "this identity cannot be a member's"
         | none => .error (Http.Response.text "not found\n" 404)
     ] r).getD (.error (page (Message s none "Not found" "There is no such page.") 404))
 
 def encodeReply (s : Settings) (viewer : Viewer) : Reply → Http.Response
   | .signedIn m session at_s => home.setCookie (cookie s (sessionToken s m session at_s))
-  | .full => page (Message s none "Full" "No more members can join.") 503
   | .signedOut | .noSession => home.clearCookie (cookie s "")
   | .created v media at_s => match viewer with
     | some who => page (UploadPage s who v media at_s)
@@ -539,25 +594,43 @@ def readResponse (s : Settings) : List Out → Http.Response
   | [.reply _ viewer r] => encodeReply s viewer r
   | _ => page (Message s none "Error" "This page could not be read.") 500
 
-/-- A read, answered from the site's state at a boundary between entries (`Http.View`): with
-the response the site gives the same request, which leaves it as it was
-(`Videos.Web.view_answers`). -/
+
+def isMember : fullSig.Id → Bool
+  | .inr _ => true
+  | .inl _ => false
+
+/-- The members' sites among the states of every actor a peek read. -/
+def memberSites (config : Config) (others : List ((i : fullSig.Id) × (system config).State i)) : List (Member × Site) :=
+  others.filterMap fun
+    | ⟨.inr m, s⟩ => some (m, s)
+    | ⟨.inl _, _⟩ => none
+
+/-- The members' sites a read is answered from: those it names, or every member's for the feed. -/
+def sitesOf (config : Config) (rd : Read)
+    (get : (i : fullSig.Id) → i ∈ rd.names.map .inr → (system config).State i)
+    (others : List ((i : fullSig.Id) × (system config).State i)) : List (Member × Site) :=
+  if rd.every then memberSites config others
+  else rd.names.attach.map fun ⟨m, h⟩ => (m, get (.inr m) (List.mem_map_of_mem h))
+
+/-- A read, answered at a boundary between entries (`Http.View`) from the sites of the members
+it reads, as one site (`Site.union`): the spec's read of them (`Videos.Web.view_answers`). -/
 def view (config : Config) (s : Settings) (r : Http.Request) : Option (Http.View (system config)) :=
   if !r.bodyWithin s.maxBody_bytes then none
-  else (read? r).map fun c =>
-    { reads := [.inr ()]
-      answer := fun get =>
-        readResponse s (Site.handle config (get (.inr ()) List.mem_cons_self) (.request (c 0) (arrived r))).2 }
+  else (read? r).map fun rd =>
+    { reads := rd.names.map .inr
+      every := fun i => rd.every && isMember i
+      answer := fun get others =>
+        readResponse s (Site.read config (Site.union (sitesOf config rd get others)) rd (arrived r)) }
 
 /-! ## Saving -/
 
 def actors (config : Config) : Kernel.Image.Codecs (system config) where
-  id := Codec.of (Unit ⊕ Unit)
+  id := Codec.of (Member ⊕ Member)
   state
-    | .inl () => Codec.of (Schedule.State Key Unit)
-    | .inr () => Codec.of Site
+    | .inl _ => Codec.of (Schedule.State Key Unit)
+    | .inr _ => Codec.of Site
   msg
-    | .inl () => Codec.of (Schedule.Msg Key Unit Answer)
-    | .inr () => Codec.of Input
+    | .inl _ => Codec.of (Schedule.Msg Key Unit Answer)
+    | .inr _ => Codec.of Input
 
 end Videos.Web

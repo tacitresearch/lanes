@@ -130,8 +130,10 @@ entries, hand over these outputs, save this image, answer this peek. The shell p
 in order and decides nothing. Proved: the journal describes the kernel (`Batch.run_kernel`); an
 output is handed over only after the entries that produce it are appended, and a save falls
 only where every output is handed over (`Batch.run_sound`); a peek, which reads the states of a
-list of actors, is answered at the end of its batch after every other act, with the states of
-the kernel the batch's journal describes (`Batch.run_peeks`), and a batch with its peeks taken
+list of actors and of every actor started that a predicate holds of (an actor not started has
+its initial state: `Batch.Peek.init_of_not_others`), is answered at the end of its batch after
+every other act, with the states of the kernel the batch's journal describes
+(`Batch.run_peeks`), and a batch with its peeks taken
 out is the same batch (`Batch.run_erase_peeks`), so reads leave no trace in the journal; over
 the whole history, a peek asked after an output was handed over sees a world the semantics
 reaches by a run that put that output out first (`Batch.chain_peek_after`,
@@ -425,7 +427,9 @@ armed is passed to it (`Http.Front.pending_answered`).
 
 A request that changes nothing can be answered from the state (`Lanes/Web/Http/View.lean`, the
 decision "Reads from the state"). The application gives `serve` a `view` beside its bridge: for a
-request it names, the actors it reads and its response from their states. Such a read never
+request it names, the actors it reads, a predicate for the actors of which it reads every one
+started (`View.every`: the video site's feed reads every member), and its response from their
+states. Such a read never
 enters the system. It waits behind a gate of its own, `Gate.step` over `readSig`
 (`ServerConfig.reads`: its own deadline and bound), for a peek of those actors at the end of the
 shard's next batch (`Runtime.tryPeek`), and is answered from their states off the shard's thread,
@@ -924,6 +928,7 @@ Where: `Lanes/Behaviours/Server.lean`, `Lanes/Behaviours/Once/`, `Lanes/Behaviou
 | Schedule: beside a system, the end of every job held that is not periodic is handled by that system: an answer that ends it (`succeeded`, `failed` or `cancelled`), or the notice of a job that runs once; a call job's end is such an answer | `Schedule.attach_end_handled`, `Schedule.attach_answer_handled`, `Lanes/Semantics/Schedule.lean`; gate `Tests/Axioms/Semantics.lean` | A fair run in which the scheduler does not crash; the links from the scheduler to the system lose nothing; no actor of the system is crashed or stops; whatever the service does | proved |
 | Schedule: a job leaves only in a step that tells its requester once and no more: one answer that ends it, or the notice of a job that runs once | `Schedule.told_of_leaves`, `Schedule.leaves_answered`; gate `Tests/Axioms/Behaviours.lean` | None: every step | proved |
 | Schedule: an id held is one job however often it is scheduled; beyond `maxJobs` or `maxPayload` a scheduling is refused | `Schedule.within`; `Tests/Schedule.lean` | None | proved (the bound); checked (the answers) |
+| Schedule: a scheduler for each entity (`Schedule.attachBy`), the job of a key held by the scheduler of the entity its key names: each holds at most `maxJobs` jobs and no id twice, and each job it holds that is not periodic ends | `Schedule.attachBy_within`, `Schedule.attachBy_held_leaves`, `Schedule.armedBy`; gates `Tests/Axioms/Behaviours.lean`, `Tests/Axioms/Semantics.lean` | For the second: a fair run in which that scheduler does not crash; whatever the service does | proved |
 
 Also:
 
@@ -1411,28 +1416,29 @@ Where: `examples/videos`, a package of its own.
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| Videos: the scheduler beside the site holds at most `maxJobs` jobs and no key twice | `Videos.jobs_bounded`, `examples/videos/Videos/Proofs/Jobs.lean`; gate `examples/videos/Videos/Proofs/Axioms.lean` | None: every environment | proved |
-| Videos: every check, last check, start of a transcode and delete ends, whatever the store and the worker do | `Videos.job_ends`; same gate | A fair run in which the scheduler does not crash; the job is not periodic (the site schedules none, but the system takes schedulings from outside) | proved |
+| Videos: each member's scheduler holds at most `maxJobs` jobs and no key twice | `Videos.jobs_bounded`, `examples/videos/Videos/Proofs/Jobs.lean`; gate `examples/videos/Videos/Proofs/Axioms.lean` | None: every environment | proved |
+| Videos: every check, last check, start of a transcode and delete ends, whatever the store and the worker do | `Videos.job_ends`; same gate | A fair run in which the member's scheduler does not crash; the job is not periodic (the site schedules none, but the system takes schedulings from outside) | proved |
+| Videos: no output of the system shows a video, and a read shows a private one only to a session of its owner that the owner's site lets in at the read's time | `Videos.Site.quiet_handle`, `Videos.private_to_owner`, `Videos.Site.read_private`; same gate | None | proved |
+| Videos: once a delete is answered, no later output of the owner's actor shows the video, and no read after it, whatever other members' sites it reads; the video leaves the feed, its channel and its watch page at one boundary | `Videos.Site.deleted_never_served`, `Videos.Site.Gone.run`; same gate; `Lanes.Batch.run_peeks` for the boundary | About runs of the spec's functions on the owner's site | proved |
+| Videos: a view answers the spec's read of the sites of the members it reads, each that actor's state at the peek's boundary; for the feed, every member's actor started, the rest having the empty site | `Videos.Web.view_answers`; same gate | None | proved |
 | Videos: a delete answered schedules the delete of the object, whose end is reported exactly when the scheduler gave it up | `Videos.Site.delete_schedules`, `Videos.Site.delete_reported`; same gate | None | proved |
 | Videos: once its job is over, a deleted video's object was deleted by the store, or is reported | `examples/videos/Videos/Check.lean`, run by its `lake test` | Runs with no crash of an actor (a crash loses its mail; on one shard neither actor crashes alone); one video, two attempts | checked, not proved |
-| Videos: a video is shown only after a job asking the store for its upload succeeded with `found`, which the scheduler says only of the store's answer | `Videos.Site.listed_confirmed`, `Schedule.succeeded_replied`; same gate and `Tests/Axioms/Behaviours.lean` | The seeded bugs off; the adapter asks the store what the key says (`Videos.Web.exchangeOf`, tested) | proved |
+| Videos: a read shows a video only if the run of its owner's site has a job asking the store for its upload that succeeded with `found`, which the scheduler says only of the store's answer | `Videos.Site.listed_confirmed`, `Schedule.succeeded_replied`; same gate and `Tests/Axioms/Behaviours.lean` | The seeded bugs off; the adapter asks the store what the key says (`Videos.Web.exchangeOf`, tested); about runs of the spec's functions | proved |
 | Videos: a check and a delete the store refuses once are tried again and succeed | `examples/videos/Videos/EndToEnd.lean`, run by its `lake test` | The test kit's fake S3, told to refuse (`Testing.S3.Fake.refuse`) | tested |
-| Videos: a video is listed as ready only after a request in which the worker reported a round of its transcode done, with a signature that checks under the worker's key | `Videos.Site.listed_transcoded`, `examples/videos/Videos/Proofs/Confirmed.lean`; same gate | The seeded bugs off (`Config.Honest`); about runs of the spec's functions | proved |
+| Videos: a read shows a video as ready only if the run of its owner's site has a request in which the worker reported a round of its transcode done, with a signature that checks under the worker's key | `Videos.Site.listed_transcoded`, `examples/videos/Videos/Proofs/Confirmed.lean`; same gate | The seeded bugs off (`Config.Honest`); about runs of the spec's functions | proved |
 | Videos: a report of the worker changes only the video its round names, whatever its signature | `Videos.Site.report_names`; same gate | None | proved |
 | Videos: nothing is shown whose rendition and thumbnail the store may not hold, and a report taken unsigned shows a video the worker never reported done | `examples/videos/Videos/Check.lean`, run by its `lake test` | The worker's model, honest; reports twice, failed and forged; one video, a crash anywhere | checked |
-| Videos: with an honest worker that reports, a confirmed upload ends ready or failed | `Videos.report_settles`, `Videos.Site.report_leaves`, `examples/videos/Videos/Proofs/Ready.lean`; same gate; the whole, with the worker's model, `examples/videos/Videos/Check.lean`: of runs with no crash, every state with no successor has no video transcoding | A fair run; the site not crashed; the link from outside to it lossless; the worker's signed report of the round is an input of the run (the premise). The check: runs with no crash, one video and one retry | proved from the report; checked as a whole |
+| Videos: with an honest worker that reports, a confirmed upload ends ready or failed | `Videos.report_settles`, `Videos.Site.report_leaves`, `examples/videos/Videos/Proofs/Ready.lean`; same gate; the whole, with the worker's model, `examples/videos/Videos/Check.lean`: of runs with no crash, every state with no successor has no video transcoding | A fair run; the owner's actor not crashed; the link from outside to it lossless; the worker's signed report of the round is an input of the run (the premise). The check: runs with no crash, one video and one retry | proved from the report; checked as a whole |
 | Videos: an upload is transcoding, then ready, its page playing the rendition with the thumbnail as its poster; a transcode that failed is shown to its owner and tried again; a report forged with another key is refused | `examples/videos/Videos/EndToEnd.lean`, run by its `lake test` | The test kit's fake S3 and worker (`Lanes.Testing.Transcode`) | tested |
 
 Also:
 
 - Checked: a pipeline: a confirmed upload is given to a transcode worker outside the site (`Lanes.Transcode`, a JSON job over HTTP and a signed webhook back), and the video is ready only once the worker reports, signed, a playable rendition and a thumbnail, which its page plays and shows; a failed transcode is shown to its owner with a retry.
-- Checked: bounds on one member's videos and comments far below the site's, so that one member cannot fill them.
+- Checked: bounds on one member's videos and comments, held in that member's site.
 - Checked: model-checked beside the worker's and the object store's models with their timeouts, late, repeated and forged reports and crashes, four seeded bugs found (the browser's word taken for an upload, a timed-out check taken as found, sessions that never end, a report taken unsigned).
-- Checked: one actor that runs the spec's functions, on `Http.serveFronted` with a journal and snapshots, its calls to the store and the worker jobs of the scheduler beside it (`Lanes.Schedule`), retried with a backoff, kept on the journal and bounded by `maxJobs`: a check, the last check of an upload a day after it was begun, which confirms it or takes it out, the start of a round of a transcode, and the delete of a deleted video's objects, reported if given up.
+- Checked: an actor for each member, named by the identity that signs in (`Videos.Who`), that runs the spec's functions on the member's site, on `Http.serveFronted` with a journal and snapshots, and a scheduler for each member beside it (`Schedule.attachBy`), whose jobs are the calls to the store and the worker, retried with a backoff, kept on the journal and bounded by `maxJobs`: a check, the last check of an upload a day after it was begun, which confirms it or takes it out, the start of a round of a transcode, and the delete of a deleted video's objects, reported if given up. A like, a comment and the taking out of a comment are let in by the visitor's actor and taken by the owner's (`Videos.Visit`). The feed, watch pages and channel pages are reads from the members' actors (`Videos.Web.view`). How widely the work spreads over the actors is measured with `lake exe videosWaves` (`docs/decisions/D109-videos-per-member.md`).
 - Checked: public, unlisted and private videos, a feed by pages, channels.
-- Proved: a deleted video never shown again, and a video shown only after the scheduler said a check of it succeeded with `found`, which it says only of the store's answer, and after the worker reported it done with its signature, in every run of the spec's functions (`Videos.Site.deleted_never_served`, `Videos.Site.listed_confirmed`, `Videos.Site.listed_transcoded`, `Schedule.succeeded_replied`).
-- Proved: a private video shown only to its owner in every run of the system (`Videos.private_to_owner`), and only in answer to a session of the owner's that let the request in when it arrived (`Videos.Site.handle_private`).
-- Proved: each like counted once in every reachable state (`Videos.likes_distinct`).
+- Proved: each like counted once in every reachable state of every member's site (`Videos.likes_distinct`).
 
 ### Raft key-value store
 

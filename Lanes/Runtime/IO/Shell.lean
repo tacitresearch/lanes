@@ -113,7 +113,8 @@ private abbrev Cmd (sys : System σ) :=
   Batch.Command σ (fun ids => IO.Promise (Batch.Peek sys ids)) (IO.Promise Bool)
 
 instance {sys : System σ} {ids : List σ.Id} : Nonempty (Batch.Peek sys ids) :=
-  ⟨⟨ids.map fun i => ⟨i, (sys.actor i).init⟩, by simp [List.map_map, Function.comp_def]⟩⟩
+  ⟨{ states := ids.map fun i => ⟨i, (sys.actor i).init⟩
+     ids_eq := by simp [List.map_map, Function.comp_def] }⟩
 
 /-- Who is woken when the inbox changes: the shard, which parks, or a sender waiting for room. -/
 private inductive Wake where
@@ -383,7 +384,7 @@ def trace (rt : Runtime sys) : BaseIO (Array (Event σ)) :=
 full. For tests; an application reads with `tryPeek`. -/
 def state (rt : Runtime sys) (i : σ.Id) : Async (sys.State i) := do
   let reply ← IO.Promise.new
-  rt.send (.peek [i] reply)
+  rt.send (.peek [i] (fun _ => false) reply)
   let some peek ← await reply.result? | throw stopped
   return peek.get i List.mem_cons_self
 
@@ -391,15 +392,16 @@ def state (rt : Runtime sys) (i : σ.Id) : Async (sys.State i) := do
 at the end of the batch that takes the peek, once everything that batch and those before it
 wrote is appended and handed over (`Batch.run_sound`), with every entry before that boundary
 and none after it (`Batch.run_peeks`), and nothing is journalled (`Batch.run_erase_peeks`).
-`reply` is given them on a task of its own, or `none` if the shard stops first. `false` means
-nothing was asked: the shard is busy or has stopped.
+With `every`, the states of every actor started that it holds of are read too
+(`Batch.Peek.others`). `reply` is given them on a task of its own, or `none` if the shard stops
+first. `false` means nothing was asked: the shard is busy or has stopped.
 
 The states are then shared with that task: an actor stepped before the task lets go of its
 state starts from a copy of it. -/
-def tryPeek (rt : Runtime sys) (ids : List σ.Id) (reply : Option (Batch.Peek sys ids) → BaseIO Unit) :
-    BaseIO Bool := do
+def tryPeek (rt : Runtime sys) (ids : List σ.Id) (reply : Option (Batch.Peek sys ids) → BaseIO Unit)
+    (every : σ.Id → Bool := fun _ => false) : BaseIO Bool := do
   let promise ← IO.Promise.new
-  unless ← rt.offer (.peek ids promise) do return false
+  unless ← rt.offer (.peek ids every promise) do return false
   discard <| BaseIO.mapTask (t := promise.result?) reply
   return true
 
