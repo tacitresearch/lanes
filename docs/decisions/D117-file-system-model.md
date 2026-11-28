@@ -1,4 +1,4 @@
-# D?. A file system that may lose power, as a platform model
+# D117. A file system that may lose power, as a platform model
 
 Status: Accepted
 
