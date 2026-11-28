@@ -4,7 +4,7 @@ Where: `Lanes/Web/`.
 
 The gate:
 
-- A journal of the gate `serve` ran before `docs/decisions/D43-one-gate.md` is refused; one `serve` wrote behind a gate of other settings is replayed behind that gate and carried across (`Http.regateUpgrade`, `docs/decisions/new-journal-version.md`).
+- A journal of the gate `serve` ran before `docs/decisions/D43-one-gate.md` is refused; one `serve` wrote behind a gate of other settings is replayed behind that gate and carried across (`Http.regateUpgrade`, `docs/decisions/D94-journal-version.md`).
 - Every request that arrives is answered, in a fair run in which the gate does not crash and the link from outside to the gate loses nothing (`Http.served_arrival_answered`, `Http.fronted_arrival_answered`, from `System.Run.Fair.delivered`: a message on a link that loses nothing to an actor that stays up is handed to it), so a request whose id is used once is answered exactly once; model-checked on two requests, with each premise shown to be needed.
 - HTTP/1.1 adapter whose logic is the gate, one system (`Http.gateSystem`, decisions `Gate.step`).
 - In `fronted sys`, outputs of `sys` that are no response and inputs that are no request pass the gate by, so a shard with peers can sit behind it (`Http.serveFronted`, `Http.serveShard`).
