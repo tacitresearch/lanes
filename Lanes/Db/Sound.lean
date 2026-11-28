@@ -894,4 +894,104 @@ theorem TableOf.every_apply {α : Type} (t : TableOf α) {P : α → Prop} (o : 
     · exact hw x hx a ha
   · exact hP x hx a ha
 
+/-! ## Rows a transaction does not write
+
+A transaction whose writes to a table are all to keys of some set leaves every row of another
+key as it was (`Txn.All.others`): what one user's requests cannot touch of another's, when each
+user's rows are those whose keys name them. -/
+
+/-- The key of the row a write puts in its table or takes out. -/
+def Op.writtenKey : Op → Option Row
+  | .insert t r | .update t r | .upsert t r => some (t.keyOf r)
+  | .delete _ k => some k
+  | _ => none
+
+/-- What an operation may do to the table `t`: if it is on a table of that name, it is on `t`,
+and what it writes is under a key `K` admits. -/
+def Op.WritesWithin (t : Table) (K : Row → Prop) (o : Op) : Prop :=
+  o.table.name = t.name → o.table = t ∧ ∀ k, o.writtenKey = some k → K k
+
+theorem Op.others_onRows (o : Op) {K : Row → Prop} (hk : ∀ k, o.writtenKey = some k → K k)
+    (rows : List Row) {x : Row} (hx : ¬ K (o.table.keyOf x)) :
+    x ∈ (o.onRows rows).2 ↔ x ∈ rows := by
+  have other : ∀ (key : Row), K key → (o.table.hasKey key x) = false := fun key hK => by
+    simp only [Table.hasKey, beq_eq_false_iff_ne]
+    intro heq
+    exact hx (heq ▸ hK)
+  cases o with
+  | get t k => exact .rfl
+  | scan s => exact .rfl
+  | insert t r =>
+    have hr := hk _ rfl
+    simp only [Op.onRows]
+    split
+    · exact .rfl
+    · rw [t.mem_insertSorted]
+      exact ⟨fun h => h.resolve_left fun he => hx (he ▸ hr), .inr⟩
+  | update t r =>
+    have hr := other _ (hk _ rfl)
+    simp only [Op.onRows]
+    split
+    · exact .rfl
+    · simp only [List.mem_map]
+      constructor
+      · rintro ⟨y, hy, hxy⟩
+        split at hxy
+        · subst hxy
+          exact absurd (hk _ rfl) (by simpa [Op.table] using hx)
+        · exact hxy ▸ hy
+      · intro h
+        exact ⟨x, h, by simp only [Op.table] at hr; simp [hr]⟩
+  | upsert t r =>
+    have hr := other _ (hk _ rfl)
+    simp only [Op.onRows]
+    split
+    · exact .rfl
+    · rw [t.mem_insertSorted]
+      simp only [Table.without, List.mem_filter]
+      constructor
+      · rintro (he | ⟨h, -⟩)
+        · subst he
+          exact absurd (hk _ rfl) (by simpa [Op.table] using hx)
+        · exact h
+      · intro h
+        exact .inr ⟨h, by simp only [Op.table] at hr; simp [hr]⟩
+  | delete t k =>
+    have hr := other _ (hk _ rfl)
+    simp only [Op.onRows, Table.without, List.mem_filter]
+    simp only [Op.table] at hr
+    simp [hr]
+
+/-- An operation that writes the table `t` only under keys `K` admits leaves each row of `t`
+whose key `K` does not admit there exactly when it was there before. -/
+theorem Op.others_apply (o : Op) {t : Table} {K : Row → Prop} (ho : o.WritesWithin t K)
+    {db : Db} {r : o.Ret} {db' : Db} (h : o.apply db = .ok (r, db')) {x : Row}
+    (hx : ¬ K (t.keyOf x)) : x ∈ db'.rows t.name ↔ x ∈ db.rows t.name := by
+  rw [Op.rows_apply o h]
+  split
+  · next hc =>
+    obtain ⟨heq, hk⟩ := ho hc.2.symm
+    rw [← hc.2]
+    exact o.others_onRows hk _ (heq ▸ hx)
+  · exact .rfl
+
+/-- **Rows a transaction does not write.** A transaction each of whose operations writes the
+table `t` only under keys `K` admits leaves each row of `t` whose key `K` does not admit there
+exactly when it was there before. -/
+theorem Txn.All.others {α : Type} {t : Txn α} {tbl : Table} {K : Row → Prop}
+    (ht : t.All (Op.WritesWithin tbl K)) {db : Db} {a : α} {db' : Db} (h : t.run db = .ok (a, db'))
+    {x : Row} (hx : ¬ K (tbl.keyOf x)) : x ∈ db'.rows tbl.name ↔ x ∈ db.rows tbl.name :=
+  ht.keeps (I := fun d => x ∈ d.rows tbl.name ↔ x ∈ db.rows tbl.name)
+    (fun o ho _ _ _ hI ha => (o.others_apply ho ha hx).trans hI) db a db' .rfl h
+
+/-- Two properties of every operation of one transaction are one. -/
+theorem Txn.All.and {α : Type} {P Q : Op → Prop} {t : Txn α} (hp : t.All P) (hq : t.All Q) :
+    t.All fun o => P o ∧ Q o := by
+  induction hp with
+  | pure a => exact .pure a
+  | abort why => exact .abort why
+  | op o k hpo _ ih =>
+    cases hq with
+    | op _ _ hqo hk => exact .op o k ⟨hpo, hqo⟩ fun r => ih r (hk r)
+
 end Lanes.Db

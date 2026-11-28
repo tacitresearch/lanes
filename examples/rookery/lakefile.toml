@@ -1,6 +1,6 @@
 name = "rookery"
 version = "0.1.0"
-defaultTargets = ["Rookery", "rookeryCheck", "rookery", "rookeryLive"]
+defaultTargets = ["Rookery", "rookeryCheck", "rookery"]
 testDriver = "rookeryCheck"
 # Lake's artifact cache: each output is stored once per toolchain, by its content, shared by
 # every project on this machine, and hard-linked into `.lake/build`.
@@ -17,18 +17,13 @@ path = "../.."
 name = "Rookery"
 roots = ["Rookery", "Rookery.Proofs"]
 
-# Model checks of the spec alone and of the system, run by `lake test` (Lanes rule 5.1).
+# Model checks, the bridge's tests, and with LANES_POSTGRES the application on PostgreSQL,
+# run by `lake test` (Lanes rule 5.1).
 [[lean_exe]]
 name = "rookeryCheck"
 root = "Check"
 
-# The web application: `rookery [port] [secrets] [memory_kib] [maxPerWindow]`.
+# The web application: `rookery [port] [secrets] [memory_kib] [maxPerWindow] [lockout_s]`.
 [[lean_exe]]
 name = "rookery"
 root = "Main"
-
-# Accounts, posts, follows, timelines, deletes and rate limits over HTTP, the server killed
-# with SIGKILL and started again.
-[[lean_exe]]
-name = "rookeryLive"
-root = "Live"

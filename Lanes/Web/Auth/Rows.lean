@@ -123,12 +123,16 @@ def SessionRow.live (r : SessionRow) (now_s : Int64) : Bool :=
 def «open» (id : Int64) (user : String) (now_s : Int64) : Txn Bool :=
   (table cfg).insert { id, user, started_s := now_s, used_s := now_s }
 
-/-- The user of a session that is open and not over at `now_s`, which it marks used. -/
+/-- The user of a session that is open and not over at `now_s`, which it marks used. A time
+before the session was last used is judged as that time, and leaves it: a clock that steps back,
+another instance's that lags, or a request that carries no time (`0`) neither ends a session nor
+lets one in that is over. -/
 def accepts (id : Int64) (now_s : Int64) : Txn (Option String) := do
   match ← (table cfg).get [.int id] with
   | some r =>
-    if SessionRow.live cfg r now_s then
-      discard <| (table cfg).update { r with used_s := now_s }
+    let t := max now_s r.used_s
+    if SessionRow.live cfg r t then
+      discard <| (table cfg).update { r with used_s := t }
       return some r.user
     else return none
   | none => return none
