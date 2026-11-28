@@ -302,6 +302,9 @@ theorem step (h : Released a b) {ev : Event σ} (hstep : b.step env ev = some b'
     · exact .inl ⟨_, step_start.mpr ⟨hi.2.1.symm.trans hdown, (h.hasMail i).symm ▸ hmail, rfl⟩,
         h.startActor hi⟩
     · exact .inr ⟨i, rfl, (h.wake hi).1⟩
+  | restart =>
+    obtain ⟨hmay, rfl⟩ := step_restart.mp hstep
+    exact .inl ⟨_, step_restart.mpr ⟨hmay, rfl⟩, refl _⟩
 
 theorem run (h : Released a b) {events : List (Event σ)} (hrun : b.run env events = some b') :
     ∃ evs a', a.run env evs = some a' ∧ Event.awake evs = Event.awake events
@@ -385,6 +388,9 @@ theorem step_back (h : Released a b) (hcrash : ∀ i, env.mayCrash i = false) {e
     have hi := h.same_of_down hdown
     exact after [] b _ rfl rfl (step_start.mpr ⟨hi.2.1.trans hdown, (h.hasMail i) ▸ hmail, rfl⟩)
       (h.startActor hi)
+  | restart =>
+    obtain ⟨hmay, rfl⟩ := step_restart.mp hstep
+    exact after [] b _ rfl rfl (step_restart.mpr ⟨hmay, rfl⟩) (refl _)
 
 theorem run_back (h : Released a b) (hcrash : ∀ i, env.mayCrash i = false)
     {events : List (Event σ)} (hrun : a.run env events = some a') :

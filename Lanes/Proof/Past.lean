@@ -83,11 +83,14 @@ theorem mem_seen_grow {S : Type} {actor : (i : σ.Id) → σ.Actor i S}
   · rw [seen_grow_of_ne hj]
     simp [hj]
 
-/-- No event takes a state out of an actor's past. -/
-theorem mem_seen_step {env : EnvModel σ} {c c' : SysState sys.withPast} {ev : Event σ}
+/-- No event takes a state out of an actor's past but a restart, which forgets the past with the
+rest of the actor's state. -/
+theorem mem_seen_step {env : EnvModel σ} (hrestart : env.mayRestart = false)
+    {c c' : SysState sys.withPast} {ev : Event σ}
     (h : c.step env ev = some c') {i : σ.Id} {p : sys.State i} (hp : p ∈ c.seen i) :
     p ∈ c'.seen i := by
-  rcases step_state h with hs | ⟨k, msg, hs⟩ | ⟨k, hs⟩ <;> simp only [seen, hs]
+  rcases step_state_of_noRestarts h hrestart with hs | ⟨k, msg, hs⟩ | ⟨k, hs⟩ <;>
+    simp only [seen, hs]
   · exact hp
   · by_cases hik : i = k
     · subst hik
@@ -100,7 +103,8 @@ theorem mem_seen_step {env : EnvModel σ} {c c' : SysState sys.withPast} {ev : E
       exact List.mem_cons_of_mem _ hp
     · rwa [update_of_ne _ _ hik]
 
-theorem mem_seen_run {env : EnvModel σ} {c c' : SysState sys.withPast} {evs : List (Event σ)}
+theorem mem_seen_run {env : EnvModel σ} (hrestart : env.mayRestart = false)
+    {c c' : SysState sys.withPast} {evs : List (Event σ)}
     (h : c.run env evs = some c') {i : σ.Id} {p : sys.State i} (hp : p ∈ c.seen i) :
     p ∈ c'.seen i := by
   induction evs generalizing c with
@@ -109,18 +113,19 @@ theorem mem_seen_run {env : EnvModel σ} {c c' : SysState sys.withPast} {evs : L
     simp only [run] at h
     cases hstep : c.step env ev with
     | none => simp [hstep] at h
-    | some c₁ => exact ih (by simpa [hstep] using h) (mem_seen_step hstep hp)
+    | some c₁ => exact ih (by simpa [hstep] using h) (mem_seen_step hrestart hstep hp)
 
 end SysState
 
 /-- Two points of a run of the real system, with the past: what an actor was at the earlier it
-has been at the later. A statement about two times is proved from an invariant over `seen`
-through this. -/
-theorem System.Reachable.exists_past {sys : System σ} {env : EnvModel σ} {c c' : SysState sys}
+has been at the later, where the process does not restart. A statement about two times is
+proved from an invariant over `seen` through this. -/
+theorem System.Reachable.exists_past {sys : System σ} {env : EnvModel σ}
+    (hrestart : env.mayRestart = false) {c c' : SysState sys}
     {evs : List (Event σ)} (h : sys.Reachable env c) (hrun : c.run env evs = some c') :
     ∃ d' : SysState sys.withPast, sys.withPast.Reachable env d' ∧ d'.erase = c' ∧
       ∀ i, c.state i ∈ d'.seen i := by
   obtain ⟨d, d', hreach, rfl, hrun', rfl⟩ := h.exists_ghost_run (.past sys) hrun
-  exact ⟨d', hreach.run hrun', rfl, fun i => SysState.mem_seen_run hrun' (d.mem_seen_self i)⟩
+  exact ⟨d', hreach.run hrun', rfl, fun i => SysState.mem_seen_run hrestart hrun' (d.mem_seen_self i)⟩
 
 end Lanes

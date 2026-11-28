@@ -142,6 +142,9 @@ import Lanes.Semantics
 /-- info: 'Lanes.Http.served_arrival_answered' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.served_arrival_answered
 
+/-- info: 'Lanes.Http.Gate.pending_leaves_unlessRestart' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Gate.pending_leaves_unlessRestart
+
 -- Lanes.Semantics.History
 /-- info: 'Lanes.System.Implements.history' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.System.Implements.history
@@ -230,6 +233,10 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Refines.traces' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Refines.traces
+
+-- Lanes.Semantics.Restart
+/-- info: 'Lanes.System.LeadsTo.unlessRestart' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.System.LeadsTo.unlessRestart
 
 -- Lanes.Semantics.Sent
 /-- info: 'Lanes.System.traced' depends on axioms: [propext, Classical.choice, Quot.sound] -/

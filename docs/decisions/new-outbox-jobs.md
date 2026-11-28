@@ -65,7 +65,9 @@ second index, and is the same for every attempt.
 
 The theorems run the worker's real step beside `Db.outside` with the application's
 transactions on the same database at any moment (`Worker.world`; the input `submit` stands for
-them in the model), and any service, in every environment model:
+them in the model), and any service, in every environment model, process restarts included
+(the restart event of #240: the worker starts again from nothing, the store and the service
+keep what they hold):
 
 - **No effect for a transaction that did not commit** (`Worker.committed_only`). Every attempt
   the worker hands over is of a job, with its work, in every database the model may hold, once

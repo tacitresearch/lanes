@@ -10,7 +10,7 @@ Model checks of the reminders (Lanes rule 5.1): the worker beside the store's mo
 answers may be lost and whose lost `COMMIT`s may take effect late, with the reminders'
 transactions (remind, cancel) running on the same database at any moment, and a notification
 service that honours idempotency keys and answers each delivery `200`, `503` or `unknown`, or
-never; the worker crashes and restarts. A reminder is delivered only once it is in every
+never; the process restarts. A reminder is delivered only once it is in every
 database the store may hold, at most once at the service, a reminder sent was taken, and no
 more than `maxReminders` wait.
 -/
@@ -100,13 +100,15 @@ def always : List (Check.Property W) :=
     .always "a reminder sent was taken by the service" sentWasTaken,
     .always "no more reminders wait than maxReminders" bounded ]
 
-def check (ticks : List Int64) (requests : List Action) (witness : String) (p : W → Bool) :=
-  Check.system worker { driver := (world ticks requests).driver samples }
+def check (ticks : List Int64) (requests : List Action) (witness : String) (p : W → Bool)
+    (maxRestarts : Nat := 0) :=
+  Check.system worker
+    { env := { mayRestart := true }, driver := (world ticks requests).driver samples, maxRestarts }
     (always ++ [.sometimes witness p]) {}
 
 /-- A reminder due at once, refused, and sent on a retry. -/
-def delivered := check [0, 50] [.remind "tea" 0] "a reminder is sent after a retry" fun w =>
-  (slots w).any (·.result == some 200) && w.driver.1.1.attempts.any (·.2 ≥ 3)
+def delivered := check [0, 50] [.remind "tea" 0] "a reminder is sent after a retry" (maxRestarts := 1)
+  fun w => (slots w).any (·.result == some 200) && w.driver.1.1.attempts.any (·.2 ≥ 3)
 
 /-- A reminder due later, and cancelled; then a second, refused while one waits. -/
 def cancelled := check [0] [.remind "tea" 1000, .cancel 0, .remind "jam" 1000]

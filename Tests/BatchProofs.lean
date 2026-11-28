@@ -52,7 +52,8 @@ theorem handles {svc : Service In Out S} (state : (i : Unit) → S × List In)
       by simp [account, actor, serve_eq_run]⟩
 
 theorem implements (svc : Service In Out S) (env : EnvModel (sig In Out))
-    (henv : (env.link none ()).duplicating = false) : (system svc).Implements env svc := by
+    (henv : (env.link none ()).duplicating = false) (hrestart : env.mayRestart = false) :
+    (system svc).Implements env svc := by
   refine (account svc).implements (inv := fun _ => True) (fun _ _ => trivial)
     ⟨(), by simp [account, SysState.init, SysState.startActor, SysState.settle, SysState.blank,
       SysState.perform, Effect.isStop, actor], by simp [Account.pending, account, SysState.init,
@@ -68,7 +69,7 @@ theorem implements (svc : Service In Out S) (env : EnvModel (sig In Out))
       obtain rfl : m = .flush := by cases h <;> rename_i h <;> cases ‹Msg In› <;> simp_all [actor]
       exact .grow (handles _ _ _ none .flush))
     (fun c ⟨⟩ _ => .quiet (fun _ _ h => by simpa [account] using h) rfl rfl (fun _ => by simp)
-      (fun _ => rfl))
+      (fun _ => rfl)) (fun h => absurd h (by simp [hrestart]))
   rintro c ⟨src, ⟨⟩, m⟩ _ hsent _ hdup
   obtain rfl : src = none := by
     cases hsent with
@@ -79,12 +80,13 @@ theorem implements (svc : Service In Out S) (env : EnvModel (sig In Out))
 
 /-- The same of the server that remembers every state it has been in, and back. -/
 theorem implements_withPast (svc : Service In Out S) (env : EnvModel (sig In Out))
-    (henv : (env.link none ()).duplicating = false) :
+    (henv : (env.link none ()).duplicating = false) (hrestart : env.mayRestart = false) :
     (system svc).withPast.Implements env svc :=
-  System.Refines.to_ghost _ (implements svc env henv)
+  System.Refines.to_ghost _ (implements svc env henv hrestart)
 
 example (svc : Service In Out S) (env : EnvModel (sig In Out))
-    (henv : (env.link none ()).duplicating = false) : (system svc).Implements env svc :=
-  System.Refines.of_ghost (.past _) (implements_withPast svc env henv)
+    (henv : (env.link none ()).duplicating = false) (hrestart : env.mayRestart = false) :
+    (system svc).Implements env svc :=
+  System.Refines.of_ghost (.past _) (implements_withPast svc env henv hrestart)
 
 end Tests.Batch

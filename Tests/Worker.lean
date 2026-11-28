@@ -12,7 +12,8 @@ what the transactions do on small tables, and model checks of the worker beside 
 model (`Lanes/Db/Model.lean`), whose answers may be lost and whose lost `COMMIT`s may take
 effect late, and beside a service that honours idempotency keys (`Idempotent.server`), which
 may answer an attempt, fail it, or not answer. The application's transactions (`submit`, an
-`enqueue`) run on the same database at any moment, and the worker crashes and restarts.
+`enqueue`) run on the same database at any moment; the worker crashes, and the process
+restarts.
 -/
 
 namespace Tests.Worker
@@ -187,9 +188,12 @@ def doneTaken (w : W) : Bool :=
 
 def bounded (w : W) : Bool := (w.state.state ()).running.length ≤ config.jobs.batch_max
 
-def check (ticks : List Int64) (keys : List String) (losses : Bool) (maxCrashes : Nat) :=
+def check (ticks : List Int64) (keys : List String) (losses : Bool) (maxCrashes : Nat)
+    (maxRestarts : Nat := 0) :=
   Check.system worker
-    { env := { mayCrash := fun _ => true }, driver := (world ticks keys).driver (samples losses), maxCrashes }
+    { env := { mayCrash := fun _ => true, mayRestart := true }
+      driver := (world ticks keys).driver (samples losses)
+      maxCrashes, maxRestarts }
     [ .always "every attempt is of a job of every database the store may hold" committedOnly,
       .always "no two effects under one job's key" onceEach,
       .always "a job done had an attempt the service took" doneTaken,
@@ -210,11 +214,11 @@ def report (name : String) (r : Check.Report W (Event wsig)) : String :=
   | some (.deadlock _) => s!"{name}: FAIL deadlock"
 
 def tests : List (String × Bool) :=
-  let plain := check [0, 200] ["a"] false 1
+  let plain := check [0, 200] ["a"] false 1 1
   let lost := check [0, 200] ["a"] true 0
   transactionTests ++
   [ (s!"worker: only jobs that committed are attempted, each under its key once at the service, "
-        ++ s!"a job done was taken; with crashes ({plain.states} states)",
+        ++ s!"a job done was taken; with a crash and a restart ({plain.states} states)",
       plain.ok && plain.witnesses.length == 2),
     (s!"worker: the same when the store loses answers and lost commits take effect late "
         ++ s!"({lost.states} states)",

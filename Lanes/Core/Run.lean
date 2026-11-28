@@ -480,9 +480,11 @@ theorem deliver_ahead {c c' : SysState sys} {x : Envelope σ}
   exact ⟨hmem, hsub⟩
 
 /-- Every step but one that hands `e` over keeps it in flight, on a link that does not lose it,
-while its receiver stays up, and lets nothing in ahead of it. -/
+while its receiver stays up and the process does not restart, and lets nothing in ahead of
+it. -/
 theorem step_ahead {c c' : SysState sys} {ev : Event σ} (hstep : c.step env ev = some c')
     (he : e ∈ c.net) (hlossless : (env.link e.src e.dst).lossy = false)
+    (hrestart : env.mayRestart = false)
     (hup : c'.up e.dst = true) (hdeliver : ev ≠ .deliver e) (hdup : ev ≠ .duplicate e) :
     e ∈ c'.net ∧ (beforeFirst e c'.net).Sublist (beforeFirst e c.net) := by
   cases ev with
@@ -515,6 +517,7 @@ theorem step_ahead {c c' : SysState sys} {ev : Event σ} (hstep : c.step env ev 
   | start i =>
     obtain ⟨-, -, rfl⟩ := step_start.mp hstep
     exact settle_ahead (c := { c with up := _ }) he hup
+  | restart => simp [step_restart_of_noRestarts hrestart] at hstep
 
 /-- The message a delivery of which brings `e` nearer: the oldest on its link if the link is
 ordered, else `e` itself. While nothing ahead of `e` changes, it stays the same. -/
@@ -577,10 +580,11 @@ theorem mem_net_settle_of_sends {c : SysState sys} {i : σ.Id}
   · exact List.mem_append_right _ he
 
 /-- Every step but one that hands `e` over keeps it in flight, on a link that does not lose it,
-when the environment does not crash its receiver and the receiver never stops. -/
+when the environment neither crashes its receiver nor restarts the process and the receiver
+never stops. -/
 theorem mem_net_of_step {c c' : SysState sys} {ev : Event σ} (he : e ∈ c.net)
     (hstep : c.step env ev = some c') (hlossless : (env.link e.src e.dst).lossy = false)
-    (hcrash : env.mayCrash e.dst = false)
+    (hcrash : env.mayCrash e.dst = false) (hrestart : env.mayRestart = false)
     (hruns : ∀ s msg, ((sys.actor e.dst).step s msg).2.any Effect.isStop = false)
     (hrecovers : ∀ s, ((sys.actor e.dst).recover s).2.any Effect.isStop = false)
     (hdeliver : ev ≠ .deliver e) (hdup : ev ≠ .duplicate e) : e ∈ c'.net := by
@@ -615,6 +619,7 @@ theorem mem_net_of_step {c c' : SysState sys} {ev : Event σ} (he : e ∈ c.net)
   | start i =>
     obtain ⟨-, -, rfl⟩ := step_start.mp hstep
     exact mem_net_settle he fun h => by subst h; exact hrecovers _
+  | restart => simp [step_restart_of_noRestarts hrestart] at hstep
 
 end Kept
 
@@ -629,12 +634,13 @@ theorem System.Reachable.accepted {env : EnvModel σ} {c : SysState sys} (h : sy
   have hsettle (c : SysState sys) (i : σ.Id) (r : sys.State i × List (Effect σ i)) (hc : P c) :
       P (c.settle env i r) := fun e he hsrc =>
     (SysState.mem_settle_net he).elim (fun h => hc e h hsrc) fun h => by simp [h] at hsrc
+  have hinit : P (SysState.init sys env) :=
+    SysState.init_induction (P := P) (by simp [P, SysState.blank])
+      fun c i hc => hsettle { c with up := update c.up i true } i _ hc
   suffices hall : P c from hall e he hsrc
   clear he hsrc
   induction h with
-  | init =>
-    exact SysState.init_induction (P := P) (by simp [P, SysState.blank])
-      fun c i hc => hsettle { c with up := update c.up i true } i _ hc
+  | init => exact hinit
   | @step c c' ev _ hstep ih =>
     cases ev with
     | input x =>
@@ -664,5 +670,8 @@ theorem System.Reachable.accepted {env : EnvModel σ} {c : SysState sys} (h : sy
     | start i =>
       obtain ⟨_, _, rfl⟩ := SysState.step_start.mp hstep
       exact hsettle _ _ _ ih
+    | restart =>
+      obtain ⟨_, rfl⟩ := SysState.step_restart.mp hstep
+      exact hinit
 
 end Lanes

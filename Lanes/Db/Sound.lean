@@ -407,7 +407,9 @@ theorem observe_holds (cfg : Config) (hI : Preserves h I) {s : State Q A} (c : C
 /-- **The invariant theorem.** If the start satisfies `I` and every transaction of the handler
 keeps it, then after every run the model allows at `SERIALIZABLE`, with lost `COMMIT`s, failures
 and calls taking effect at any moment, every database the store may hold satisfies `I`, also
-once any call still outstanding or lost takes effect. -/
+once any call still outstanding or lost takes effect. The run may restart the process
+(`Event.restart`): the store is outside it and sees nothing of a restart, and a call the process
+forgot may still take effect. -/
 theorem invariant {σ : Signature} (cfg : Config) (port : Port σ Q A) {start : Db} (hstart : I start)
     (hI : Preserves h I) {events : List (Event σ)} {s : State Q A}
     (hrun : (outside cfg h start port).after events = some s) :

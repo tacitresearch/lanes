@@ -35,12 +35,12 @@ variable {σ : Signature}
 
 deriving instance DecidableEq for Event
 
-/-- The actor that takes the step, where the event is a step of one actor. No event changes
-whether another actor is up, or another actor's timers. -/
+/-- The actor that takes the step, where the event is a step of one actor. No event but a
+restart changes whether another actor is up, or another actor's timers. -/
 def Event.actor? : Event σ → Option σ.Id
   | .deliver e | .duplicate e => some e.dst
   | .timeout i _ | .crash i | .start i => some i
-  | .input _ | .drop _ | .output _ => none
+  | .input _ | .drop _ | .output _ | .restart => none
 
 /-- The timers that the effects of actor `i` arm, as the events that fire them. -/
 def Effect.timeouts (i : σ.Id) (effs : List (Effect σ i)) : List (Event σ) :=
@@ -59,16 +59,16 @@ def arms (c : SysState sys) : Event σ → List (Event σ)
     Effect.timeouts e.dst ((sys.actor e.dst).step (c.state e.dst) e.msg).2
   | .timeout i msg => Effect.timeouts i ((sys.actor i).step (c.state i) msg).2
   | .start i => Effect.timeouts i ((sys.actor i).recover (c.state i)).2
-  | .input _ | .drop _ | .output _ | .crash _ => []
+  | .input _ | .drop _ | .output _ | .crash _ | .restart => []
 
-/-- The environment's events (inputs, duplicates, drops, crashes) are never owed, and neither is
-starting an actor that has no mail. -/
+/-- The environment's events (inputs, duplicates, drops, crashes, restarts) are never owed, and
+neither is starting an actor that has no mail. -/
 def owed (env : EnvModel σ) (c : SysState sys) : Event σ → Bool
   | .deliver e => c.up e.dst && c.deliverable env e
   | .timeout i msg => c.up i && (c.timers i).contains msg
   | .start i => !c.up i && c.hasMail i
   | .output out => c.outbox.contains out
-  | .input _ | .duplicate _ | .drop _ | .crash _ => false
+  | .input _ | .duplicate _ | .drop _ | .crash _ | .restart => false
 
 /-- Contains every owed event except the timers of actors outside `actors`. -/
 def maybeOwed (c : SysState sys) (actors : List σ.Id) : List (Event σ) :=
@@ -97,6 +97,12 @@ def init (sys : System σ) (env : EnvModel σ) : FairScheduler sys :=
   let c := SysState.init sys env
   ⟨c, requeue env c sys.boot []⟩
 
+/-- The actors whose timers taking `ev` may change: its actor, or after a restart the boot
+actors, the only ones with timers in `SysState.init`. -/
+def touched (sys : System σ) : Event σ → List σ.Id
+  | .restart => sys.boot
+  | ev => ev.actor?.toList
+
 /-- Take `ev`, which goes to the back of the queue, as do the timers it arms again. An event
 that is not enabled changes nothing. -/
 def take (env : EnvModel σ) (s : FairScheduler sys) (ev : Event σ) : FairScheduler sys :=
@@ -104,7 +110,7 @@ def take (env : EnvModel σ) (s : FairScheduler sys) (ev : Event σ) : FairSched
   | none => s
   | some c =>
     let waiting := (s.queue.erase ev).filter fun e => !(s.state.arms ev).contains e
-    ⟨c, requeue env c ev.actor?.toList (waiting ++ [ev])⟩
+    ⟨c, requeue env c (touched sys ev) (waiting ++ [ev])⟩
 
 def next (env : EnvModel σ) (s : FairScheduler sys) : Option (Event σ) :=
   s.queue.find? (s.state.owed env)

@@ -10,9 +10,9 @@ public import Lanes.Proof.Outputs
 
 /-!
 What the worker (`Lanes/Db/Worker.lean`) does beside the store's model and a service's, in every
-run, under every environment model (lost, repeated and reordered messages, crashes and
-restarts of the worker), with the application's transactions running on the same database at
-any moment:
+run, under every environment model (lost, repeated and reordered messages, crashes of the
+worker, restarts of the process), with the application's transactions running on the same
+database at any moment:
 
 - **No effect is sent for a transaction that did not commit** (`Worker.committed_only`). Every
   attempt the worker hands to an adapter is of a job, with that job's work, in every database
@@ -363,6 +363,10 @@ theorem inv_beside (happ : ∀ x, q.Keeps (app x)) (hstart : q.Functional start)
     simp only [SysState.grow, this, Effect.sends, Effect.armed, Effect.emits, List.filterMap_nil,
       List.append_nil]
     exact ⟨h.worlds, h.replies, h.outbox, by simp [h.timers]⟩
+  restart _ c d _ h := by
+    refine ⟨h.worlds, fun e he => ?_, fun id lease dl w ho => ?_, ?_⟩ <;>
+      simp [SysState.init, SysState.startActor, SysState.settle, SysState.performAll,
+        SysState.blank, actor] at *
 
 /-- **No effect for a transaction that did not commit.** In every run of the worker, under every
 environment model, beside any clients, the store's model with the application's transactions
