@@ -6,6 +6,8 @@
 #   LANES_POSTGRES_TLS=127.0.0.1:PORT LANES_POSTGRES_CERTS=DIR lake test   # with tls
 #   pg_ctl -D DIR/data stop                      # stop it
 #
+# scripts/with-postgres does all of this around one command, on a free port.
+#
 # Run it as a user other than root (PostgreSQL refuses root), with PostgreSQL's binaries on PATH
 # (on Debian and Ubuntu, /usr/lib/postgresql/<version>/bin). It makes a database `lanes_test` and
 # one user per way of authenticating: `lanes_trust` (none), `lanes_clear` (`clear-pw`, asked in

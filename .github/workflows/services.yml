@@ -3,8 +3,10 @@ name: Services
 # The service oracles (oracles/README.md): the S3 client, its POST forms and multipart uploads,
 # the SES adapter and SQS's calls against moto, and
 # the store's adapter against PostgreSQL 16, each run checked against our model of the service.
-# They start services and take longer than a pull request should wait, so they run nightly on
-# the default branch and by hand; the pure oracles run in ci.yml. Each run's records are kept as
+# Then the live tests that skip without a PostgreSQL, against PostgreSQL 16 with TLS: `lake test`
+# (the client, its TLS and pool, the jobs worker), the to-do list's typed store (todoLive) and
+# the reminders' outbox. They start services and take longer than a pull request should wait, so
+# they run nightly on the default branch and by hand; the pure oracles run in ci.yml. Each run's records are kept as
 # the workflow's artifact: copy them over oracles/moto/*.jsonl and oracles/postgres/*.jsonl to
 # update what `lake test` checks.
 
@@ -55,6 +57,24 @@ jobs:
         run: lake build lanesServiceOracle
       - name: The store model against PostgreSQL 16
         run: oracles/postgres/run.sh --record
+      - name: Build the live tests and the examples on PostgreSQL
+        run: |
+          lake build lanesTest lanesStopChild
+          (cd examples/todo-db && lake build todoLive)
+          (cd examples/reminders && lake build)
+      # scripts/with-postgres sets LANES_POSTGRES, LANES_POSTGRES_TLS and LANES_POSTGRES_CERTS;
+      # todoLive reads libpq's variables, and goes over TLS with the certificate verified.
+      - name: The live tests against PostgreSQL 16
+        env:
+          LIVE: |
+            lake test
+            cd examples/todo-db
+            PGHOST=localhost PGPORT="${LANES_POSTGRES#*:}" PGUSER=lanes_scram PGPASSWORD=scram-pw \
+              PGDATABASE=lanes_test PGSSLMODE=verify-full PGSSLROOTCERT="$LANES_POSTGRES_CERTS/ca.pem" \
+              lake exe todoLive
+            cd ../reminders
+            lake test
+        run: scripts/with-postgres --tls bash -euo pipefail -c "$LIVE"
       - name: The object store, multipart, email and queue models against moto
         run: oracles/moto/run.sh --record
       - if: always()

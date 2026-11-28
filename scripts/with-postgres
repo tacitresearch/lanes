@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Runs a command against a PostgreSQL made for it, then stops the cluster and removes it:
+#
+#   scripts/with-postgres [--tls] COMMAND...
+#
+# The cluster is scripts/postgres-test-server's, in a new directory, on a free port of 127.0.0.1.
+# The command gets LANES_POSTGRES=127.0.0.1:PORT, which the live tests read; with --tls the server
+# also takes TLS, and the command gets LANES_POSTGRES_TLS (the same address) and
+# LANES_POSTGRES_CERTS (the directory with the authority, `ca.pem`), which
+# `Tests/PostgresTls.lean` reads. It ends with the command's status.
+#
+# PostgreSQL's binaries must be on PATH or in /usr/lib/postgresql/<version>/bin; run as root, the
+# cluster is made and run by the user postgres. Without them it fails: a caller that may go
+# without PostgreSQL checks first (oracles/postgres/run.sh).
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+tls=
+if [ "${1:-}" = --tls ]; then tls=tls; shift; fi
+if [ $# = 0 ]; then echo "usage: scripts/with-postgres [--tls] COMMAND..." >&2; exit 2; fi
+if ! command -v initdb >/dev/null; then
+  for bin in /usr/lib/postgresql/*/bin; do
+    if [ -x "$bin/initdb" ]; then PATH="$bin:$PATH"; fi
+  done
+fi
+if ! command -v initdb >/dev/null; then
+  echo "with-postgres: no PostgreSQL: initdb is not on PATH or in /usr/lib/postgresql" >&2
+  exit 1
+fi
+dir=$(mktemp -d "${TMPDIR:-/tmp}/lanes-postgres.XXXXXX")
+as=()
+if [ "$(id -u)" = 0 ]; then
+  chown postgres "$dir"
+  as=(runuser -u postgres --)
+fi
+port=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
+stop() {
+  "${as[@]}" env PATH="$PATH" pg_ctl -D "$dir/data" -m fast stop >/dev/null 2>&1 || true
+  rm -rf "$dir"
+}
+trap stop EXIT
+"${as[@]}" env PATH="$PATH" bash "$root/scripts/postgres-test-server" "$dir" "$port" $tls
+initdb --version
+export LANES_POSTGRES="127.0.0.1:$port"
+if [ -n "$tls" ]; then
+  export LANES_POSTGRES_TLS="127.0.0.1:$port" LANES_POSTGRES_CERTS="$dir"
+fi
+"$@"

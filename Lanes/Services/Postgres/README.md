@@ -15,3 +15,6 @@ Status: **checked: model plus oracle**.
   and records them (`oracles/postgres/store.jsonl`, `oracles/postgres/db.jsonl`), which
   `lake test` checks again; CI runs it nightly. The messages and the connection are also tested
   against sessions recorded from PostgreSQL 16 and psql 16 (`Tests/Postgres.lean`).
+  The client, its TLS, its pool and the jobs worker are tested live against a PostgreSQL 16
+  with TLS that `scripts/with-postgres --tls` makes (`Tests/PostgresLive.lean`,
+  `Tests/PostgresTls.lean`, `Tests/Worker.lean`), nightly in `.github/workflows/services.yml`.
