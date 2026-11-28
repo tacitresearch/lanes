@@ -380,10 +380,12 @@ def display (n : Name) : String :=
   | `Lanes :: rest@(_ :: _) => toString (rest.foldl Name.append .anonymous)
   | _ => toString n
 
+/-- The first `most` names in order, then "and others": with a count, every new test of a name
+would change its line. -/
 def listOf (names : Array String) (most : Nat := 3) : String :=
   let names := sortStrings names
   let shown := ", ".intercalate ((names.toList.take most).map fun s => s!"`{s}`")
-  if names.size > most then s!"{shown} and {names.size - most} more" else shown
+  if names.size > most then s!"{shown} and others" else shown
 
 def entries (root : System.FilePath) (f : Facts) : IO (Array Entry) := do
   let trusted ← trustedRows root
@@ -436,6 +438,8 @@ def area (m : Name) : String :=
 
 def cell (s : String) : String := s.replace "|" "\\|"
 
+/-- The count of each status by area. It is printed (`lanes stats`), not written in the
+inventory: every new definition would change its last line. -/
 def summary (es : Array Entry) : String := Id.run do
   let areas := sortStrings ((es.map (area ·.module)).toList.eraseDups.toArray)
   let header := "| Area | Definitions | " ++ " | ".intercalate (Status.all.map (·.label)) ++ " |\n"
@@ -456,8 +460,8 @@ def render (es : Array Entry) : String := Id.run do
     ++ "Generated from the built modules by `lake exe lanes lint --fix` (`LanesCli/Inventory.lean`);\n"
     ++ "do not edit. What each status means, and what is not listed, is in\n"
     ++ "`docs/decisions/D47-the-inventory-is-computed.md`. The definitions of `Lanes/` with status\n"
-    ++ "none are on `docs/inventory-none.md`, which only shrinks.\n\n"
-    ++ "## Summary\n\n" ++ summary es
+    ++ "none are on `docs/inventory-none.md`, which only shrinks. `lake exe lanes stats` counts\n"
+    ++ "them by area.\n"
   let modules := (es.map (·.module)).toList.eraseDups
   for m in modules do
     out := out ++ s!"\n## `{pathOfModule m}`\n\n| Definition | Status | Evidence |\n| --- | --- | --- |\n"
@@ -513,12 +517,16 @@ def load (root : System.FilePath) : IO (Array Entry) := do
 def counts (es : Array Entry) : String :=
   ", ".intercalate (Status.all.map fun s => s!"{(es.filter (·.status == s)).size} {s.label}")
 
-/-- `lanesInventory [--fix | --check | --list <status>]`: write the inventory and print its
-summary, write it and then check, only check, or print the library's definitions of a status. -/
+/-- `lanesInventory [--fix | --check | --summary | --list <status>]`: write the inventory and
+print its counts, write it and then check, only check, print the counts by area, or print the
+library's definitions of a status. -/
 def run (args : List String) : IO UInt32 := do
   let root : System.FilePath := "."
   let es ← load root
   match args with
+  | ["--summary"] =>
+    IO.print (summary es)
+    return 0
   | ["--list", s] =>
     for e in es do
       if e.status.label == s && e.module.getRoot == `Lanes then

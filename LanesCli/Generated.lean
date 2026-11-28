@@ -10,11 +10,15 @@ Text that is derived from other files, so that no one types it and two branches 
 by hand:
 
 - the line counts in `TRUSTED.md` (`` `path.lean`, N lines `` or `` `path.c`, N lines ``), from
-  the files, and the total
-  in `README.md` (`About N lines of trusted code`, to the nearest 50);
+  the files;
 - the index of `docs/decisions/README.md`, from the decisions' headings, and the numbers of new
   decisions (`new-<slug>.md`, `# D?. Title`), given on the main branch only;
-- `docs/STATUS.md`, from `docs/status/page.md` and the fragments it names.
+- `docs/STATUS.md`, from `docs/status/page.md` and the fragments it names, and the order of the
+  items in each fragment.
+
+Every line written is about one item: one file, one decision, one area. No line holds a count
+or a total over the repository, so two branches that change different items never change the
+same line, and git merges them. `lanes stats` prints the totals.
 
 Each part is a plan: the edits that would make the files agree, and the findings no edit can
 fix. `lanes lint` reports the edits as findings; `lanes lint --fix` performs them.
@@ -130,23 +134,6 @@ def withCommas (n : Nat) : String :=
     String.ofList ((digits.drop (3 * k)).take 3).reverse
   ",".intercalate groups.reverse
 
-/-- Rounded to the nearest 50, so that the README changes only when the total moves. -/
-def roundedTotal (total : Nat) : Nat :=
-  (total + 25) / 50 * 50
-
-/-- `README.md` with the number before each `lines of trusted code` set to `total`. -/
-def rewriteTotal (readme : String) (total : Nat) : String :=
-  let parts := readme.splitOn " lines of trusted code"
-  let n := parts.length
-  let fixed := parts.zipIdx.map fun (part, k) =>
-    if k + 1 == n then part
-    else
-      let cs := part.toList.reverse
-      let number := cs.takeWhile fun c => c.isDigit || c == ','
-      if number.isEmpty then part
-      else String.ofList (cs.drop number.length).reverse ++ withCommas (roundedTotal total)
-  " lines of trusted code".intercalate fixed
-
 /-- Trusted sources written `` `path`, lines `` with no number before `lines`, as a merge
 leaves an entry when it drops the count: `trustedSizes` cannot read them, so they would be
 left out of the total. -/
@@ -170,13 +157,18 @@ def trustedPlan (root : System.FilePath) : IO Plan := do
   let wrong := (trustedSizes trusted).filterMap fun (path, listed) =>
     (lookup path).bind fun n =>
       if n == listed then none else some s!"`{path}` has {n} lines, not {listed}"
-  let mut edits ← writeIfChanged root "TRUSTED.md" (rewriteSizes trusted lookup) "trusted-size"
+  let edits ← writeIfChanged root "TRUSTED.md" (rewriteSizes trusted lookup) "trusted-size"
     s!"{"; ".intercalate wrong}: run `lake exe lanes lint --fix` (rule 5.5)"
-  let total := (actual.map (·.2)).sum
-  if let some readme ← readIfExists (root / "README.md") then
-    edits := edits ++ (← writeIfChanged root "README.md" (rewriteTotal readme total)
-      "trusted-size" s!"the total of trusted lines is {stale}")
   return { edits, problems := problems.reverse }
+
+/-- The trusted files `TRUSTED.md` counts, and their lines as the files have them now. -/
+def trustedTotal (root : System.FilePath) : IO (Nat × Nat) := do
+  let some trusted ← readIfExists (root / "TRUSTED.md") | return (0, 0)
+  let paths := (trustedSizes trusted).map (·.1) |>.eraseDups
+  let mut total := 0
+  for path in paths do
+    if let some text ← readIfExists (root / path) then total := total + lineCount text
+  return (paths.length, total)
 
 /-! ## Decisions -/
 
@@ -242,9 +234,12 @@ def readDecisions (root : System.FilePath) : IO (List Decision × List Problem) 
 def indexLine (d : Decision) (n : Nat) : String :=
   s!"- [D{n}. {d.title}]({d.file})"
 
+/-- The index is sorted by slug, not by number: a new decision lands at its own place in the
+list, not after the last line, where every other new one would land too. -/
 def indexText (readme : Option String) (decisions : List Decision) : String :=
   let numbered := decisions.filterMap fun d => d.number.map (d, ·)
-  let sorted := (numbered.toArray.qsort (·.2 < ·.2)).toList
+  let sorted := (numbered.toArray.qsort fun (a, m) (b, n) =>
+    a.slug < b.slug || (a.slug == b.slug && m < n)).toList
   let index := "\n".intercalate (sorted.map fun (d, n) => indexLine d n)
   let preamble := match readme with
     | none => "# Decisions\n\n## Index\n"
@@ -305,54 +300,66 @@ def decisionsPlan (root : System.FilePath) (main : Bool) : IO Plan := do
 
 def statusDir : String := "docs/status"
 
-/-- `<!-- rows: areas -->` names the fragments in `docs/status/areas`. -/
-def rowsMarker? (line : String) : Option String := do
-  guard (line.startsWith "<!-- rows: " && line.endsWith " -->")
-  let inner := String.ofList ((line.toList.drop 11).take (line.length - 15))
+/-- `<!-- sections: areas -->` names the fragments in `docs/status/areas`. -/
+def sectionsMarker? (line : String) : Option String := do
+  guard (line.startsWith "<!-- sections: " && line.endsWith " -->")
+  let inner := String.ofList ((line.toList.drop 15).take (line.length - 19))
   guard (!inner.isEmpty)
   return inner
-
-def limitsMarker : String := "<!-- limits -->"
 
 def generatedNote : String :=
   "<!-- Generated by `lake exe lanes lint --fix` from `docs/status/`: edit the fragments there, "
     ++ "not this file. -->"
 
-/-- A fragment's first line is its table row; the lines after it are its known limits. -/
-def splitFragment (text : String) : String × List String :=
-  match text.splitOn "\n" with
-  | [] => ("", [])
-  | row :: rest =>
-    let trimmed := (rest.dropWhile (·.isEmpty)).reverse.dropWhile (·.isEmpty) |>.reverse
-    (row, trimmed)
+/-- Each run of items (lines that start `- `) sorted. Two branches that each add an item to one
+list then add it at different places, unless the two are neighbours. -/
+def sortItems (lines : List String) : List String :=
+  let (done, run) := lines.foldl (init := (([] : List String), ([] : List String)))
+    fun (done, run) line =>
+      if line.startsWith "- " then (done, run ++ [line])
+      else (done ++ sortStrings run ++ [line], [])
+  done ++ sortStrings run
+
+/-- A fragment without its blank lines at the end. -/
+def trimFragment (text : String) : List String :=
+  ((text.splitOn "\n").reverse.dropWhile (·.trimAscii.isEmpty)).reverse
+
+/-- The problems of a fragment: its first line is its heading, and each item is one line. -/
+def fragmentProblems (path : String) (lines : List String) : List Problem :=
+  let heading := if (lines.headD "").startsWith "### " then []
+    else [(path, 1, "status", "a fragment's first line is its heading, `### Name`")]
+  let wrapped := lines.zipIdx.filterMap fun (line, k) =>
+    if line.startsWith " " then
+      some (path, k + 1, "status", "one item per line: join this line to the one before")
+    else none
+  heading ++ wrapped
 
 def statusPlan (root : System.FilePath) : IO Plan := do
   let pagePath := s!"{statusDir}/page.md"
   let some page ← readIfExists (root / pagePath) | return {}
   let pageLines := page.splitOn "\n"
-  let dirs := pageLines.filterMap rowsMarker?
-  let mut fragments : List (String × List (String × String × List String)) := []
+  let mut sections : List (String × List String) := []
+  let mut edits : List Edit := []
   let mut problems : List Problem := []
-  for dir in dirs do
-    let mut here := []
+  for dir in pageLines.filterMap sectionsMarker? do
+    let mut here : List String := []
     for name in ← markdownIn (root / statusDir / dir) do
       let path := s!"{statusDir}/{dir}/{name}"
-      let (row, limits) := splitFragment (← IO.FS.readFile (root / path))
-      if !row.startsWith "| " then
-        problems := (path, 1, "status", "a fragment's first line is its row of the table")
-          :: problems
-      here := here ++ [(path, row, limits)]
-    fragments := fragments ++ [(dir, here)]
-  let rows := fun dir => ((fragments.find? (·.1 == dir)).map (·.2)).getD []
-  let limits := fragments.flatMap fun (_, here) => here.flatMap (·.2.2)
+      let text ← IO.FS.readFile (root / path)
+      let lines := sortItems (trimFragment text)
+      problems := problems ++ fragmentProblems path lines
+      edits := edits ++ (← writeIfChanged root path ("\n".intercalate lines ++ "\n") "status"
+        "its items are not sorted: run `lake exe lanes lint --fix`")
+      here := here ++ (if here.isEmpty then [] else [""]) ++ lines
+    sections := sections ++ [(dir, here)]
   let out := pageLines.flatMap fun line =>
-    match rowsMarker? line with
-    | some dir => (rows dir).map (·.2.1)
-    | none => if line == limitsMarker then limits else [line]
+    match sectionsMarker? line with
+    | some dir => ((sections.find? (·.1 == dir)).map (·.2)).getD []
+    | none => [line]
   let text := generatedNote ++ "\n" ++ "\n".intercalate out
-  let edits ← writeIfChanged root "docs/STATUS.md" text "status"
-    s!"{stale}; edit `docs/status/`, not this file"
-  return { edits, problems := problems.reverse }
+  edits := edits ++ (← writeIfChanged root "docs/STATUS.md" text "status"
+    s!"{stale}; edit `docs/status/`, not this file")
+  return { edits, problems }
 
 /-! ## Applying a plan -/
 

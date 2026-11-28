@@ -21,29 +21,30 @@ def rules (report : Report) : List String :=
   report.findings.map (·.rule)
 
 def page : String :=
-  "# Status\n\n| Area | What |\n| --- | --- |\n<!-- rows: areas -->\n\n| App | What |\n"
-    ++ "| --- | --- |\n<!-- rows: apps -->\n\n## Known limits\n\n<!-- limits -->\n"
+  "# Status\n\n## Areas\n\n<!-- sections: areas -->\n\n## Apps\n\n<!-- sections: apps -->\n"
 
 def project (root : System.FilePath) : IO Unit := do
   write root "Shell.lean" (String.join (List.replicate 60 "-- a line\n"))
   write root "TRUSTED.md" "| The shell | `Shell.lean`, 7 lines | |\n"
-  write root "README.md" "About 1,150 lines of trusted code.\n"
+  write root "README.md" "Trusted code.\n"
   write root "docs/decisions/README.md" "# Decisions\n\nPreamble.\n"
   write root "docs/decisions/D1-first.md" "# D1. First\n\nText.\n"
   write root "docs/decisions/D2-second.md" "# D2. Second, `code`\n\nMore text.\n"
   write root "docs/decisions/new-third.md" "# D?. Third\n\nNewest, after `new-third.md`.\n"
   write root "docs/status/page.md" page
-  write root "docs/status/areas/runtime.md"
-    "| Runtime | a kernel (`docs/decisions/new-third.md`) |\n\n- Runtime limit.\n  Continued.\n"
-  write root "docs/status/areas/actors.md" "| Actors | `Actor` |\n"
-  write root "docs/status/apps/bank.md" "| Bank | conserves money |\n\n- Bank limit.\n"
+  write root "docs/status/areas/runtime.md" ("### Runtime\n\n- The kernel "
+    ++ "(`docs/decisions/new-third.md`).\n- A batch.\n\nKnown limits:\n\n- Runtime limit.\n\n")
+  write root "docs/status/areas/actors.md" "### Actors\n\n- `Actor`.\n"
+  write root "docs/status/apps/bank.md" "### Bank\n\n- Conserves money.\n\nKnown limits:\n\n- Bank limit.\n"
+
+def runtime (third : String) : String :=
+  s!"### Runtime\n\n- A batch.\n- The kernel (`docs/decisions/{third}`).\n\nKnown limits:\n\n"
+    ++ "- Runtime limit.\n"
 
 def expectedStatus (third : String) : String :=
-  Generated.generatedNote ++ "\n# Status\n\n| Area | What |\n| --- | --- |\n"
-    ++ "| Actors | `Actor` |\n"
-    ++ s!"| Runtime | a kernel (`docs/decisions/{third}`) |\n\n| App | What |\n| --- | --- |\n"
-    ++ "| Bank | conserves money |\n\n## Known limits\n\n"
-    ++ "- Runtime limit.\n  Continued.\n- Bank limit.\n"
+  Generated.generatedNote ++ "\n# Status\n\n## Areas\n\n### Actors\n\n- `Actor`.\n\n"
+    ++ runtime third ++ "\n## Apps\n\n### Bank\n\n- Conserves money.\n\nKnown limits:\n\n"
+    ++ "- Bank limit.\n"
 
 def expectedIndex (third : Bool) : String :=
   "# Decisions\n\nPreamble.\n\n## Index\n\n- [D1. First](D1-first.md)\n"
@@ -61,6 +62,7 @@ def fixTests (root : System.FilePath) : IO (List (String × Bool)) := do
   let again ← lint root { fix := true }
   let trusted ← read root "TRUSTED.md"
   let readme ← read root "README.md"
+  let fragment ← read root "docs/status/areas/runtime.md"
   let status ← read root "docs/STATUS.md"
   let index ← read root "docs/decisions/README.md"
   let unnumbered ← lint root { main := true }
@@ -71,13 +73,15 @@ def fixTests (root : System.FilePath) : IO (List (String × Bool)) := do
   let statusAfter ← read root "docs/STATUS.md"
   let indexAfter ← read root "docs/decisions/README.md"
   return [
-    ("lint: a wrong count, a stale total, index and status page are each reported",
-      rules before == ["trusted-size", "trusted-size", "decisions", "status"]),
+    ("lint: a wrong count, a stale index, an unsorted fragment and the status page are each reported",
+      rules before == ["trusted-size", "decisions", "status", "status"]),
     ("lint --fix: no findings after it", fixed.findings.isEmpty && fixed.fixed.length == 4),
     ("lint --fix: a second run changes nothing", again.fixed.isEmpty && again.findings.isEmpty),
     ("lint --fix: the count is the file's", trusted == "| The shell | `Shell.lean`, 60 lines | |\n"),
-    ("lint --fix: the total is rounded to 50", readme == "About 50 lines of trusted code.\n"),
-    ("lint --fix: the status page has the rows by name and the limits after them",
+    ("lint --fix: the README holds no total", readme == "Trusted code.\n"),
+    ("lint --fix: a fragment's items are sorted, its blank lines at the end dropped",
+      fragment == runtime "new-third.md"),
+    ("lint --fix: the status page has the sections by name, each after its heading",
       status == expectedStatus "new-third.md"),
     ("lint --fix: the index lists the numbered decisions, not a new one",
       index == expectedIndex false),
@@ -96,7 +100,8 @@ def problemTests (root : System.FilePath) : IO (List (String × Bool)) := do
   write root "docs/decisions/D2-again.md" "# D2. Again\n"
   write root "docs/decisions/D4-wrong.md" "# D5. Wrong\n"
   write root "docs/decisions/notes.md" "# Notes\n"
-  write root "docs/status/areas/broken.md" "Not a row.\n"
+  write root "docs/status/areas/broken.md" "Not a heading.\n"
+  write root "docs/status/areas/wrapped.md" "### Wrapped\n\n- An item\n  wrapped.\n"
   let report ← lint root { fix := true }
   let decisions := report.findings.filter (·.rule == "decisions")
   return [
@@ -104,9 +109,12 @@ def problemTests (root : System.FilePath) : IO (List (String × Bool)) := do
         ++ "are reported, and --fix leaves them",
       decisions.length == 4
         && (← (root / "docs/decisions/D2-again.md").pathExists)),
-    ("lint: a status fragment that does not start with a row is reported",
+    ("lint: a status fragment that does not start with a heading is reported",
       report.findings.any fun f => f.rule == "status"
-        && f.file.toString == "docs/status/areas/broken.md")]
+        && f.file.toString == "docs/status/areas/broken.md"),
+    ("lint: an item of a status fragment written on two lines is reported",
+      report.findings.any fun f => f.rule == "status"
+        && f.file.toString == "docs/status/areas/wrapped.md" && f.line == 4)]
 
 def citing : String :=
   "See `Lanes/A.lean`, `Lanes/{A,B}.lean` and `Lanes/`.\n"
@@ -121,9 +129,9 @@ def linkTests (root : System.FilePath) : IO (List (String × Bool)) := do
   discard <| lint root { fix := true }
   write root "Lanes/A.lean" ""
   write root "Lanes/B.lean" ""
-  write root "README.md" ("About 50 lines of trusted code.\n" ++ citing)
+  write root "README.md" ("Trusted code.\n" ++ citing)
   write root "docs/GUIDE.md" "Cites `Lanes/Nowhere.lean`.\n"
-  write root "docs/status/areas/actors.md" "| Actors | `Lanes/Away.lean` |\n"
+  write root "docs/status/areas/actors.md" "### Actors\n\n- `Lanes/Away.lean`.\n"
   write root "docs/history/old.md" "Was `Lanes/Old.lean`.\n"
   write root "docs/decisions/D3-past.md" "# D3. Past\n\nWas `Lanes/Past.lean`.\n"
   let report ← lint root { fix := true }
@@ -135,7 +143,7 @@ def linkTests (root : System.FilePath) : IO (List (String × Bool)) := do
         ("README.md", 3, "`Lanes/Lost.lean` does not exist"),
         ("README.md", 9, "`Lanes/Missing/` does not exist"),
         ("docs/GUIDE.md", 1, "`Lanes/Nowhere.lean` does not exist"),
-        ("docs/status/areas/actors.md", 1, "`Lanes/Away.lean` does not exist")]),
+        ("docs/status/areas/actors.md", 3, "`Lanes/Away.lean` does not exist")]),
     ("lint links: the history, the decisions and the generated status page are not checked",
       !links.any fun f => f.file.toString.startsWith "docs/history"
         || f.file.toString.startsWith "docs/decisions" || f.file.toString == "docs/STATUS.md"),
@@ -172,26 +180,68 @@ def oracleTests (root : System.FilePath) : IO (List (String × Bool)) := do
         (1, "`Lanes/Web/E.lean` has no row under Protocol modules: name its oracle, or why it has none"),
         (1, "`Lanes/Outside/M.lean` has no row under Outside models: name its oracle, or why it has none")])]
 
+def changelog : String :=
+  "# Changelog\n\nIntro.\n\n## [Unreleased]\n\nNote.\n\n## [0.1.0] - 2026-01-01\n\nOld.\n"
+
+def changelogTests (root : System.FilePath) : IO (List (String × Bool)) := do
+  project root
+  discard <| lint root { fix := true }
+  write root "CHANGELOG.md" (changelog.replace "Note.\n" "Note.\n\n- A line here.\n")
+  write root "docs/changes/README.md" "# Unreleased changes\n\nNot a fragment.\n"
+  write root "docs/changes/good.md" "### Added\n\n- Good.\n"
+  write root "docs/changes/bad.md" "### Improved\n\n- Bad.\n"
+  let report ← lint root { fix := true }
+  let found := (report.findings.filter (·.rule == "changelog")).map fun f => (f.file.toString, f.line)
+  let parsed := Changelog.parse "### Added\n\n- One.\n  Continued.\n\n### Fixed\n\n- Two.\n"
+  let refused := fun text => match Changelog.parse text with
+    | .error (line, _) => some line
+    | .ok _ => none
+  let a : Changelog.Fragment := [("Fixed", ["- A fix."]), ("Added", ["- A."])]
+  let b : Changelog.Fragment := [("Added", ["- B."])]
+  return [
+    ("lint changelog: a fragment that does not read, and an entry in CHANGELOG.md's Unreleased "
+        ++ "section, are reported; the folder's README is no fragment",
+      found == [("docs/changes/bad.md", 1), ("CHANGELOG.md", 9)]),
+    ("Changelog.parse: sections in order, an entry with its next line",
+      parsed matches .ok [("Added", ["- One.\n  Continued."]), ("Fixed", ["- Two."])]),
+    ("Changelog.parse: an entry before a heading, a heading with no entry, another section's name "
+        ++ "and a line of text are refused at their lines",
+      refused "- No heading.\n" == some 1 && refused "### Added\n" == some 1
+        && refused "### Improved\n- x\n" == some 1 && refused "### Added\n- x\nText.\n" == some 3),
+    ("Changelog.assemble: each section once, in Keep a Changelog's order, the fragments in order",
+      Changelog.assemble [a, b] == "### Added\n\n- A.\n- B.\n\n### Fixed\n\n- A fix.\n"),
+    ("Changelog.insertRelease: the release goes after the Unreleased section's text",
+      (Changelog.insertRelease changelog "0.2.0" "2026-02-01" "### Added\n\n- New.\n").toOption
+        == some ("# Changelog\n\nIntro.\n\n## [Unreleased]\n\nNote.\n\n## [0.2.0] - 2026-02-01\n\n"
+          ++ "### Added\n\n- New.\n\n## [0.1.0] - 2026-01-01\n\nOld.\n"))]
+
 def tests : IO (List (String × Bool)) := do
   let root ← scratch
   let other ← scratch
   let third ← scratch
   let fourth ← scratch
+  let fifth ← scratch
   try
     let results := (← fixTests root) ++ (← problemTests other) ++ (← linkTests third)
-      ++ (← oracleTests fourth)
+      ++ (← oracleTests fourth) ++ (← changelogTests fifth)
     return results ++ [
       ("withCommas", Generated.withCommas 1587 == "1,587" && Generated.withCommas 50 == "50"
         && Generated.withCommas 1000000 == "1,000,000"),
       ("replaceName: a reference is rewritten, the end of another name is not",
         Generated.replaceName "D4-new-one.md, `new-one.md` (new-one.md)" "new-one.md" "D5-one.md"
           == "D4-new-one.md, `D5-one.md` (D5-one.md)"),
-      ("roundedTotal", Generated.roundedTotal 1587 == 1600 && Generated.roundedTotal 1574 == 1550),
+      ("indexText: the index is sorted by slug, each line with its number",
+        Generated.indexText none [⟨"D1-zeta.md", some 1, "zeta", "Zeta", ""⟩,
+            ⟨"D2-alpha.md", some 2, "alpha", "Alpha", ""⟩, ⟨"new-beta.md", none, "beta", "Beta", ""⟩]
+          == "# Decisions\n\n## Index\n\n- [D2. Alpha](D2-alpha.md)\n- [D1. Zeta](D1-zeta.md)\n"),
+      ("sortItems: each run of items is sorted on its own",
+        Generated.sortItems ["b", "- d", "- c", "a", "- f", "- e"]
+          == ["b", "- c", "- d", "a", "- e", "- f"]),
       ("countless: an entry whose count a merge dropped is found, prose after a comma is not",
         Generated.countless "| a | `A/B.lean`,  lines  It | `C.c`, 12 lines | `T.lean`, against x |"
           == ["A/B.lean"])]
   finally
-    for dir in [root, other, third, fourth] do
+    for dir in [root, other, third, fourth, fifth] do
       if ← dir.pathExists then IO.FS.removeDirAll dir
 
 end Tests.Lint
