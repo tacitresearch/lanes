@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Lib.Postgres.Bytes
+public import Lanes.Services.Postgres.Bytes
 public import Lanes.Proof.ByteArray
 
 /-!
@@ -16,7 +16,7 @@ protocol in text format sends (`Frontend`) and receives (`Backend`), as data; th
 `Frontend.decode`); and the frames they come in, a type byte and a length of four bytes that
 counts itself (`Frame.read`).
 
-`Lanes/Lib/Postgres/MessageSound.lean` proves that each decoder reads back what its encoder
+`Lanes/Services/Postgres/MessageSound.lean` proves that each decoder reads back what its encoder
 writes of a message within its bounds (`Backend.Ok`, `Frontend.Ok`). The client's own bytes are
 `Frontend.encode`; what a server sends is read by `Frame.read` and `Backend.decode`, and recorded
 exchanges with a real server are replayed through them in `Tests/Postgres.lean`.

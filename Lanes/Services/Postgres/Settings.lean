@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Lib.Net.Ip
-public import Lanes.Lib.Postgres.Conn
+public import Lanes.Services.Postgres.Conn
 
 /-!
 Where a client of PostgreSQL connects, and how, decided purely (rule 3.9).

@@ -4,13 +4,13 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Lib.Postgres.Message
-public import Lanes.Lib.Postgres.Scram
+public import Lanes.Services.Postgres.Message
+public import Lanes.Services.Postgres.Scram
 
 /-!
 # A connection to PostgreSQL, as a pure function
 
-The IO that runs a connection (`Lanes.Lib.Postgres.IO.Client`) tells it what happened
+The IO that runs a connection (`Lanes.Services.Postgres.IO.Client`) tells it what happened
 (`Postgres.Conn.Event`: bytes received, the end of them, a broken socket, a request to send, the
 TLS handshake done or failed, `stop`) and does what it answers (`Postgres.Conn.Action`: send
 bytes, send a request's bytes, start TLS, report the connection open, answer a request, close),
@@ -27,7 +27,7 @@ the transaction is the one the last `ReadyForQuery` reported. A connection that 
 receives what the protocol does not allow answers every request in flight with `unknown`, and
 closes (rule 3.1).
 
-What it promises is proved in `Lanes/Lib/Postgres/ConnSound.lean`, and model-checked against a
+What it promises is proved in `Lanes/Services/Postgres/ConnSound.lean`, and model-checked against a
 server that answers in any pieces and may fail any statement or leave at any moment
 (`Tests/PostgresConn.lean`).
 -/

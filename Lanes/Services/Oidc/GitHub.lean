@@ -2,7 +2,9 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Lanes
+module
+
+public import Lanes
 
 /-!
 Sign-in with GitHub: an OAuth app, which gives no ID token. The user is known by calling
@@ -12,6 +14,8 @@ address and whether GitHub verified it. `read` makes an identity of the two answ
 answers of other shapes rather than guess. The name shown is the user's `name`, which may be
 `null`, or else the `login`.
 -/
+
+@[expose] public section
 
 namespace GitHub
 

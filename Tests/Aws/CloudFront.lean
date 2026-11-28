@@ -2,7 +2,7 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Aws
+import Lanes.Services.Aws
 import Tests.Oracle.Basic
 
 /-!
@@ -20,9 +20,9 @@ open Lanes Tests.Oracle Aws.CloudFront
 
 def testing (pem : String) : ByteArray := (pem.replace "TESTING KEY" "PRIVATE KEY").toUTF8
 
-def rsaPem : ByteArray := testing (include_str "../../../oracles/botocore/keys/rsa2048.pem")
+def rsaPem : ByteArray := testing (include_str "../../oracles/botocore/keys/rsa2048.pem")
 
-def p256Pem : ByteArray := testing (include_str "../../../oracles/botocore/keys/p256.pem")
+def p256Pem : ByteArray := testing (include_str "../../oracles/botocore/keys/p256.pem")
 
 structure Spec where
   key : String

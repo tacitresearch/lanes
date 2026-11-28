@@ -2,7 +2,9 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Aws.Ses
+module
+
+public import Lanes.Services.Aws.Ses
 
 /-!
 # Amazon SQS's calls
@@ -16,6 +18,8 @@ kept only when its body's MD5 is the one SQS sent with it, as botocore checks.
 Only the calls and their answers, as data: no handler. The bounds are SQS's: 1 to 10 messages a
 receive, a visibility timeout of at most 12 hours, a wait of at most 20 seconds.
 -/
+
+@[expose] public section
 
 namespace Aws.Sqs
 

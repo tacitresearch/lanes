@@ -2,19 +2,21 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Google
-import Lanes.Testing
+import Lanes.Services.Oidc.Google
+import Lanes
 
 /-!
-The preset against what Google published, as fetched on 2026-11-27 and kept in `recorded/`: its
+The preset against what Google published, as fetched on 2026-11-27 and kept in `oracles/google/`: its
 discovery document and its JWK Set. Nothing is fetched here.
 -/
 
+namespace Checks.Google
+
 open Lanes Lanes.OAuth
 
-def discovery : String := include_str "recorded/openid-configuration.json"
+def discovery : String := include_str "../../oracles/google/openid-configuration.json"
 
-def certs : String := include_str "recorded/certs.json"
+def certs : String := include_str "../../oracles/google/certs.json"
 
 def client : Client :=
   { id := "1234.apps.googleusercontent.com", secret := ⟨"s"⟩,
@@ -44,5 +46,4 @@ def tests : List (String × Bool) :=
           && (url.splitOn "nonce=").length == 2 && (url.splitOn "code_challenge_method=S256").length == 2) ]
   | _, _ => [("google: the discovery document is read", false)]
 
-def main (args : List String) : IO UInt32 :=
-  Lanes.Testing.report args (Lanes.Testing.Result.tests tests .test)
+end Checks.Google

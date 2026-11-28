@@ -2,8 +2,10 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Aws.CloudFront
-import Lanes.Lib.Encoding.Json.PrinterSound
+module
+
+public import Lanes.Services.Aws.CloudFront
+public import Lanes.Lib.Encoding.Json.PrinterSound
 
 /-!
 What CloudFront checks a link against: the canned policy signed is byte for byte the one AWS
@@ -11,6 +13,8 @@ documents for the URL and the time (`cannedPolicy_eq`), which CloudFront builds 
 the signature; CloudFront's base64 reads back (`decode_encode`); and every parameter and cookie
 needs no escaping, so every cookie is set (`cookies_valid`).
 -/
+
+@[expose] public section
 
 namespace Aws.CloudFront
 
@@ -70,7 +74,7 @@ theorem compress_resource (r : Resource) :
 theorem compress_nat (e : Nat) : (Json.num (e : JsonNumber)).compress.toList = (toString e).toList := by
   simp [Json.compress, Json.compressTo, JsonNumber.toString, JsonNumber.fromNat, JsonNumber.fromInt]
   show (Int.ofNat e).repr.toList = _
-  simp [Int.repr, Nat.repr]
+  simp [Int.repr_eq_ite]
 
 theorem escapeChar_plain {c : Char} (h : Json.needsEscape c = false) :
     (Json.escapeChar "" c).toList = [c] := Json.escapeChar_of_not_needsEscape h
@@ -86,7 +90,7 @@ theorem cannedPolicy_eq (r : Resource) (e : Nat) :
 theorem urlSafe_toString (e : Nat) : (toString e).toList.all urlSafe = true := by
   rw [List.all_eq_true]
   intro c hc
-  have hd := Json.isDigit_of_mem_toDigits (n := e) (by simpa [Nat.repr] using hc)
+  have hd := Json.isDigit_of_mem_toDigits (n := e) (by simpa using hc)
   simp only [urlSafe, Char.isAlphanum, Char.isDigit, Bool.or_eq_true, Bool.and_eq_true,
     decide_eq_true_eq]
   exact .inl (.inl (.inl (.inr ⟨hd.1, hd.2⟩)))

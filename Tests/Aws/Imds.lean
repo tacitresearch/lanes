@@ -2,8 +2,8 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Aws
-import Checks.Fake
+import Lanes.Services.Aws
+import Tests.Aws.Fake
 
 /-!
 The credentials' sources and the provider: the answers AWS documents read; the calls of IMDSv2;

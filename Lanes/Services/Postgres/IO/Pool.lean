@@ -4,12 +4,12 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Lib.Postgres.IO.Client
-public import Lanes.Lib.Postgres.Pool
+public import Lanes.Services.Postgres.IO.Client
+public import Lanes.Services.Postgres.Pool
 
 /-!
 The IO of a pool of connections to PostgreSQL. Which connection a client gets, when one is opened
-or closed, and who waits or is refused, are `Pool.step`'s (`Lanes/Lib/Postgres/Pool.lean`,
+or closed, and who waits or is refused, are `Pool.step`'s (`Lanes/Services/Postgres/Pool.lean`,
 proved); whether a connection handed back may be handed out again is `Conn.reusable`, pure. This
 file opens and closes the connections, keeps the clients waiting on promises, numbers
 connections and clients from one counter, so that no number is used twice (the premise of

@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Web.S3.Basic
+public import Lanes.Services.S3.Basic
 
 /-!
 A multipart upload, for an object too large for one request or one that should survive a part
@@ -17,7 +17,7 @@ object of the parts a CompleteMultipartUpload lists, in order.
 pure machine: what to send next (`Flow.next`) and what an answer, or none, does (`Flow.answer`).
 It retries each call up to `maxAttempts`, aborts an upload it gives up on, and when a Complete
 whose answer was lost is then refused because the upload is gone, asks the object's `HEAD`
-rather than guess. `S3.upload` (`Lanes/Web/IO/S3.lean`) only performs it. It is model-checked
+rather than guess. `S3.upload` (`Lanes/Services/S3/IO/Client.lean`) only performs it. It is model-checked
 against `Lanes.Multipart`'s model of the store (`Tests/Multipart.lean`).
 -/
 

@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Web.S3.Basic
+public import Lanes.Services.S3.Basic
 public import Lanes.Lib.Encoding.Json
 public import Lanes.Lib.Encoding.Base64
 
@@ -17,7 +17,7 @@ the file, or the status it answers, as fields its policy names.
 
 `form` writes the policy and the fields; `check` is what S3 does with a form it receives, apart
 from the signature: the policy unexpired, each condition met, and each field named by one. Proved
-(`Lanes/Web/S3/PostSound.lean`): the policy a form carries reads back as exactly the conditions
+(`Lanes/Services/S3/PostSound.lean`): the policy a form carries reads back as exactly the conditions
 given, its expiry is the one given, and a file `check` admits has a size within the range.
 -/
 

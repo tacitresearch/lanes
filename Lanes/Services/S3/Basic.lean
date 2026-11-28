@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Web.Http.SigV4
-public import Lanes.Web.S3.Xml
+public import Lanes.Services.S3.Xml
 public import Lanes.Web.IO.Client
 public import Lanes.Outside.ObjectStore
 

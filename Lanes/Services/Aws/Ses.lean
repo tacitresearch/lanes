@@ -2,7 +2,9 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Lanes
+module
+
+public import Lanes
 
 /-!
 # Sending email with Amazon SES
@@ -21,6 +23,8 @@ have been sent. SES takes no idempotency key, so a call is a request without one
 which the model gives an effect of its own each time it is sent: a resend after `unknown` may
 send the message twice, and a system that must not send twice must not resend.
 -/
+
+@[expose] public section
 
 namespace Aws.Ses
 

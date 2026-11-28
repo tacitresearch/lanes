@@ -6,8 +6,8 @@ module
 
 public import Std.Async
 public import Lanes.Runtime.IO.Shell
-public import Lanes.Lib.Postgres.Settings
-public import Lanes.Lib.Postgres.Table
+public import Lanes.Services.Postgres.Settings
+public import Lanes.Services.Postgres.Table
 public import Lanes.Lib.Crypto.Certificate
 public import Lanes.Web.IO.Tls
 
@@ -17,7 +17,7 @@ what happened, and does what it answers: send bytes, run the TLS handshake, repo
 decides nothing (rule 3.9): whether to ask for TLS, what the server's answer means, which bytes
 to send, with which channel binding, what the server's bytes mean, which reply answers which
 request and what a reply to `COMMIT` means are `Conn.step`'s, proved in
-`Lanes/Lib/Postgres/ConnSound.lean`. It draws the SCRAM nonce from `randomBytes`, reads no more than
+`Lanes/Services/Postgres/ConnSound.lean`. It draws the SCRAM nonce from `randomBytes`, reads no more than
 `Conn.room` bytes at a time, and tells the connection the socket broke when a send or a read
 fails or a request's deadline passes.
 
@@ -26,7 +26,7 @@ there, and from then on every byte goes through the session. The hash of the ser
 certificate for channel binding is `Certificate.endPoint`, pure.
 
 `Session` is a connection used by one task at a time. `Store.handler` runs the transactional
-store of `Lanes/Outside/Store/Basic.lean` on a table (`Lanes/Lib/Postgres/Table.lean`) as an
+store of `Lanes/Outside/Store/Basic.lean` on a table (`Lanes/Services/Postgres/Table.lean`) as an
 adapter: each transaction on a connection of its own, each request on a task of its own, its
 answer handed back as an input.
 

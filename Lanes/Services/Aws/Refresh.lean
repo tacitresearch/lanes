@@ -2,7 +2,9 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Lanes
+module
+
+public import Lanes
 
 /-!
 # When to fetch credentials that expire
@@ -25,6 +27,8 @@ credentials or `unknown`, as a model of the service sees it (`Lanes.Rpc`).
 - A fetch that fails is tried again after a wait that doubles from `backoff_ms` up to
   `maxBackoff_ms` (`backoff_le`, `retry_within`), while the credentials held last and after.
 -/
+
+@[expose] public section
 
 namespace Aws.Refresh
 

@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Lib.Postgres.Message
+public import Lanes.Services.Postgres.Message
 
 /-!
 The decoders read back what the encoders write: every backend message within its bounds, in a

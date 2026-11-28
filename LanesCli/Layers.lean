@@ -8,7 +8,9 @@ Released under Apache 2.0 license as described in the file LICENSE.
 
 Lanes is built in layers, each of which works without the ones above it
 (`docs/decisions/D99-layered-packages.md`): the semantics and the checker (`model`); actors
-(`actors`), with the standard library beside them (`std`); a runtime; the web and PostgreSQL; and the umbrella `Lanes`, which imports them all. Each module of `Lanes/` belongs to
+(`actors`), with the standard library beside them (`std`); a runtime; the web; the umbrella
+`Lanes`, which imports them all and is the core; and the services (`Lanes/Services/`, D110),
+which may import the core, which never imports them. Each module of `Lanes/` belongs to
 one of these packages, read from `homes` by the longest prefix of its path, and may import only
 the modules of its own package and of the packages it requires, directly or below
 (`Package.requires`). `lanes lint` reports any other import of a module of Lanes (rule
@@ -23,11 +25,11 @@ change to this table's packages. `scripts/layers.py` reads this file to plan tho
 namespace Lanes.Cli.Layers
 
 inductive Package where
-  | model | actors | std | runtime | web | postgres | umbrella
+  | model | actors | std | runtime | web | umbrella | services
   deriving DecidableEq, Repr, Inhabited
 
 def Package.all : List Package :=
-  [.model, .actors, .std, .runtime, .web, .postgres, .umbrella]
+  [.model, .actors, .std, .runtime, .web, .umbrella, .services]
 
 def Package.name : Package → String
   | .model => "model"
@@ -35,8 +37,8 @@ def Package.name : Package → String
   | .std => "std"
   | .runtime => "runtime"
   | .web => "web"
-  | .postgres => "postgres"
   | .umbrella => "umbrella"
+  | .services => "services"
 
 /-- The packages each package requires directly. -/
 def Package.requires : Package → List Package
@@ -45,8 +47,8 @@ def Package.requires : Package → List Package
   | .std => [.model]
   | .runtime => [.actors]
   | .web => [.runtime, .std]
-  | .postgres => [.runtime, .std]
-  | .umbrella => [.web, .postgres]
+  | .umbrella => [.web]
+  | .services => [.umbrella]
 
 /-- The packages `p` requires, directly or below. A chain of requirements is shorter than the
 list of packages, so that many rounds reach all of them. -/
@@ -93,10 +95,11 @@ def homes : List (String × Package) := [
   ("Lanes/Semantics/Front.lean", .web),
   ("Lanes/Testing/", .web),
   ("Lanes/Testing.lean", .web),
-  ("Lanes/Lib/Postgres/", .postgres),
   ("Lanes.lean", .umbrella),
   ("Lanes/Proofs.lean", .umbrella),
-  ("Lanes/Semantics.lean", .umbrella)
+  ("Lanes/Semantics.lean", .umbrella),
+  ("Lanes/Services/", .services),
+  ("Lanes/Services.lean", .services)
 ]
 
 /-- The package of the module at `path`, relative to the root of Lanes. -/

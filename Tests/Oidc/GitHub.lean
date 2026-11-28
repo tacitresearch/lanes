@@ -2,13 +2,15 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import GitHub
-import Lanes.Testing
+import Lanes.Services.Oidc.GitHub
+import Lanes
 
 /-!
 GitHub's answers in the shapes its REST documentation gives them, written by hand: none was
 recorded from GitHub (`docs/decisions/D72-sign-in-with-oauth.md`).
 -/
+
+namespace Checks.GitHub
 
 open Lanes Lanes.OAuth
 
@@ -57,5 +59,4 @@ def tests : List (String × Bool) :=
       (Tokens.read 200 "{\"error\":\"bad_verification_code\",\"error_description\":\"The code \
         passed is incorrect or expired.\"}".toUTF8) matches .error (.token "bad_verification_code")) ]
 
-def main (args : List String) : IO UInt32 :=
-  Lanes.Testing.report args (Lanes.Testing.Result.tests tests .test)
+end Checks.GitHub

@@ -2,7 +2,9 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Lanes
+module
+
+public import Lanes
 
 /-!
 # Signed URLs and signed cookies for Amazon CloudFront
@@ -22,6 +24,8 @@ AWS's Go and JavaScript SDKs sign. It is made by `Lanes.SigningKey` (`native/sig
 policy and the signature are written in base64 with `+`, `=` and `/` as `-`, `_` and `~`, which
 reads back (`decode_encode`) and needs no escaping in a URL or a cookie (`cookies_valid`).
 -/
+
+@[expose] public section
 
 namespace Aws.CloudFront
 

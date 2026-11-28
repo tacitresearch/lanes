@@ -4,8 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Lib.Postgres.Conn
-public import Lanes.Lib.Postgres.MessageSound
+public import Lanes.Services.Postgres.Conn
+public import Lanes.Services.Postgres.MessageSound
 
 /-!
 What a connection to PostgreSQL promises, for every configuration and every sequence of events:

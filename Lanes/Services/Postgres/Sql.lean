@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Lib.Postgres.Conn
+public import Lanes.Services.Postgres.Conn
 public import Lanes.Lib.Crypto.Hmac
 public import Lanes.Db.Retry
 
@@ -12,7 +12,7 @@ public import Lanes.Db.Retry
 # The typed store in SQL
 
 The query subset of `Lanes/Db/Query.lean` as PostgreSQL statements with parameters, and what
-their replies mean, pure, so that the driver (`Lanes/Lib/Postgres/IO/Db.lean`) decides nothing
+their replies mean, pure, so that the driver (`Lanes/Services/Postgres/IO/Db.lean`) decides nothing
 (rule 3.9).
 
 - **Tables.** `create` gives a table's `CREATE TABLE` and `CREATE INDEX` statements: `bigint`,

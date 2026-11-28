@@ -11,7 +11,7 @@ The fields PostgreSQL's messages are made of, each written as a list of bytes an
 parser, with the law that a parser reads back what its writer wrote whatever follows
 (`Postgres.Inverse`): unsigned integers of two and four bytes, big-endian; strings ended by a
 NUL; values with a length of four bytes, `-1` for SQL's `NULL`; lists with a count before them,
-and lists ended by a zero byte. The messages (`Lanes/Lib/Postgres/Message.lean`) are built from
+and lists ended by a zero byte. The messages (`Lanes/Services/Postgres/Message.lean`) are built from
 these, and their round trips from these laws.
 
 The fields are over `List UInt8`, so that the laws are about lists; a message's body is turned

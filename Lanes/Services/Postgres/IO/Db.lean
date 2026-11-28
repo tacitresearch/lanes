@@ -4,15 +4,15 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Lib.Postgres.IO.Pool
-public import Lanes.Lib.Postgres.Sql
+public import Lanes.Services.Postgres.IO.Pool
+public import Lanes.Services.Postgres.Sql
 public import Lanes.Db.Model
 
 /-!
 The IO of the typed store on PostgreSQL: a call runs its handler's transaction in attempts, each
 `BEGIN ISOLATION LEVEL SERIALIZABLE`, one statement per operation, `COMMIT`, on a connection of
 the pool. It decides nothing (rule 3.9): the SQL of an operation and what its reply means are
-`Lanes/Lib/Postgres/Sql.lean`'s, whether an operation may be sent is `Op.valid`, and whether to
+`Lanes/Services/Postgres/Sql.lean`'s, whether an operation may be sent is `Op.valid`, and whether to
 try again is `Retry.next`'s (`Lanes/Db/Retry.lean`). An attempt that did not commit on a
 connection still open is rolled back before the connection goes back to the pool.
 

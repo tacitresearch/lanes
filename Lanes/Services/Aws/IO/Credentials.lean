@@ -2,7 +2,10 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Aws.Imds
+module
+
+public import Lanes.Services.Aws.Imds
+public import Lanes.Services.S3.IO.Client
 
 /-!
 The credentials' IO: a task that reads the wall clock, ticks `Refresh.step` with it, makes the
@@ -13,6 +16,8 @@ is sooner. What to fetch and when, what an answer means and what may be handed o
 (`Provider.source`, read at each call by `S3.exchange`) sees one state or the next. Nothing
 here prints or logs a secret: why the last fetch failed is kept, and says no value.
 -/
+
+public section
 
 namespace Aws.Credentials
 

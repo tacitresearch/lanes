@@ -2,15 +2,19 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Aws.Ses
-import Lanes.Lib.Encoding.Json.ParserSound
-import Lanes.Lib.Encoding.Json.BasicSound
+module
+
+public import Lanes.Services.Aws.Ses
+public import Lanes.Lib.Encoding.Json.ParserSound
+public import Lanes.Lib.Encoding.Json.BasicSound
 
 /-!
 The request SES is sent is JSON that reads back with exactly the recipients given: the
 document is within the reader's limits, so `Json.parse_compress` reads it back, and the
 recipients survive `Json.normalize`.
 -/
+
+@[expose] public section
 
 namespace Aws.Ses
 

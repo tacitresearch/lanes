@@ -5,8 +5,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Testing.Http
-public import Lanes.Web.IO.S3
-public import Lanes.Web.S3.Post
+public import Lanes.Services.S3.IO.Client
+public import Lanes.Services.S3.Post
 public import Lanes.Lib.Crypto.Md5
 
 /-!

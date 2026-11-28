@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Lib.Postgres.Conn
+public import Lanes.Services.Postgres.Conn
 public import Lanes.Outside.Store.Basic
 
 /-!

@@ -2,7 +2,9 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Lanes
+module
+
+public import Lanes
 
 /-!
 Sign-in with Google: its OpenID Connect provider, with the endpoints its discovery document
@@ -11,6 +13,8 @@ gives (`https://accounts.google.com/.well-known/openid-configuration`), kept as 
 name either of two issuers, which name the same users: the sign-in gives an identity under the
 first (`OAuth.Identity.under`). The scope `profile` is asked for by default, for the user's `name`.
 -/
+
+@[expose] public section
 
 namespace Google
 

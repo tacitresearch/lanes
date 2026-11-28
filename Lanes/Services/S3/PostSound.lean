@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Web.S3.Post
+public import Lanes.Services.S3.Post
 public import Lanes.Lib.Encoding.Json.ParserSound
 public import Lanes.Lib.Encoding.Json.BasicSound
 public import Lanes.Data.Codec

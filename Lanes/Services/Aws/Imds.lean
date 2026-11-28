@@ -2,7 +2,9 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Aws.Refresh
+module
+
+public import Lanes.Services.Aws.Refresh
 
 /-!
 # A role's credentials, from where AWS gives them to a machine
@@ -26,6 +28,8 @@ Two sources, each a few HTTP calls whose answers are read here; the edge
 Both answer the same JSON: `AccessKeyId`, `SecretAccessKey`, `Token` and `Expiration`, the last
 in RFC 3339, and the metadata service a `Code` that must be `Success`.
 -/
+
+@[expose] public section
 
 namespace Aws.Imds
 

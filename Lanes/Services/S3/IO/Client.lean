@@ -4,14 +4,14 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Web.S3.Multipart
+public import Lanes.Services.S3.Multipart
 public import Std.Time
 
 /-!
 The S3 client's IO: credentials from the environment, or read at each call from a source, the
 time to sign with, and the call made through the HTTP client. A system calls the store with an
 output and is told the answer, or `unknown`, with an input (`S3.handler`); what the answer means
-and what is signed are the pure `Lanes.Web.S3.Basic`. Secrets are never formatted or logged
+and what is signed are the pure `Lanes.Services.S3.Basic`. Secrets are never formatted or logged
 here.
 -/
 

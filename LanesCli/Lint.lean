@@ -22,14 +22,15 @@ Source-level checks of the rules in `AGENTS.md` that can be decided from the tex
   `App.Proofs`) live in a proof directory, one named `…Proofs` included, or are named
   `…Proofs.lean`, so executable code never links them. In Lanes itself, also: each module of
   `Lanes/` imports modules of Lanes only from its own package and the packages it requires
-  (`LanesCli/Layers.lean`), so each layer builds without the ones above it.
+  (`LanesCli/Layers.lean`), so each layer builds without the ones above it, and the core never
+  imports a service (`Lanes/Services/`).
 - `links`: every repository path that a Markdown file at the root or under `docs/` writes in
   backquotes exists (`a/{b,c}.lean` names two). `docs/decisions/` and `CHANGELOG.md` record the
   past and are not checked.
 - `oracles`, where there is an `oracles/README.md`: its tables name a reference for each folder
   of `oracles/`, and an oracle, or why there is none, for each module of `Lanes/Lib/` and
-  `Lanes/Web/` and each model of `Lanes/Outside/` that is not a proof or IO; every module and
-  path they name exists (`docs/decisions/D80-oracles.md`).
+  `Lanes/Web/`, each model of `Lanes/Outside/` and each module of `Lanes/Services/` that is not a
+  proof or IO; every module and path they name exists (`docs/decisions/D80-oracles.md`).
 
 Comments and string literals are ignored. The checks that need the elaborator (`no-io-in-step`,
 `bounded`, `field-leak`) are not implemented yet.
@@ -191,9 +192,13 @@ def checkLayers (root : System.FilePath) (files : Array System.FilePath) : IO (L
           if let some q := if ours.contains target then Layers.home? target else none then
             unless p.mayImport q do
               findings := findings ++ [⟨path, k + 1, "layering",
-                s!"`{module}` is in {q.name}, which {p.name} does not require: move what it "
-                  ++ "needs down, or what imports it up, or pass it in (rule 1.6, "
-                  ++ "`LanesCli/Layers.lean`)"⟩]
+                if q == .services then
+                  s!"`{module}` is a service, and the core never imports a service: move what "
+                    ++ "the core needs into a shape of `Lanes/Outside/`, or pass it in (rule 1.6)"
+                else
+                  s!"`{module}` is in {q.name}, which {p.name} does not require: move what it "
+                    ++ "needs down, or what imports it up, or pass it in (rule 1.6, "
+                    ++ "`LanesCli/Layers.lean`)"⟩]
   return findings
 
 /-! ## Paths that docs cite -/
@@ -327,7 +332,8 @@ def inScope (root : System.FilePath) (dirs : List String) : IO (List String) := 
   return out
 
 /-- `oracles`: `oracles/README.md` has a row for each folder of `oracles/`, for each module of
-`Lanes/Lib/` and `Lanes/Web/` and each model of `Lanes/Outside/`, but proofs and IO; a module's
+`Lanes/Lib/` and `Lanes/Web/`, each model of `Lanes/Outside/` and each module of
+`Lanes/Services/`, but proofs and IO; a module's
 row names an oracle or says why there is none; and every module and path the rows name exists. -/
 def checkOracles (root : System.FilePath) : IO (List Finding) := do
   let doc := "oracles/README.md"
@@ -346,7 +352,7 @@ def checkOracles (root : System.FilePath) : IO (List Finding) := do
         findings := findings ++ [⟨doc, 1, "oracles",
           s!"`{folder}` has no row under References: its reference, version and pin"⟩]
   for (heading, dirs) in [("## Protocol modules", ["Lanes/Lib", "Lanes/Web"]),
-      ("## Outside models", ["Lanes/Outside"])] do
+      ("## Outside models", ["Lanes/Outside"]), ("## Services", ["Lanes/Services"])] do
     let rows := tableRows text heading
     for (line, row) in rows do
       match row with

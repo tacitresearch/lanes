@@ -10,7 +10,7 @@ public import Std
 # A pool of connections, as a pure function
 
 Which connection a client is handed, when one is opened or closed, and who waits or is refused,
-decided here; the IO (`Lanes/Lib/Postgres/IO/Pool.lean`) opens and closes connections, keeps
+decided here; the IO (`Lanes/Services/Postgres/IO/Pool.lean`) opens and closes connections, keeps
 the clients waiting, and says when a connection opened or failed to, was handed back, and when a
 client's deadline passed. Connections and clients are named by numbers the IO chooses.
 

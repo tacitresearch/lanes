@@ -2,7 +2,10 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Aws.Ses
+module
+
+public import Lanes.Services.Aws.Ses
+public import Lanes.Services.S3.IO.Client
 
 /-!
 The SES adapter's IO: credentials read from their source at each send, the wall clock to sign
@@ -10,6 +13,8 @@ with, the call `Ses.call` builds made through the HTTP client, and `Ses.interpre
 the answer handed back, or `unknown`. Nothing here prints or logs a message, an address or a
 secret.
 -/
+
+public section
 
 namespace Aws.Ses
 
