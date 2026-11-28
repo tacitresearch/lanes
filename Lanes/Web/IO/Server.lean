@@ -9,6 +9,7 @@ public import Lanes.Durable.IO.Journal
 public import Lanes.Web.Http.Admit
 public import Lanes.Web.Http.Conn
 public import Lanes.Web.Http.JournalName
+public import Lanes.Web.Http.View
 public import Lanes.Web.Http.Waiting
 public import Lanes.Web.IO.Ops
 
@@ -31,6 +32,12 @@ the shard's answer or the ticker. The shard runs `admitted sys` (`serve`, `serve
 response (`serveFronted`); both are `sys` with no actor that every request goes through. What
 is trusted is that this file does what `Gate.step` returns, as `Lanes/Web/Http/AdmitSound.lean`
 models it.
+
+A request the application's `view` names is a read (`Http.View`): it never enters the system.
+It waits behind a gate of its own (`readBridge`, bounded by `ServerConfig.reads`) for a peek of
+the actors it reads, at the end of the shard's next batch (`Runtime.tryPeek`), and is answered
+from their states off the shard's thread, or `504` at its deadline. It takes an id from the same
+table as every request, and leaves no entry in the journal.
 
 One refusal is made here: `503` when the shard's inbox is full. TLS is not handled: terminate it
 in a reverse proxy.
@@ -89,6 +96,9 @@ structure ServerConfig where
   /-- The gate's bounds. A journal holds only the requests the gate admitted, so it does not
   depend on them. -/
   gate : GateConfig := {}
+  /-- The bounds of the reads, the requests a view answers from the state: how long one waits for
+  the shard's peek before it is answered `504`, and how many may wait at once. -/
+  reads : GateConfig := {}
   /-- Where to keep a journal. With one, the system behind the server survives the process:
   it starts in the state it was in (`docs/decisions/` D24). -/
   journal : Option System.FilePath := none
@@ -202,6 +212,8 @@ the system (`Gate.step`) with when each is due. -/
 private structure Desk where
   waiting : Waiting (Response → BaseIO Unit)
   pending : List ReqId := []
+  /-- The reads waiting for their peek: the state of their gate. -/
+  reads : List ReqId := []
   deadlines : Std.HashMap ReqId Nat := {}
 
 /-- What the lock's cell holds while its desk is out of it. -/
@@ -457,12 +469,18 @@ by the shard's inbox (`503`) leaves the gate's state as it was. `decode` runs un
 it ran on the shard's one thread when the gate was an actor; taking it out would cost a second
 lock an arrival. An answer is encoded on the shard's thread and read by the gate
 under the lock (`Gate.receive`); deadlines are looked at by the ticker.
+
+A read takes the lock as an arrival does, and its gate admits it (`Gate.admit` over `readSig`);
+the peek is asked under the lock, so that a refusal by the inbox leaves that gate as it was. The
+view's response is made on the task the peek's answer runs on, and read by the gate under the lock
+(`Gate.receive`).
 -/
 private def serveOn (system : System τ) [Hashable τ.Id] (bridge : Bridge σ) (config : ServerConfig)
     (runtimeConfig : Runtime.Config) (log : Option (Journal.Log system))
     (enter : ReqId × Request → τ.In) (output : τ.Out → σ.Out)
     (other : Journal.OutputId → σ.Out → Async Unit)
-    (arrive : Option (Request → IO (Except Response Request))) :
+    (arrive : Option (Request → IO (Except Response Request)))
+    (view : Request → Option (View system)) :
     Async (Server system) := do
   let some addr := Std.Net.IPv4Addr.ofString config.host
     | throw (IO.userError s!"lanes: {config.host} is not an IPv4 address")
@@ -475,6 +493,14 @@ private def serveOn (system : System τ) [Hashable τ.Id] (bridge : Bridge σ) (
     let calls ← desk.atomically (modifyGet fun d =>
       let (pending, acts) := msg d
       let (d, calls) := Desk.apply { d with pending } (now + gate.requestTimeout_ms) acts
+      (calls, d))
+    for call in calls do call
+  /- The same, for the gate of reads. -/
+  let decideRead (now : Nat) (msg : List ReqId → List ReqId × List (Gate.Act readSig)) :
+      BaseIO Unit := do
+    let calls ← desk.atomically (modifyGet fun d =>
+      let (reads, acts) := msg d.reads
+      let (d, calls) := Desk.apply { d with reads } (now + config.reads.requestTimeout_ms) acts
       (calls, d))
     for call in calls do call
   let runtime ← Runtime.startWith system runtimeConfig (journal := log) fun _ id out => do
@@ -499,8 +525,32 @@ private def serveOn (system : System τ) [Hashable τ.Id] (bridge : Bridge σ) (
   let server : Server system := {
     runtime, listener, desk, connections := ← Mutex.new {}, down
     localPort := (← listener.getSockName).port, lanes, ops }
+  let read (v : View system) (answer : Response → BaseIO Unit) : BaseIO Unit := do
+    let now ← IO.monoMsNow
+    let calls ← desk.atomically do
+      let d ← modifyGet fun d => (d, Desk.hole)
+      let (id, waiting) := d.waiting.wait answer
+      let d := { d with waiting }
+      let (reads, acts) := Gate.admit (σ := readSig) config.reads Gate.acts d.reads id (.ok id)
+      if acts.any (· matches .forward _) then
+        let asked ← runtime.tryPeek v.reads fun peek => do
+          let response := match peek with
+            | some peek => v.respond peek
+            | none => busy
+          decideRead (← IO.monoMsNow) (Gate.receive Gate.acts · (id, response))
+        unless asked do
+          let (waiter, waiting) := d.waiting.answer id
+          set { d with waiting }
+          return (waiter.map (· busy)).toList
+      let (d', calls) := Desk.apply { d with reads } (now + config.reads.requestTimeout_ms) acts
+      set d'
+      return calls
+    for call in calls do call
   let hand (request : Request) (answer : Response → BaseIO Unit) : BaseIO (Option ReqId) := do
     let request := bridge.prepare request
+    if let some v := view request then
+      read v answer
+      return none
     let now ← IO.monoMsNow
     let (id, taken, calls) ← desk.atomically do
       -- Taken out of the lock's cell while it is held, so that its tables are updated in place.
@@ -569,6 +619,9 @@ private def serveOn (system : System τ) [Hashable τ.Id] (bridge : Bridge σ) (
       decide now fun d =>
         let (pending, acts) := Gate.step bridge gate Gate.acts d.pending (.expire id)
         (pending, .disarm id :: acts)
+      decideRead now fun reads =>
+        let (reads, acts) := Gate.step readBridge config.reads Gate.acts reads (.expire id)
+        (reads, .disarm id :: acts)
   discard <| IO.asTask (prio := .dedicated) (ticker server config.tick_ms expire)
   background do
     repeat
@@ -591,9 +644,11 @@ private def serveOn (system : System τ) [Hashable τ.Id] (bridge : Bridge σ) (
 def serveWith (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig := {})
     (runtimeConfig : Runtime.Config := {})
     (log : Option (Journal.Log (admitted sys bridge)))
-    (arrive : Option (Request → IO (Except Response Request)) := none) :
+    (arrive : Option (Request → IO (Except Response Request)) := none)
+    (view : Request → Option (View sys) := fun _ => none) :
     Async (Server (admitted sys bridge)) :=
   serveOn (admitted sys bridge) bridge config runtimeConfig log id id (fun _ _ => pure ()) arrive
+    fun request => (view request).map View.admitted
 
 /-- Serve `sys` behind a gate it shares the process with other things: an output of `sys` that
 the bridge does not read as a response comes to `onOutput` with its id, which a driver passes on
@@ -603,9 +658,11 @@ def serveFronted (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config
     (runtimeConfig : Runtime.Config := {})
     (onOutput : Journal.OutputId → σ.Out → Async Unit := fun _ _ => pure ())
     (log : Option (Journal.Log (admittedFronted sys bridge)) := none)
-    (arrive : Option (Request → IO (Except Response Request)) := none) :
+    (arrive : Option (Request → IO (Except Response Request)) := none)
+    (view : Request → Option (View sys) := fun _ => none) :
     Async (Server (admittedFronted sys bridge)) :=
   serveOn (admittedFronted sys bridge) bridge config runtimeConfig log .inl id onOutput arrive
+    fun request => (view request).map View.fronted
 
 /-- What `serve` needs to save the kernel and cut the journal: how the system's actors are
 written. -/
@@ -639,10 +696,13 @@ With a journal and `saving`, the kernel is saved from time to time and the journ
 a request needs in IO before it is prepared, done on a task of its own: what it returns enters as
 the request, or is the answer and nothing enters. The sign-in (`SignIn.arrive`) is such work.
 Requests of one connection may then enter in another order than they were read; their answers
-are still written in that order. -/
+are still written in that order. A request `view` names, once prepared, is a read: it is
+answered from the states of the actors it reads and never enters the system (`View`); with none,
+every request enters. -/
 def serve (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig := {})
     (runtimeConfig : Runtime.Config := {}) (saving : Option (Saving sys) := none)
-    (arrive : Option (Request → IO (Except Response Request)) := none) :
+    (arrive : Option (Request → IO (Except Response Request)) := none)
+    (view : Request → Option (View sys) := fun _ => none) :
     Async (Server (admitted sys bridge)) := do
   let log ← config.journal.mapM fun path => do
     let name ← journalHeader path
@@ -658,7 +718,7 @@ def serve (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : Serv
           is replayed through: start the version that wrote it, or move the journal and its \
           snapshot aside to begin anew")
       throw e
-  try serveWith sys bridge config runtimeConfig log arrive
+  try serveWith sys bridge config runtimeConfig log arrive view
   catch e =>
     if let some log := log then discard log.close.toBaseIO
     throw e

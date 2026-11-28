@@ -8,11 +8,12 @@ import Videos.Web
 # Serving the site
 
 The site and its scheduler behind the gate, with the sign-in and the time stamp in `arrive`, on
-a journal with snapshots. Each attempt the scheduler dispatches is made through the S3 client,
-or, for a transcode, posted to the worker as its job (`Lanes.Web.Transcode`), cut off at the
-attempt's deadline, and its answer, or `unknown` when there is none, is handed back as an input.
-What each call is and what its answer means are the pure functions below. `Main`, the
-end-to-end test and the live smoke start it the same way.
+a journal with snapshots. The feed, the watch pages and the channel pages are reads, answered
+from the site's state by `view` and never journalled. Each attempt the scheduler dispatches is
+made through the S3 client, or, for a transcode, posted to the worker as its job
+(`Lanes.Web.Transcode`), cut off at the attempt's deadline, and its answer, or `unknown` when
+there is none, is handed back as an input. What each call is and what its answer means are the
+pure functions below. `Main`, the end-to-end test and the live smoke start it the same way.
 
 `S3.handler` needs the `Runtime` of the system, which `Http.serveFronted` keeps to itself, so
 the call is made here with `S3.exchange` and answered with `Server.tryInput`. An answer that
@@ -119,7 +120,7 @@ def start (d : Deployment) : Async (Server (Site' d)) := do
     | some path => some <$> openLog d path
     | none => pure none
   let server ← serveFronted (system d.config) (bridge d.settings) d.server d.runtime (fun _ => onOutput) log
-    (arrive := some arrive)
+    (arrive := some arrive) (view := view d.config d.settings)
   running.resolve (some server)
   return server
 

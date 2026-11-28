@@ -14,6 +14,10 @@ the repository. Read it first; this file does not repeat it. A clone needs elan 
 
 - Work is trunk-based: `main` is the only long-lived branch. Make one branch per change, from
   `main`, and open a pull request from it.
+- Every pull request belongs to an issue, and its description's first line names it: `Fixes #n`
+  when the pull request finishes the issue, `Part of #n` when it is one step of it. GitHub closes
+  the issue when a pull request that says `Fixes` merges, and lists the others on it. A change
+  with no issue gets one first.
 - A pull request merges through the merge queue once the `build` check passes. `build` passes
   only when every CI job before it passed: the build with warnings as errors, lint, the tests,
   the model checks, the differential tests against Go, and the applications' jobs.

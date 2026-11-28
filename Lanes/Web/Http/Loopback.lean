@@ -7,6 +7,7 @@ module
 public import Lanes.Runtime.Kernel
 public import Lanes.Web.Http.Admit
 public import Lanes.Web.Http.Conn
+public import Lanes.Web.Http.View
 
 /-!
 An application's front end with no socket, for tests: the bytes of a request go through the
@@ -16,6 +17,10 @@ own, and the bytes written back are read by the client's reader (`Response.read`
 server's loop does with these is IO; everything it decides is here, run as it runs there. Time
 passes only when nothing else can happen: then the next timer of the kernel or the next
 deadline of the gate is due, so a request the system never answers gets the gate's `504`.
+
+A request the `view` names is a read, as the server answers it: its gate admits it, and it is
+answered from the kernel's states at the end of the next batch of work, without entering the
+kernel.
 
 Each exchange is a connection of its own; the system's state carries over from one to the next.
 -/
@@ -34,6 +39,14 @@ structure Loopback (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (gate
   deadlines : List (ReqId × Nat) := []
   /-- The gate's answers not yet told to the connection, oldest first. -/
   answers : List (ReqId × Response) := []
+  /-- Which requests are reads, and how each is answered from the state (`Http.View`). -/
+  view : Request → Option (View sys) := fun _ => none
+  /-- The bounds of the gate of reads. -/
+  readGate : GateConfig := {}
+  /-- The gate of reads' state: the reads waiting for their peek. -/
+  reads : List ReqId := []
+  /-- The reads admitted, to be answered at the end of the next batch. -/
+  peeks : List (ReqId × View sys) := []
   conn : Conn.Config := {}
   nextId : ReqId := 0
   now_ms : Nat := 0
@@ -49,8 +62,9 @@ namespace Loopback
 variable {sys : System σ} [Hashable σ.Id] {bridge : Bridge σ} {gate : GateConfig}
 
 def start (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (gate : GateConfig := {})
-    (conn : Conn.Config := {}) : Loopback sys bridge gate :=
-  { kernel := (Kernel.boot (admitted sys bridge)).1, conn }
+    (conn : Conn.Config := {}) (view : Request → Option (View sys) := fun _ => none)
+    (readGate : GateConfig := {}) : Loopback sys bridge gate :=
+  { kernel := (Kernel.boot (admitted sys bridge)).1, conn, view, readGate }
 
 /-- Do what the gate decided; what it passes on is `entry`, the arrival it decided on. -/
 def act (lb : Loopback sys bridge gate) (entry : Option (ReqId × Request)) :
@@ -74,10 +88,30 @@ def decide (lb : Loopback sys bridge gate) (msg : GateMsg σ) : Loopback sys bri
     | _ => none
   { lb with pending }.act entry acts
 
-/-- Pass the deadlines due by `now_ms` to the gate. -/
+/-- Let the gate of reads decide on `msg`, as the server does; what it admits is read by `v`. -/
+def decideRead (lb : Loopback sys bridge gate) (msg : GateMsg readSig) (v : Option (View sys)) :
+    Loopback sys bridge gate :=
+  let (reads, acts) := Gate.step readBridge lb.readGate Gate.acts lb.reads msg
+  acts.foldl (init := { lb with reads }) fun lb a =>
+    match a, v with
+    | .respond id response, _ => { lb with answers := lb.answers ++ [(id, response)] }
+    | .forward id, some v => { lb with peeks := lb.peeks ++ [(id, v)] }
+    | .forward _, none => lb
+    | .arm id, _ =>
+      { lb with deadlines := lb.deadlines ++ [(id, lb.now_ms + lb.readGate.requestTimeout_ms)] }
+    | .disarm id, _ => { lb with deadlines := lb.deadlines.filter (·.1 != id) }
+
+/-- Answer the reads waiting for a peek from the kernel's states, at the end of a batch. -/
+def answerPeeks (lb : Loopback sys bridge gate) : Loopback sys bridge gate :=
+  lb.peeks.foldl (init := { lb with peeks := [] }) fun lb (id, v) =>
+    lb.decideRead (.answer (id, (v.admitted (bridge := bridge)).respond
+      (Batch.Peek.of lb.kernel (v.reads.map .inr)))) none
+
+/-- Pass the deadlines due by `now_ms` to the gates. -/
 def expire (lb : Loopback sys bridge gate) (now_ms : Nat) : Loopback sys bridge gate :=
   let (due, rest) := lb.deadlines.partition (·.2 ≤ now_ms)
-  due.foldl (fun lb (id, _) => lb.decide (.expire id)) { lb with deadlines := rest }
+  due.foldl (fun lb (id, _) => (lb.decide (.expire id)).decideRead (.expire id) none)
+    { lb with deadlines := rest }
 
 /-- What a connection's loop would be told and what the client has received so far. -/
 structure Exchange where
@@ -97,8 +131,10 @@ def submit (lb : Loopback sys bridge gate) (x : Exchange) (request : Request)
     (reply : Response → Conn.Event) : Loopback sys bridge gate × Exchange :=
   let id := lb.nextId
   let request := bridge.prepare request
-  ({ lb.decide (.arrive id request) with nextId := id + 1 },
-    { x with asked := x.asked ++ [(id, reply)] })
+  let lb := match lb.view request with
+    | some v => lb.decideRead (.arrive id request) (some v)
+    | none => lb.decide (.arrive id request)
+  ({ lb with nextId := id + 1 }, { x with asked := x.asked ++ [(id, reply)] })
 
 /-- The events an answer gives: the connection is told it under the number it was asked as. -/
 def told (x : Exchange) (out : ReqId × Response) : Exchange × Option Conn.Event :=
@@ -159,8 +195,11 @@ def settle (lb : Loopback sys bridge gate) (x : Exchange) (timers : Bool) :
       settle lb x timers fuel
     else
       let step := lb.kernel.runBatch 64
-      let lb := { lb with kernel := step.kernel }
-      if step.outputs.isEmpty && step.events.isEmpty then
+      let peeked := !lb.peeks.isEmpty
+      let lb := step.outputs.foldl (fun lb out => lb.decide (.answer out))
+        { lb with kernel := step.kernel }
+      let lb := lb.answerPeeks
+      if step.outputs.isEmpty && step.events.isEmpty && !peeked then
         let timer := match lb.kernel.wait with
           | .for_ms ms => some (lb.now_ms + ms)
           | _ => none
@@ -174,9 +213,7 @@ def settle (lb : Loopback sys bridge gate) (x : Exchange) (timers : Bool) :
             let (lb, x) := tell lb x .tick
             settle lb x timers fuel
         | none => (lb, x)
-      else
-        let lb := step.outputs.foldl (fun lb out => lb.decide (.answer out)) lb
-        settle lb x timers fuel
+      else settle lb x timers fuel
 
 /-- Send `pieces` on a new connection, each as the server would receive it, then the end of
 them, and what the server writes back. -/

@@ -409,6 +409,15 @@ def sharedCacheTests : List (String × Bool) :=
   [ ("shared cache: no reply, and no answer the bridge gives itself, may be kept and given to "
       ++ "another viewer", Http.SharedCache.leaks (encoded ++ direct) == []) ]
 
+/-- How many requests the journal at `path` holds, and how many of them are reads. -/
+def journalled (d : Deployment) (path : System.FilePath) : IO (Nat × Nat) := do
+  let log ← openLog d path
+  let requests := log.past.filterMap fun
+    | .input (.inl (_, r)) => some r
+    | _ => none
+  log.close
+  return (requests.length, (requests.filter fun r => (read? r).isSome).length)
+
 /-- The flow against the fake S3 and the provider, both run here. With `corpus`, the site saves
 often, and its journal and snapshot are copied there at the end, each unless one is there
 already (`lake exe videosTest corpus <dir>`, `Tests/Corpus.lean` in Lanes). -/
@@ -423,10 +432,12 @@ def run (corpus : Option System.FilePath := none) : IO (List (String × Bool)) :
       let d := if corpus.isSome then { d with runtime := { snapshotEvery := 32 } } else d
       let results ← flow d provider worker (fun key => store.holds key) (store.refuse 1)
         (return (← store.refusing) == 0)
+      let (entered, reads) ← journalled d journal
       worker.stop
       store.stop
       provider.stop
-      return results : Async _).block
+      return results ++ [("videos: the feed, the watch pages and the channel pages are answered "
+        ++ "from the state, and none is journalled", 0 < entered && reads == 0)] : Async _).block
     if let some dir := corpus then
       IO.FS.createDirAll dir
       for (name, from_) in [("journal", journal), ("snapshot", journal.addExtension "snapshot")] do
