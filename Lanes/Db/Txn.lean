@@ -45,6 +45,24 @@ instance : Monad Txn where
   pure := .pure
   bind := Txn.bind
 
+theorem bind_pure {α : Type} (t : Txn α) : t.bind Txn.pure = t := by
+  induction t with
+  | pure a => rfl
+  | abort why => rfl
+  | op o k ih => simp only [bind, ih]
+
+theorem bind_assoc {α β γ : Type} (t : Txn α) (f : α → Txn β) (g : β → Txn γ) :
+    (t.bind f).bind g = t.bind fun a => (f a).bind g := by
+  induction t with
+  | pure a => rfl
+  | abort why => rfl
+  | op o k ih => simp only [bind, ih]
+
+instance : LawfulMonad Txn := LawfulMonad.mk'
+  (id_map := fun t => bind_pure t)
+  (pure_bind := fun _ _ => rfl)
+  (bind_assoc := bind_assoc)
+
 /-- The transaction's answer and the database after it, from `db`, or why it aborted. -/
 def run {α : Type} : Txn α → Db → Except String (α × Db)
   | .pure a, db => .ok (a, db)

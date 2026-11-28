@@ -9,11 +9,8 @@ The axiom gate (Lanes rule 5.5): each headline theorem depends only on Lean's th
 axioms. If a `sorry` or a new axiom reaches one, this file stops compiling.
 -/
 
-/-- info: 'TodoDb.keyed_requests' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms TodoDb.keyed_requests
+/-- info: 'TodoDb.preserves' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms TodoDb.preserves
 
-/-- info: 'TodoDb.keyed_no_unkeyed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms TodoDb.keyed_no_unkeyed
-
-/-- info: 'TodoDb.outputs_noUnkeyed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms TodoDb.outputs_noUnkeyed
+/-- info: 'TodoDb.unique_always' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms TodoDb.unique_always

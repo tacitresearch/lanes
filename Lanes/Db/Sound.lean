@@ -20,8 +20,10 @@ What the typed store promises, proved for every handler:
   meaning, as a serializable server answers it, is `Txn.run` (`Txn.interp_apply`).
 
 And the facts a proof of `Preserves` takes apart a transaction with: `Txn.run_bind`, that a read
-leaves the database as it was (`Op.apply_read`), and that a write changes only its own table
-(`Op.rows_apply`).
+leaves the database as it was (`Op.apply_read`), that a write changes only its own table
+(`Op.rows_apply`), what each write leaves of its table (`Op.insert_rows`, `Op.update_rows`,
+`Op.delete_rows`), and that a lookup that found nothing means no row has those values
+(`Scan.run_eq_nil`, `Scan.matches_lookup`).
 -/
 
 @[expose] public section
@@ -35,6 +37,15 @@ def Preserves (h : Handler Q A) (I : Db → Prop) : Prop :=
   ∀ q db a db', I db → (h q).run db = .ok (a, db') → I db'
 
 /-! ## Transactions -/
+
+theorem Op.apply_read (o : Op) (hread : o.writes = false) {db : Db} {r : o.Ret} {db' : Db}
+    (h : o.apply db = .ok (r, db')) : db' = db := by
+  unfold Op.apply at h
+  split at h
+  · simp only [hread, Bool.false_eq_true, ↓reduceIte, Except.ok.injEq, Prod.mk.injEq] at h
+    exact h.2.symm
+  · cases h
+
 
 namespace Txn
 
@@ -68,6 +79,71 @@ theorem run_bind {α β : Type} (t : Txn α) (f : α → Txn β) (db : Db) :
     | error e => simp [run_op_error _ h]
     | ok p => rw [run_op_ok _ h, run_op_ok _ h]; exact ih p.1 p.2
 
+theorem run_op_ok_inv {α : Type} {o : Op} {k : o.Ret → Txn α} {db : Db} {x : α × Db}
+    (h : (Txn.op o k).run db = .ok x) : ∃ r db₁, o.apply db = .ok (r, db₁) ∧ (k r).run db₁ = .ok x := by
+  cases ha : o.apply db with
+  | error e => rw [run_op_error _ ha] at h; cases h
+  | ok p => exact ⟨p.1, p.2, rfl, by rw [run_op_ok _ ha] at h; exact h⟩
+
+/-- One operation, as a transaction: its meaning. -/
+theorem run_single {o : Op} {db : Db} {r : o.Ret} {db' : Db}
+    (h : (Txn.op o Txn.pure).run db = .ok (r, db')) : o.apply db = .ok (r, db') := by
+  obtain ⟨r', db₁, ha, hk⟩ := run_op_ok_inv h
+  simp only [run, Except.ok.injEq] at hk
+  rw [ha, hk]
+
+theorem run_bind_ok_inv {α β : Type} {t : Txn α} {f : α → Txn β} {db : Db} {x : β × Db}
+    (h : (t.bind f).run db = .ok x) : ∃ a db₁, t.run db = .ok (a, db₁) ∧ (f a).run db₁ = .ok x := by
+  rw [run_bind] at h
+  cases ht : t.run db with
+  | error e => simp [ht] at h
+  | ok p => exact ⟨p.1, p.2, rfl, by simpa [ht] using h⟩
+
+/-- A transaction that only reads. -/
+inductive Reads {α : Type} : Txn α → Prop where
+  | pure (a : α) : Reads (.pure a)
+  | abort (why : String) : Reads (.abort why)
+  | op (o : Op) (k : o.Ret → Txn α) : o.writes = false → (∀ r, Reads (k r)) → Reads (.op o k)
+
+theorem Reads.run {α : Type} {t : Txn α} (h : t.Reads) {db : Db} {a : α} {db' : Db}
+    (hrun : t.run db = .ok (a, db')) : db' = db := by
+  induction h generalizing db with
+  | pure a => simp at hrun; exact hrun.2.symm
+  | abort why => simp at hrun
+  | op o k hw _ ih =>
+    obtain ⟨r, db₁, ha, hk⟩ := run_op_ok_inv hrun
+    rw [ih r hk, Op.apply_read o hw ha]
+
+theorem Reads.bind {α β : Type} {t : Txn α} {f : α → Txn β} (ht : t.Reads) (hf : ∀ a, (f a).Reads) :
+    (t.bind f).Reads := by
+  induction ht with
+  | pure a => exact hf a
+  | abort why => exact .abort why
+  | op o k hw _ ih => exact .op o _ hw ih
+
+theorem Reads.mapM {α β : Type} (f : α → Txn β) (hf : ∀ a, (f a).Reads) :
+    ∀ xs : List α, (xs.mapM f).Reads := by
+  intro xs
+  induction xs with
+  | nil => exact .pure []
+  | cons x xs ih =>
+    simp only [List.mapM_cons]
+    exact Reads.bind (hf x) fun b => Reads.bind ih fun bs => .pure _
+
+theorem run_mapM_length {α β : Type} (f : α → Txn β) :
+    ∀ (xs : List α) {db : Db} {ys : List β} {db' : Db}, (xs.mapM f).run db = .ok (ys, db') → ys.length = xs.length := by
+  intro xs
+  induction xs with
+  | nil => intro db ys db' h; simp [List.mapM_nil] at h; simp [← h.1]
+  | cons x xs ih =>
+    intro db ys db' h
+    simp only [List.mapM_cons, bind_eq] at h
+    obtain ⟨b, db₁, -, h⟩ := run_bind_ok_inv h
+    obtain ⟨bs, db₂, hbs, h⟩ := run_bind_ok_inv h
+    simp at h
+    rw [← h.1]
+    simp [ih hbs]
+
 /-- A transaction answered operation by operation by each one's meaning, in the state monad of
 the database, is its meaning. -/
 theorem interp_apply {α : Type} (t : Txn α) (db : Db) :
@@ -86,14 +162,6 @@ theorem interp_apply {α : Type} (t : Txn α) (db : Db) :
 end Txn
 
 /-! ## Operations -/
-
-theorem Op.apply_read (o : Op) (hread : o.writes = false) {db : Db} {r : o.Ret} {db' : Db}
-    (h : o.apply db = .ok (r, db')) : db' = db := by
-  unfold Op.apply at h
-  split at h
-  · simp only [hread, Bool.false_eq_true, ↓reduceIte, Except.ok.injEq, Prod.mk.injEq] at h
-    exact h.2.symm
-  · cases h
 
 theorem lookup_replace (l : List (String × List Row)) (n m : String) (rows : List Row) :
     (l.map fun (k, rs) => if k == n then (k, rows) else (k, rs)).lookup m
@@ -158,6 +226,31 @@ theorem Op.apply_ok (o : Op) {db : Db} {r : o.Ret} {db' : Db} (h : o.apply db = 
     simp only [Except.ok.injEq, Prod.mk.injEq] at h
     exact ⟨hv, h.1.symm⟩
   · cases h
+
+theorem TableOf.decode_reads {α : Type} (t : TableOf α) (r : Row) : (t.decode r).Reads := by
+  unfold TableOf.decode; split
+  · exact .pure _
+  · exact .abort _
+
+theorem TableOf.scan_reads {α : Type} (t : TableOf α) (s : Scan) : (t.scan s).Reads :=
+  Txn.Reads.bind (.op _ _ rfl fun _ => .pure _) fun rows => Txn.Reads.mapM _ t.decode_reads rows
+
+theorem TableOf.lookup_reads {α : Type} (t : TableOf α) (i : Index) (vals : Row) (limit : Nat) :
+    (t.lookup i vals limit).Reads :=
+  Txn.Reads.bind (.op _ _ rfl fun _ => .pure _) fun rows => Txn.Reads.mapM _ t.decode_reads rows
+
+theorem TableOf.get_reads {α : Type} (t : TableOf α) (key : Row) : (t.get key).Reads := by
+  refine Txn.Reads.bind (.op _ _ rfl fun _ => .pure _) fun r => ?_
+  cases r with
+  | some r => exact Txn.Reads.bind (t.decode_reads r) fun _ => .pure _
+  | none => exact .pure _
+
+theorem TableOf.run_decode {α : Type} (t : TableOf α) {r : Row} {db : Db} {a : α} {db' : Db}
+    (h : (t.decode r).run db = .ok (a, db')) : t.ofRow r = some a := by
+  unfold TableOf.decode at h
+  split at h
+  · simp at h; rw [← h.1]; assumption
+  · simp at h
 
 /-! ## Retries -/
 
@@ -336,5 +429,87 @@ theorem invariant {σ : Signature} (cfg : Config) (port : Port σ Q A) {start : 
     · exact hd
 
 end Model
+
+/-! ## Rows: what a proof of `Preserves` reads off an operation -/
+
+theorem Value.compare_eq_iff (a b : Value) : a.compare b = .eq ↔ a = b := by
+  cases a <;> cases b <;> simp [Value.compare, Value.rank, Int64.toInt_inj]
+
+/-- A scan with a limit that found nothing: no row matches it. -/
+theorem Scan.run_eq_nil (s : Scan) {rows : List Row} (h : s.run rows = []) (hlimit : 0 < s.limit) :
+    ∀ r ∈ rows, s.matches r = false := by
+  unfold Scan.run at h
+  rw [List.take_eq_nil_iff] at h
+  rcases h with h | h
+  · omega
+  · have hlen := List.length_mergeSort (le := s.before) (rows.filter s.matches)
+    rw [h] at hlen
+    have hnil : rows.filter s.matches = [] := List.eq_nil_of_length_eq_zero hlen.symm
+    intro r hr
+    simpa using List.filter_eq_nil_iff.mp hnil r hr
+
+theorem all_eq_iff_map (r : Row) : ∀ (cs : List Nat) (vs : Row), cs.length = vs.length →
+    (((cs.zip vs).all fun (n, v) => (Cond.eq v).holds (r.getD n .null)) = true ↔ cs.map (r.getD · .null) = vs) := by
+  intro cs
+  induction cs with
+  | nil => intro vs h; cases vs <;> simp_all
+  | cons c cs ih =>
+    intro vs h
+    cases vs with
+    | nil => simp at h
+    | cons v vs =>
+      have ih' := ih vs (by simpa using h)
+      simp only [Cond.holds] at ih'
+      simp only [List.zip_cons_cons, List.all_cons, Bool.and_eq_true, List.map_cons, List.cons.injEq,
+        Cond.holds, beq_iff_eq, Value.compare_eq_iff]
+      rw [ih']
+
+/-- A lookup by an index, with a value for each of its columns, finds the rows whose values in
+the index are those. -/
+theorem Scan.matches_lookup (t : Table) (i : Index) (vals : Row) (limit : Nat)
+    (hlen : vals.length = i.columns.length) (r : Row) :
+    Scan.matches { table := t, index := some i, eq := vals, limit } r = true ↔ i.project r = vals := by
+  have hnone : i.columns[vals.length]? = none := by simp [hlen]
+  simp only [Scan.matches, Scan.conds, Scan.columns, hnone, List.append_nil, List.all_map]
+  unfold Index.project
+  rw [← all_eq_iff_map r i.columns vals hlen.symm]
+  rfl
+
+theorem Table.insertSorted_perm (t : Table) (row : Row) :
+    ∀ rows : List Row, (t.insertSorted row rows).Perm (row :: rows) := by
+  intro rows
+  induction rows with
+  | nil => exact .refl _
+  | cons r rest ih =>
+    unfold Table.insertSorted
+    split
+    · exact .refl _
+    · exact (List.Perm.cons r ih).trans (List.Perm.swap row r rest)
+
+/-- What an insert leaves of a table's rows: the same rows, or the row added to rows none of
+which has its key. -/
+theorem Op.insert_rows (t : Table) (row : Row) (rows : List Row) :
+    ((Op.insert t row).onRows rows).2 = rows ∨ (((Op.insert t row).onRows rows).2.Perm (row :: rows)
+      ∧ ∀ x ∈ rows, t.keyOf x ≠ t.keyOf row) := by
+  simp only [Op.onRows]
+  split
+  · exact .inl rfl
+  · rename_i h
+    simp only [Bool.or_eq_true, not_or, Bool.not_eq_true, List.any_eq_false] at h
+    refine .inr ⟨t.insertSorted_perm row rows, fun x hx heq => ?_⟩
+    have := h.1 x hx
+    simp [Table.hasKey, heq] at this
+
+/-- An update leaves the rows of other keys, and puts the row in place of the row of its key. -/
+theorem Op.update_rows (t : Table) (row : Row) (rows : List Row) :
+    ((Op.update t row).onRows rows).2 = rows ∨
+      ((Op.update t row).onRows rows).2 = rows.map fun x => if t.hasKey (t.keyOf row) x then row else x := by
+  simp only [Op.onRows]
+  split
+  · exact .inl rfl
+  · exact .inr rfl
+
+theorem Op.delete_rows (t : Table) (key : Row) (rows : List Row) :
+    ((Op.delete t key).onRows rows).2 = rows.filter (!t.hasKey key ·) := rfl
 
 end Lanes.Db

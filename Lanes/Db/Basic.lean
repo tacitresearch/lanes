@@ -91,16 +91,10 @@ def rank : Value → Nat
   | .text _ => 3
   | .bool _ => 4
 
-def lex : List UInt8 → List UInt8 → Ordering
-  | [], [] => .eq
-  | [], _ :: _ => .lt
-  | _ :: _, [] => .gt
-  | a :: as, b :: bs => (compare a b).then (lex as bs)
-
 def compare : Value → Value → Ordering
   | .int a, .int b => Ord.compare a.toInt b.toInt
-  | .bytes a, .bytes b => lex a.data.toList b.data.toList
-  | .text a, .text b => lex a.toUTF8.data.toList b.toUTF8.data.toList
+  | .bytes a, .bytes b => Ord.compare a b
+  | .text a, .text b => Ord.compare a b
   | .bool a, .bool b => Ord.compare a b
   | a, b => Ord.compare a.rank b.rank
 
