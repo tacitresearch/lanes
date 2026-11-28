@@ -37,3 +37,11 @@ root = "ServiceOracle"
 [[lean_lib]]
 name = "Checks"
 globs = ["Checks.+"]
+needs = ["@/botocoreKeys"]
+
+# The test keys `Checks.CloudFront` embeds with `include_str`, which Lake does not track: the
+# library needs them, so their hashes are in its modules' traces.
+[[input_dir]]
+name = "botocoreKeys"
+path = "../../oracles/botocore/keys"
+text = true

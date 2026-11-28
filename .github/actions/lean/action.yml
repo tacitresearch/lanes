@@ -9,6 +9,9 @@ description: >
   `lake exe cache get` when missing), the build on the commit, falling back to the newest
   earlier one. With `system`, `examples/<system>` gets the same packages and its own build back.
   Saving is left to the jobs that build, when `warm` is not true: see the keys in the outputs.
+  Lake's artifact cache (AGENTS.md, "Build and checks") is in the toolchain's directory under
+  ELAN_HOME: empty at the start of a job on GitHub's runners, and shared by the runners of a
+  machine of our own.
 inputs:
   system:
     description: A directory under `examples/` whose build to restore as well.
@@ -128,11 +131,6 @@ runs:
         path: .lake/build
         key: ${{ steps.keys.outputs.build }}
         restore-keys: ${{ steps.keys.outputs.build-prefix }}
-    # Lake does not track the templates `LanesCli/New.lean` embeds with `include_str`, so a restored
-    # build would keep the templates of the commit it was saved from: build that module again.
-    - name: Forget the embedded templates
-      shell: bash
-      run: rm -f .lake/build/lib/lean/LanesCli/New.* .lake/build/ir/LanesCli/New.*
     - name: Fetch Mathlib's build
       if: steps.shared.outputs.warm != 'true' && steps.packages.outputs.cache-hit != 'true'
       shell: bash

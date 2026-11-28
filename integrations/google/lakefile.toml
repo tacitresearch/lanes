@@ -18,3 +18,10 @@ name = "Google"
 [[lean_exe]]
 name = "check"
 root = "Check"
+needs = ["@/recorded"]
+
+# What `Check` embeds with `include_str`, which Lake does not track: the executable needs it, so
+# its hashes are in the trace of `Check`.
+[[input_dir]]
+name = "recorded"
+text = true

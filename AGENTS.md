@@ -31,6 +31,21 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
   `examples/raft-kv`, `examples/ledger` and `examples/rookery` run as jobs of their own. A pull
   request that changes only documentation is built and linted, and the other jobs are skipped
   (the `changes` job of `.github/workflows/ci.yml` says which files count).
+- Lake's artifact cache is on for Lanes, the examples, the integrations and generated apps
+  (`enableArtifactCache` and `restoreAllArtifacts` in each lakefile; D99, section 6). Lake keeps
+  each build output once, named by a hash of its content, in the toolchain's cache,
+  `$ELAN_HOME/toolchains/<toolchain>/lake/cache` (`ELAN_HOME` is `~/.elan` by default;
+  `LAKE_CACHE_DIR` moves it), with a record of which outputs each module's inputs gave. A build
+  whose inputs are recorded there makes hard links in `.lake/build` instead of building. So the
+  worktrees and apps of a machine share one copy: a new worktree builds only what no checkout
+  built before, and its `.lake/build` takes almost no disk of its own. The dependencies,
+  Mathlib among them, are linked into the cache too, and their files become read-only. Builds in
+  several worktrees at once are safe: Lake writes each output to a new file, links it in, and
+  removes an output before building it again. An entry is found only by the hash of everything
+  a module's build reads, so it is as good as a build, provided each file read by `include_str`
+  is declared (below). The cache only grows; delete the directory to reclaim it, and set
+  `LAKE_CACHE_DIR=` (empty) to give a checkout a cache of its own, in `.lake/cache`. Nothing is
+  fetched from a remote cache yet (#98).
 - `lanes lint` checks the text of a project: `no-sorry` (no `sorry` or `admit`), `trusted-listed`
   (`partial`, `unsafe`, `axiom`, `panic!`, `implemented_by`, `extern` and C only in files
   `TRUSTED.md` names), `trusted-size` (each trusted file has the line count `TRUSTED.md` gives),
@@ -45,11 +60,14 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
   it has an axiom gate. A new definition of `Lanes/` with no theorem, test or row of `TRUSTED.md`
   fails `lanes lint` unless it is on `docs/inventory-none.md` under a heading that says why; when
   one there gets evidence, take it off.
-- Templates are embedded with `include_str`, which Lake does not track: after editing
-  `templates/`, delete `.lake/build/lib/lean/LanesCli/New.*` and `.lake/build/ir/LanesCli/New.*`,
-  rebuild `lanes`, and write `examples/counter` again (move it aside, run `lake exe lanes new
-  counter --dir examples/counter --lanes-path ../..`, put its `lake-manifest.json` back): `lake
-  test` fails while the two differ. Then build and test it.
+- Lake hashes a module's source and imports, not the files it reads with `include_str`. So each
+  embedded file is an `input_dir` or `input_file` target that the module's library or executable
+  `needs` (`templates/` in `lakefile.lean`; the integrations' lakefiles likewise), which puts the
+  files' hashes in the module's trace: an edit rebuilds it, and neither `.lake/build` nor the
+  artifact cache serves a copy built from the old files. A new `include_str` adds its file the
+  same way. After editing `templates/`, rebuild `lanes` and write `examples/counter` again (move
+  it aside, run `lake exe lanes new counter --dir examples/counter --lanes-path ../..`, put its
+  `lake-manifest.json` back): `lake test` fails while the two differ. Then build and test it.
 - Oracles (rule 5.9, `docs/decisions/D80-oracles.md`) are in `oracles/`, one folder per
   reference implementation with its pin, and `oracles/README.md` lists every protocol module and
   every model against its oracle or the reason it has none (lint `oracles`). *Pure oracles*: a
