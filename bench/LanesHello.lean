@@ -22,8 +22,7 @@ def bridge : Bridge (Server.sig ReqId ReqId) where
   encode id := some (id, .text "hello\n")
 
 def saving : Http.Saving (Server.system hello) :=
-  { actors := { id := Codec.unit, state := fun _ => Codec.unit, msg := fun _ => Codec.nat }
-    out := Codec.nat }
+  { actors := { id := Codec.unit, state := fun _ => Codec.unit, msg := fun _ => Codec.nat } }
 
 /-- The value of `key=N` among the arguments. -/
 def option (args : List String) (key : String) : Option Nat :=

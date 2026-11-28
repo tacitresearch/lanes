@@ -400,6 +400,6 @@ def actors (config : Config Name) : Kernel.Image.Codecs (Sys config) where
     | .ledger => Codec.of (LedgerMsg Name)
 
 def saving (config : Config Name) : Http.Saving (Sys config) :=
-  { actors := actors config, out := Codec.of Out }
+  { actors := actors config }
 
 end Ledger.Web

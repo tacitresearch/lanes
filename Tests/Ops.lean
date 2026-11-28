@@ -184,7 +184,7 @@ has not recovered until it is let go. -/
 def readyTest : Async (List (String × Bool)) := do
   let lines ← IO.mkRef #[]
   let release : IO.Promise Unit ← IO.Promise.new
-  let (log, _) ← memory (Tests.Fronted.Fronted {}) [.advance 0, .input (.inr (.note 7)), .batch 64]
+  let (log, _) ← memory (admittedFronted (Server.system Tests.Fronted.desk) Tests.Fronted.bridge) [.advance 0, .input (.inr (.note 7)), .batch 64]
   let server ← serveFronted (Server.system Tests.Fronted.desk) Tests.Fronted.bridge
     { port := 0, ops := opsConfig lines } {}
     (fun _ out => match out with | .memo _ => discard <| await release.result? | .reply _ => pure ())
@@ -310,10 +310,10 @@ def refusedTest : Async (List (String × Bool)) := do
       refused.isEmpty && valueOf page "lanes_http_connections_refused_total" == some (1 + more)) ]
 
 /-- The same requests, with all of it off and with all of it on and probed between them: the
-journals hold the same inputs. -/
+journals hold the same inputs, the four the gate admits (`/bad` it refuses before the shard). -/
 def journalTest : Async (List (String × Bool)) := do
   let run := fun (ops : OpsConfig) (probe : Bool) => do
-    let (log, written) ← memory (served (Server.system Tests.Gate.echo) Tests.Gate.bridge {}) []
+    let (log, written) ← memory (admitted (Server.system Tests.Gate.echo) Tests.Gate.bridge) []
     let server ← serveWith (Server.system Tests.Gate.echo) Tests.Gate.bridge
       { port := 0, ops } {} (some log)
     let port := server.port.getD 0
@@ -334,7 +334,7 @@ def journalTest : Async (List (String × Bool)) := do
   let (on, page) ← run (opsConfig lines) true
   return [
     ("ops: with metrics, health and logs on, the journal holds the same inputs as with them off",
-      off.length == 5 && off == on),
+      off.length == 4 && off == on),
     ("ops: and the journal's appends were counted",
       (valueOf page "lanes_journal_entries_total").any (· > 0)) ]
 
@@ -363,7 +363,7 @@ def slowBridge : Bridge (Server.sig Job Work) where
     | .reply id => some (id, .text "done\n")
     | .start _ => none
 
-abbrev Slow := fronted (Server.system slow) slowBridge {}
+abbrev Slow := admittedFronted (Server.system slow) slowBridge
 
 /-- Run by `lanesTest stop-child drain_ms`: a server whose work is done when a line arrives on
 standard input, and never if it ends first, stopped by a signal. It says on standard output when it is listening and when
