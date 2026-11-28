@@ -77,6 +77,7 @@ different lines. The numbers give the order in which they were taken.
 - [D51. An actor at rest is released, and the kernel's theorems hold up to the starts that bring it back](D51-release-actors-at-rest.md)
 - [D44. A request is prepared before it is journalled](D44-request-prepared-before-journal.md)
 - [D22. Routes are values with a proof; htmx attributes come from them](D22-routes-are-values-with-a-proof.md)
+- [D96. One model with proofs, and runtimes proved against it](D96-runtime-contract.md)
 - [D71. S3 and Signature Version 4, in Lanes as the protocol of a class of object stores](D71-s3-and-signature-version-4.md)
 - [D30. Shards in different processes are joined by a link that promises little](D30-shards-in-different-processes-are-joined.md)
 - [D72. Sign-in with OAuth 2.0 and OpenID Connect, done where a request arrives](D72-sign-in-with-oauth.md)
