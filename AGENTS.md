@@ -302,13 +302,16 @@ lanes_data inductive Id (F : Type) where
 
 - `Codable` gives `Entry.codec : Codec N → Codec C → Codec (Entry N C)` and an instance;
   `Codec.of T` is the instance's codec, and its law holds by construction. A codec also carries
-  its type's `Schema` (the names of its fields and constructors, their defaults and former
-  names) and a map each way to `Value`, with the law `ofValue (toValue a) = some a`
-  (`Lanes/Data/Schema.lean`); `lake exe lanes journal schema --type T` prints it. `Body.write`
+  its type's `Schema`: a table of the named types it uses, each declared once with the names of
+  its fields and constructors, their defaults and former names, where every use of a named type
+  is a reference by its name; and a map each way to `Value`, with the law
+  `ofValue (toValue a) = some a` (`Lanes/Data/Schema.lean`); `lake exe lanes journal schema
+  --type T` prints it. `Body.write`
   and `Body.read` turn a `Value` into bytes and back with its schema, under `Codec.Limits`, and
   each value has one body (`Body.read_eq_ok_iff`); `Body.encode` and `Body.decode` do it for a
   type, through its `Schema.Of` (`Body.decode_encode`). Data written under an older schema is
-  read by name: `Schema.Plan.of` matches the writer's schema with the reader's once, refusing
+  read by name: `Schema.Plan.of` matches the writer's schema with the reader's once, each pair of
+  named types once, refusing
   what cannot be read with a `Codec.Error` that names it, and `Body.decodeWith` reads each value
   through the plan (`Lanes/Data/Match.lean`; `Schema.Plan.of_insertIdx`,
   `Schema.Plan.of_rename`). The journal and the snapshot are written so, in format 2 of the
@@ -327,8 +330,10 @@ lanes_data inductive Id (F : Type) where
   name, `height (was y) : Int`, `| path (was line)`, `(closed (was shut) : Bool)`, so that data
   written under them can be read by name (`docs/decisions/D103-lanes-data-aliases.md`). A value with a property is a subtype,
   read back only if the property holds. A field whose type names an earlier field is refused.
-  `extends`, indices and recursive types are not accepted: write those with `structure` or
-  `inductive` and the codec with `Codec.struct%` or `Codec.sum%`.
+  `extends` and indices are not accepted: write those with `structure` or `inductive` and the
+  codec with `Codec.struct%` or `Codec.sum%`. A recursive type has no codec: a schema can say it
+  (a named type may refer to itself), but a codec is a value, and neither `lanes_data` nor the
+  macros can define one that refers to itself.
 - A line `from Old := f` after `deriving` says how a value of the type's previous version
   becomes one of this: it gives `T.migrate` and a `Migrate Old T` instance. A deploy that
   changes a persisted type keeps the old version's types, codecs and step functions in a module

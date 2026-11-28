@@ -46,7 +46,7 @@ namespace Entry
 
 /-- The schema of an entry, with the inputs' schema, and the map each way to `Value`. -/
 def schema (input : Codec σ.In) : Schema.Of (Entry σ) :=
-  (Schema.Of.variants "Lanes.Journal.Entry" [input.schema]
+  (Schema.Of.variants "Lanes.Journal.Entry" [input.schema.root]
     (.cons "input" [] (.cons "x" [] input.toOf none .nil)
       (.cons "advance" [] (.cons "now_ms" [] .nat none .nil)
         (.cons "batch" [] (.cons "fuel" [] .nat none .nil)
@@ -73,14 +73,19 @@ abbrev own (input : Codec σ.In) : Schema := (schema input).schema
 /-- The schema of an entry whose inputs have the schema `input`, for a reader that has no codec
 of them, such as `lanes journal verify` (`own_eq_schemaOf`). -/
 def schemaOf (input : Schema) : Schema :=
-  .sum "Lanes.Journal.Entry" [input]
-    [{ name := "input", fields := [{ name := "x", schema := input }] },
+  let name := Schema.nameOf "Lanes.Journal.Entry" [input.root]
+  ⟨Schema.declare name (.sum "Lanes.Journal.Entry"
+    [{ name := "input", fields := [{ name := "x", schema := input.root }] },
      { name := "advance", fields := [{ name := "now_ms", schema := .nat }] },
      { name := "batch", fields := [{ name := "fuel", schema := .nat }] },
      { name := "handed", fields := [] },
-     { name := "snapshot", fields := [{ name := "index", schema := .nat }] }]
+     { name := "snapshot", fields := [{ name := "index", schema := .nat }] }]) input.types,
+    .ref name⟩
 
-theorem own_eq_schemaOf (input : Codec σ.In) : own input = schemaOf input.schema := rfl
+theorem own_eq_schemaOf (input : Codec σ.In) : own input = schemaOf input.schema := by
+  simp [own, schema, schemaOf, Schema.Of.map, Schema.Of.variants, Schema.Ctors.cons,
+    Schema.Ctors.nil, Schema.Fields.cons, Schema.Fields.nil, Schema.Of.nat, Schema.Of.prim,
+    Schema.merge]
 
 def write (input : Codec σ.In) (entry : Entry σ) : Except Codec.Error ByteArray :=
   Body.encode Kind.journal.limits (schema input) entry

@@ -5,7 +5,7 @@ manifest (frame at byte 37)
   system "bank"
   toolchain 4.37.0-rc1 0b77e12952ad39077d80d8bd6b66d601f225c321
   runtime kernel, policy 1
-  schema frame SHA-256 f7b89f46320b7733bf75ec609a905d097837fb79330311f08af1e6f970c22251
+  schema frame SHA-256 9ae99968a0ab0b5ef5b0e31724ce1c68103a6c51ae514c42527a5be151a07cbe
 schema (frame at byte 163)
   Prod Nat (Prod (List (Σ Nat)) (Prod (List (Prod (Option Nat) (Σ Nat))) (Prod (List (Prod (Prod Nat Nat) (Σ Nat))) (Prod Nat (Prod Nat Bool)))))
 
@@ -53,5 +53,5 @@ schema (frame at byte 163)
     | false
     | true
 records: 1
-  0 at byte 9418, 73 bytes: { fst := 10, snd := { fst := [⟨0, #0(#0(70), #0(#1, []))⟩, ⟨1, #0(#0(130), #0(#1, []))⟩, ⟨2, #0(#0(100), #0(#1, []))⟩], snd := { fst := [{ fst := .none, snd := ⟨1, #0(4, 2, 5)⟩ }], snd := { fst := [], snd := { fst := 0, snd := { fst := 1500, snd := .true } } } } } }
+  0 at byte 1928, 73 bytes: { fst := 10, snd := { fst := [⟨0, #0(#0(70), #0(#1, []))⟩, ⟨1, #0(#0(130), #0(#1, []))⟩, ⟨2, #0(#0(100), #0(#1, []))⟩], snd := { fst := [{ fst := .none, snd := ⟨1, #0(4, 2, 5)⟩ }], snd := { fst := [], snd := { fst := 0, snd := { fst := 1500, snd := .true } } } } } }
 tail: the file ends after its last frame

@@ -1085,13 +1085,16 @@ Also:
 
 What every layer uses is in `Lanes/Data/`: `Enum`, codecs and `lanes_data`, schemas and values
 (`Lanes/Data/Schema.lean`), the body of a value (`Lanes/Data/Body.lean`), the queue and quorums.
-A codec carries its type's `Schema`, the names of its fields and constructors with their
-defaults and former names (`docs/decisions/D103-lanes-data-aliases.md`), and a map each way to
-`Value`; `lake exe lanes journal schema --type T` prints it. The body writes a `Value` as bytes
+A codec carries its type's `Schema`: a table of the named types it uses, each declared once
+with the names of its fields and constructors, their defaults and former names
+(`docs/decisions/D103-lanes-data-aliases.md`), and the type itself, in which every use of a named
+type is a reference by its name; and a map each way to `Value`. `lake exe lanes journal schema
+--type T` prints it. The body writes a `Value` as bytes
 with its schema, which holds every name, so the bytes hold none, and reads it back under
 `Codec.Limits` (`docs/decisions/D97-data-format.md`). Data written under an older schema is
 read by name (`Lanes/Data/Match.lean`): `Schema.Plan.of` matches the writer's schema with the
-reader's once, refusing what cannot be read with a `Codec.Error` that names it, and
+reader's once, each pair of named types once, refusing what cannot be read with a `Codec.Error`
+that names it, and
 `Body.decodeWith` reads each value through the plan. The journal and the snapshot use both, in
 format 2 of the files (Journal, snapshots and the disk model). `Schema.compare`
 (`Lanes/Data/Diff.lean`) says what changed between a pinned schema and the build's, by the same
@@ -1112,7 +1115,7 @@ Where: `Lanes/Data/`, `Lanes/Lib/`, `native/`, `oracles/`.
 | A codec reads back what it writes | The law is a field of `Codec` (`Lanes/Data/Codec.lean`), so every codec, those `lanes_data` derives among them, carries its proof | None | proved (by its type) |
 | A value read back from its schema's `Value` is itself | The law `ofValue (toValue a) = some a` is a field of `Schema.Of` (`Lanes/Data/Schema.lean`), so every codec's schema carries its proof; `Tests/Schema.lean` | None | proved (by its type) |
 | A body reads as a value exactly when the value writes as that body, so each value has one body and what is written reads back; a type's value decodes as itself | `Body.read_eq_ok_iff`, `Body.decode_encode`, `Body.encode_decode`, `Lanes/Data/BodySound.lean`; gate `Tests/Axioms/Data.lean` | Within `Codec.Limits`: the writer refuses what the reader would | proved |
-| Data written under an older schema reads by name: with the same schema a value reads back as itself; a field added with a default, anywhere, keeps every old field's value and takes its default; a renamed constructor reads through its former name; a type changed with a declared migration reads as the migrated value | `Body.decodeWith_encode_self`, `Schema.Plan.of_insertIdx`, `Schema.Plan.of_rename`, `Body.decodeWith_migrate`, `Lanes/Data/MatchSound.lean`; gate `Tests/Axioms/Data.lean` | Names unique within a record or a sum, and no former name that is another's current one | proved |
+| Data written under an older schema reads by name: with the same schema a value reads back as itself; a field added with a default, anywhere, keeps every old field's value and takes its default; a renamed constructor reads through its former name; a type changed with a declared migration reads as the migrated value | `Body.decodeWith_encode_self`, `Schema.Plan.of_insertIdx`, `Schema.Plan.of_rename`, `Body.decodeWith_migrate`, `Lanes/Data/MatchSound.lean`; gate `Tests/Axioms/Data.lean` | Names unique within a record or a sum, and no former name that is another's current one; for a field added and a constructor renamed, the record or the sum is the schema's root and its fields' types are one type in both schemas (`Schema.Plan.Alike`) | proved |
 
 Also:
 
@@ -1132,6 +1135,7 @@ Also:
 
 ### Limits
 
+- A recursive type has no codec. Its schema can be written (a named type may refer to itself, and the body, matching and the diff read such schemas, `Tests/Match.lean`), but a codec is a value, and neither `lanes_data` nor `Codec.struct%` and `Codec.sum%` can define one that refers to itself.
 - IPv6 zones (`fe80::1%eth0`) are refused, also in URLs, and a leap second (`23:59:60`) is not a time.
 
 ## Bound C

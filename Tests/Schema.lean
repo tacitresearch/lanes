@@ -74,6 +74,23 @@ structure Prod String Nat where
   snd : Nat
 "
 
+/-- A tree, which refers to itself: no codec derives one yet, and its schema is written so. -/
+def tree : Schema :=
+  ⟨[("Tree", .sum "Tree" [⟨"leaf", [], []⟩, ⟨"node", [], [⟨"left", [], .ref "Tree", none⟩,
+      ⟨"value", [], .nat, none⟩, ⟨"right", [], .ref "Tree", none⟩]⟩])], .ref "Tree"⟩
+
+def treeText : String := "Tree
+
+inductive Tree where
+  | leaf
+  | node (left : Tree) (value : Nat) (right : Tree)
+"
+
+/-- `node (node leaf 1 leaf) 2 leaf`. -/
+def treeValue : Value := .ctor 1 [.ctor 1 [.ctor 0 [], .nat 1, .ctor 0 []], .nat 2, .ctor 0 []]
+
+def pairOfPoints : Schema := (Codec.of (Point × Point)).schema
+
 def shapes : List (Shape String) :=
   [ .dot, .circle { x := 0 } 2, .path [⟨-3, 4, none⟩, {x := 5}] true, .tagged "t" [("a", 1), ("", 0)],
     .open ]
@@ -86,8 +103,8 @@ def tests : List (String × Bool) :=
       names and their defaults",
       (Codec.of (Shape String)).schema.text == shapeText),
     ("schema: a default is recorded as the value it is, and a field without one has none",
-      match (Codec.of Point).schema with
-      | .record "Tests.Schema.Point" [] [x, h, l] =>
+      match (Codec.of Point).schema.types.lookup "Tests.Schema.Point" with
+      | some (.record "Tests.Schema.Point" [x, h, l]) =>
         x.default == none && h.default == some (.int 0) && h.aliases == ["y"]
           && l.default == some (.ctor 1 [.string "here"])
       | _ => false),
@@ -110,9 +127,9 @@ def tests : List (String × Bool) :=
         && (Codec.of (Nat × String)).toValue (1, "a") == .ctor 0 [.nat 1, .string "a"]
         && (Codec.of (Nat ⊕ Unit)).toValue (.inr ()) == .ctor 1 [.ctor 0 []]
         && (Codec.of Int).toValue (-3) == .int (-3)
-        && (Codec.of (Fin 3)).schema == .nat
+        && (Codec.of (Fin 3)).schema == ⟨[], .nat⟩
         && (Codec.of (Option Nat)).schema.name == "Option Nat"
-        && (Codec.of (Std.ExtTreeMap String Nat)).schema == .map .string .nat
+        && (Codec.of (Std.ExtTreeMap String Nat)).schema == ⟨[], .map .string .nat⟩
         && (Codec.of (Std.ExtTreeMap String Nat)).toValue (.ofList [("b", 2), ("a", 1)])
           == .list [.ctor 0 [.string "a", .nat 1], .ctor 0 [.string "b", .nat 2]]),
     ("schema: Codec.struct% and Codec.sum% name what lanes_data names",
@@ -126,6 +143,20 @@ def tests : List (String × Bool) :=
           == ".tagged \"a b\" [{ fst := \"c\", snd := 2 }]"
         && c.schema.display (c.toValue (.circle ⟨-1, 2, none⟩ 3))
           == ".circle { x := -1, height := 2, label := .none } 3"
-        && c.schema.display (.nat 3) == "?") ]
+        && c.schema.display (.nat 3) == "?"),
+    ("schema: a named type is declared once, in the table, and each use refers to it by name",
+      pairOfPoints.types.map (·.1)
+          == ["Prod Tests.Schema.Point Tests.Schema.Point", "Tests.Schema.Point", "Option String"]
+        && pairOfPoints.root == .ref "Prod Tests.Schema.Point Tests.Schema.Point"
+        && pairOfPoints.type? == some "Prod"
+        && ((pairOfPoints.types.lookup pairOfPoints.name).map (·.refs))
+          == some ["Tests.Schema.Point", "Tests.Schema.Point"]
+        && (Codec.of (Std.ExtTreeMap String Point)).schema
+          == Schema.map (Codec.of String).schema (Codec.of Point).schema
+        && (Codec.of (Shape String)).schema.types.length == 5),
+    ("schema: a type that refers to itself is written, shown and read back as a value",
+      tree.text == treeText
+        && tree.display treeValue == ".node (.node .leaf 1 .leaf) 2 .leaf"
+        && Schema.ofValue? tree.toValue == some tree) ]
 
 end Tests.Schema

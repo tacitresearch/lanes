@@ -5,7 +5,7 @@ manifest (frame at byte 36)
   system "videos 4, admitted"
   toolchain 4.37.0-rc1 0b77e12952ad39077d80d8bd6b66d601f225c321
   runtime kernel, policy 1
-  schema frame SHA-256 9a61335d5eb530a6f2cd78ad7d77220007fcf3b80c2ddddefa3b9b12bf6f12e3
+  schema frame SHA-256 10180046cfaf529343b9be4f869677a1aeb6390b28822e1644860cd9855709ee
 schema (frame at byte 176)
   Lanes.Journal.Entry (Sum (Prod Nat Lanes.Http.Request) (Sum (Lanes.Schedule.Input Videos.Key Unit Videos.Answer) Videos.Input))
 
@@ -51,6 +51,12 @@ schema (frame at byte 176)
     | cancel (key : Videos.Key)
     | reply (key : Videos.Key) (attempt : Nat) (reply : Lanes.Rpc.Reply Videos.Answer)
 
+  structure Lanes.Schedule.Spec Videos.Key Unit where
+    key : Videos.Key
+    payload : Unit
+    work : Lanes.Schedule.Work
+    at_ms : Nat
+
   inductive Videos.Key where
     | check (video : Nat) (req : Nat)
     | expire (video : Nat)
@@ -60,19 +66,6 @@ schema (frame at byte 176)
   structure Videos.Round where
     video : Nat
     n : Nat
-
-  inductive Videos.Answer where
-    | found (size : Nat)
-    | missing
-    | deleted
-    | accepted
-    | failed
-
-  structure Lanes.Schedule.Spec Videos.Key Unit where
-    key : Videos.Key
-    payload : Unit
-    work : Lanes.Schedule.Work
-    at_ms : Nat
 
   inductive Lanes.Schedule.Work where
     | call (retry : Lanes.Schedule.Retry)
@@ -94,6 +87,13 @@ schema (frame at byte 176)
   inductive Lanes.Rpc.Reply Videos.Answer where
     | answer (a : Videos.Answer)
     | unknown
+
+  inductive Videos.Answer where
+    | found (size : Nat)
+    | missing
+    | deleted
+    | accepted
+    | failed
 
   inductive Videos.Input where
     | request (c : Videos.Command) (at_s : Nat)
@@ -156,10 +156,39 @@ schema (frame at byte 176)
   inductive Option Videos.Answer where
     | none
     | some (val : Videos.Answer)
-records: 5
-  0 at byte 47757, 3 bytes: .snapshot 252
-  1 at byte 47780, 3 bytes: .advance 551
-  2 at byte 47803, 275 bytes: .input (.inl { fst := 181, snd := { method := .post, path := ["v", "2", "like"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:45859" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795845765" }, { fst := "videos-verified-session", snd := "1.1" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 50, 97, 48, 50, 99, 48, 53, 99, 57, 57, 55, 54, 52, 51, 55, 100, 54, 49, 57, 57, 51, 50, 101, 48, 48, 100, 56, 52, 48, 49, 55, 49, 98, 48, 53, 99, 53, 57, 51, 99, 48, 52, 100, 51, 56, 49, 55, 54, 97, 48, 100, 97, 50, 97, 102, 48, 101, 49, 57, 97, 51, 57, 57, 97] } })
-  3 at byte 48098, 2 bytes: .batch 64
-  4 at byte 48120, 1 bytes: .handed
+records: 34
+  0 at byte 5741, 2 bytes: .snapshot 124
+  1 at byte 5763, 3 bytes: .advance 356
+  2 at byte 5786, 287 bytes: .input (.inl { fst := 108, snd := { method := .post, path := ["v", "0", "comments", "0", "delete"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:34527" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795848815" }, { fst := "videos-verified-session", snd := "2.2" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 99, 50, 55, 56, 102, 100, 49, 56, 57, 48, 56, 49, 56, 51, 51, 99, 54, 55, 97, 100, 52, 56, 102, 100, 48, 53, 101, 102, 48, 49, 101, 98, 49, 52, 55, 97, 102, 52, 55, 54, 55, 56, 102, 57, 99, 101, 98, 54, 102, 49, 49, 48, 97, 57, 100, 102, 52, 55, 54, 52, 50, 101, 98, 100] } })
+  3 at byte 6093, 2 bytes: .batch 64
+  4 at byte 6115, 1 bytes: .handed
+  5 at byte 6136, 3 bytes: .advance 361
+  6 at byte 6159, 287 bytes: .input (.inl { fst := 110, snd := { method := .post, path := ["v", "0", "comments", "0", "delete"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:34527" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795848815" }, { fst := "videos-verified-session", snd := "1.1" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 50, 97, 48, 50, 99, 48, 53, 99, 57, 57, 55, 54, 52, 51, 55, 100, 54, 49, 57, 57, 51, 50, 101, 48, 48, 100, 56, 52, 48, 49, 55, 49, 98, 48, 53, 99, 53, 57, 51, 99, 48, 52, 100, 51, 56, 49, 55, 54, 97, 48, 100, 97, 50, 97, 102, 48, 101, 49, 57, 97, 51, 57, 57, 97] } })
+  7 at byte 6466, 2 bytes: .batch 64
+  8 at byte 6488, 1 bytes: .handed
+  9 at byte 6509, 3 bytes: .advance 365
+  10 at byte 6532, 287 bytes: .input (.inl { fst := 112, snd := { method := .post, path := ["v", "0", "comments", "1", "delete"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:34527" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795848815" }, { fst := "videos-verified-session", snd := "0.0" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 99, 50, 53, 56, 98, 51, 57, 98, 100, 98, 56, 55, 99, 97, 56, 97, 50, 48, 98, 49, 53, 53, 49, 101, 50, 51, 98, 55, 50, 50, 55, 57, 98, 53, 51, 55, 97, 55, 49, 49, 98, 52, 49, 97, 53, 48, 52, 52, 99, 100, 101, 52, 99, 53, 55, 101, 97, 99, 52, 56, 99, 56, 54, 97] } })
+  11 at byte 6839, 2 bytes: .batch 64
+  12 at byte 6861, 1 bytes: .handed
+  13 at byte 6882, 3 bytes: .advance 372
+  14 at byte 6905, 276 bytes: .input (.inl { fst := 115, snd := { method := .post, path := ["v", "0", "delete"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:34527" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795848815" }, { fst := "videos-verified-session", snd := "0.0" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 99, 50, 53, 56, 98, 51, 57, 98, 100, 98, 56, 55, 99, 97, 56, 97, 50, 48, 98, 49, 53, 53, 49, 101, 50, 51, 98, 55, 50, 50, 55, 57, 98, 53, 51, 55, 97, 55, 49, 49, 98, 52, 49, 97, 53, 48, 52, 52, 99, 100, 101, 52, 99, 53, 55, 101, 97, 99, 52, 56, 99, 56, 54, 97] } })
+  15 at byte 7201, 2 bytes: .batch 64
+  16 at byte 7223, 1 bytes: .handed
+  17 at byte 7244, 3 bytes: .advance 378
+  18 at byte 7267, 9 bytes: .input (.inr (.inl (.reply (.delete 0) 1 (.answer .failed))))
+  19 at byte 7296, 2 bytes: .batch 64
+  20 at byte 7318, 3 bytes: .advance 429
+  21 at byte 7341, 2 bytes: .batch 64
+  22 at byte 7363, 1 bytes: .handed
+  23 at byte 7384, 3 bytes: .advance 435
+  24 at byte 7407, 9 bytes: .input (.inr (.inl (.reply (.delete 0) 2 (.answer .deleted))))
+  25 at byte 7436, 2 bytes: .batch 64
+  26 at byte 7458, 3 bytes: .advance 483
+  27 at byte 7481, 274 bytes: .input (.inl { fst := 119, snd := { method := .post, path := ["sign-out"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:34527" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795848815" }, { fst := "videos-verified-session", snd := "1.1" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 50, 97, 48, 50, 99, 48, 53, 99, 57, 57, 55, 54, 52, 51, 55, 100, 54, 49, 57, 57, 51, 50, 101, 48, 48, 100, 56, 52, 48, 49, 55, 49, 98, 48, 53, 99, 53, 57, 51, 99, 48, 52, 100, 51, 56, 49, 55, 54, 97, 48, 100, 97, 50, 97, 102, 48, 101, 49, 57, 97, 51, 57, 57, 97] } })
+  28 at byte 7775, 2 bytes: .batch 64
+  29 at byte 7797, 1 bytes: .handed
+  30 at byte 7818, 3 bytes: .advance 486
+  31 at byte 7841, 274 bytes: .input (.inl { fst := 120, snd := { method := .post, path := ["v", "2", "like"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:34527" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795848815" }, { fst := "videos-verified-session", snd := "1.1" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 50, 97, 48, 50, 99, 48, 53, 99, 57, 57, 55, 54, 52, 51, 55, 100, 54, 49, 57, 57, 51, 50, 101, 48, 48, 100, 56, 52, 48, 49, 55, 49, 98, 48, 53, 99, 53, 57, 51, 99, 48, 52, 100, 51, 56, 49, 55, 54, 97, 48, 100, 97, 50, 97, 102, 48, 101, 49, 57, 97, 51, 57, 57, 97] } })
+  32 at byte 8135, 2 bytes: .batch 64
+  33 at byte 8157, 1 bytes: .handed
 tail: the file ends after its last frame

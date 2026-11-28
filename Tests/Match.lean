@@ -3,6 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
+import Tests.Schema
 
 /-! Matching by name (`Lanes/Data/Match.lean`): values written with one version of a type read
 as values of the next, by each rule of the data-format decision (section 3.2), and each refusal,
@@ -121,6 +122,12 @@ def refusal (α β : Type) [Codable α] [Codable β] : Option Codec.Error :=
   | .ok _ => none
   | .error e => some e
 
+/-- The refusal of the plan from `w` to `r`, or `none`. -/
+def refusal' (w r : Schema) : Option Codec.Error :=
+  match Schema.Plan.of [] w r with
+  | .ok _ => none
+  | .error e => some e
+
 /-- `a`, written as an `α`, read as a `β`. -/
 def readAs {α : Type} (β : Type) [Codable α] [Codable β] (a : α)
     (ms : List Schema.Migration := []) : Except Codec.Error β :=
@@ -143,8 +150,12 @@ def err (path : List Codec.Error.Step) (problem : Codec.Error.Problem) : Codec.E
   { offset := 0, path, problem }
 
 def isSame : Except Codec.Error Schema.Plan → Bool
-  | .ok .same => true
+  | .ok ⟨[], .same⟩ => true
   | _ => false
+
+/-- The plan of a record `T` read as itself, field by field. -/
+def record (fields : List (Schema.Plan.Field Schema.Plan.Ty)) : Schema.Plan :=
+  ⟨[(("T", "T"), .record "T" fields)], .ref "T" "T"⟩
 
 def v1Shapes : List V1.Shape :=
   [.dot, .circle ⟨1, -2, "red"⟩ 3, .line [⟨0, 5, ""⟩, ⟨-7, 8, "blue"⟩] true, .line [] false]
@@ -154,6 +165,28 @@ def v2Shapes : List V2.Shape :=
     .path [] false]
 
 def point : Schema := (Codec.of V2.Point).schema
+
+/-- A tree whose nodes gain a label with a default. -/
+def labelled : Schema :=
+  ⟨[("Tree", .sum "Tree" [⟨"leaf", [], []⟩, ⟨"node", [], [⟨"left", [], .ref "Tree", none⟩,
+      ⟨"value", [], .nat, none⟩, ⟨"label", [], .string, some (.string "")⟩,
+      ⟨"right", [], .ref "Tree", none⟩]⟩])], .ref "Tree"⟩
+
+/-- A rose tree and its forest, each referring to the other; `v2` adds a field to the tree. -/
+def rose (v2 : Bool) : Schema :=
+  ⟨[("Rose", .record "Rose" ([⟨"value", [], .nat, none⟩, ⟨"children", [], .ref "Forest", none⟩]
+      ++ if v2 then [⟨"weight", [], .int, some (.int 1)⟩] else [])),
+    ("Forest", .sum "Forest" [⟨"nil", [], []⟩, ⟨"cons", [], [⟨"head", [], .ref "Rose", none⟩,
+      ⟨"tail", [], .ref "Forest", none⟩]⟩])], .ref "Rose"⟩
+
+/-- `{ value := 1, children := [{ value := 2, children := [] }] }`. -/
+def roseValue : Value := .ctor 0 [.nat 1, .ctor 1 [.ctor 0 [.nat 2, .ctor 0 []], .ctor 0 []]]
+
+def pairsOf (w r : Schema) : Option (List (String × String)) :=
+  (Schema.Plan.of [] w r).toOption.map (·.pairs.map (·.1))
+
+def applied (w r : Schema) (v : Value) : Option Value :=
+  (Schema.Plan.of [] w r).toOption.bind fun p => (p.apply v).toOption
 
 def tests : List (String × Bool) :=
   [ ("match: the same schema needs no plan, and reads every value as itself",
@@ -193,7 +226,7 @@ def tests : List (String × Bool) :=
       refusal V1.Point Changed
           == some (err [.type "Tests.Match.Changed", .field "x"] (.changed "Int" "String"))
         && refusal Nat String == some (err [] (.changed "Nat" "String"))
-        && (Schema.Plan.of [] (.dependent .nat) (.dependent .int)).toOption.isNone),
+        && (Schema.Plan.of [] ⟨[], .dependent .nat⟩ ⟨[], .dependent .int⟩).toOption.isNone),
     ("match: a type with a declared migration is read through it",
       isOk (readAs Migrated (V1.Point.mk (-3) 4 "red") migrations) { x := "-3", y := 4 }
         && isOk (readAs MigratedShape (V1.Shape.circle ⟨1, 2, ""⟩ 5) migrations)
@@ -206,10 +239,36 @@ def tests : List (String × Bool) :=
         && refusal V1.Shape TwiceShape
           == some (err [.type "Tests.Match.TwiceShape", .ctor "spot"] (.ambiguous "dot"))),
     ("match: a value that does not fit the writer's schema is refused",
-      isError ((Schema.Plan.record "T" [.take "x" 0 .same]).apply (.nat 1))
-          (err [] .misfit)
-        && isError ((Schema.Plan.record "T" [.take "x" 1 .same]).apply (.ctor 0 [.nat 1]))
+      isError ((record [.take "x" 0 .same]).apply (.nat 1)) (err [] .misfit)
+        && isError ((record [.take "x" 1 .same]).apply (.ctor 0 [.nat 1]))
           (err [.type "T"] .misfit)),
+    ("match: each pair of named types is matched once, and one type in both needs no plan",
+      pairsOf (Codec.of V1.Shape).schema (Codec.of V2.Shape).schema
+          == some [("Tests.Match.V1.Shape", "Tests.Match.V2.Shape"),
+            ("Tests.Match.V1.Point", "Tests.Match.V2.Point")]
+        && pairsOf (Codec.of (V1.Point × V1.Point)).schema (Codec.of (V2.Point × V2.Point)).schema
+          == some [("Prod Tests.Match.V1.Point Tests.Match.V1.Point",
+              "Prod Tests.Match.V2.Point Tests.Match.V2.Point"),
+            ("Tests.Match.V1.Point", "Tests.Match.V2.Point")]
+        && pairsOf (Codec.of (V1.Point × Bool)).schema (Codec.of (V2.Point × Bool)).schema
+          == some [("Prod Tests.Match.V1.Point Bool", "Prod Tests.Match.V2.Point Bool"),
+            ("Tests.Match.V1.Point", "Tests.Match.V2.Point")]),
+    ("match: a type that refers to itself is matched once and read at every depth",
+      applied Tests.Schema.tree labelled Tests.Schema.treeValue
+          == some (.ctor 1 [.ctor 1 [.ctor 0 [], .nat 1, .string "", .ctor 0 []], .nat 2,
+            .string "", .ctor 0 []])
+        && pairsOf Tests.Schema.tree labelled == some [("Tree", "Tree")]
+        && isSame (Schema.Plan.of [] Tests.Schema.tree Tests.Schema.tree)),
+    ("match: types that refer to each other are matched once each",
+      applied (rose false) (rose true) roseValue
+          == some (.ctor 0 [.nat 1, .ctor 1 [.ctor 0 [.nat 2, .ctor 0 [], .int 1], .ctor 0 []],
+            .int 1])
+        && pairsOf (rose false) (rose true) == some [("Rose", "Rose"), ("Forest", "Forest")]
+        && refusal' (rose true) (rose false) == none
+        && (refusal' (rose false) ⟨(rose false).types, .ref "Forest"⟩).isSome),
+    ("match: a type the schema does not declare is refused, named",
+      refusal' ⟨[], .ref "Gone"⟩ ⟨[], .ref "Gone"⟩ == none
+        && refusal' ⟨[], .ref "Gone"⟩ ⟨[], .ref "Here"⟩ == some (err [] (.undeclared "Gone"))),
     ("match: a refusal found by matching names no byte",
       (refusal V1.Point Plain).map toString
           == some "Tests.Match.Plain.z: a field the data does not have, with no default"

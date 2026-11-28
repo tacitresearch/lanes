@@ -52,35 +52,41 @@ end
 
 namespace Schema
 
-mutual
+section
 
-/-- A value read with its schema, as JSON; `null` where it does not fit. -/
-def json : Schema → Value → Json
-  | .nat, .nat n => .num n
-  | .int, .int i => .num i
-  | .string, .string s => .str s
-  | .bytes, .bytes b => .str (Bytes.hex b)
-  | .unit, .ctor 0 [] => .null
-  | .list item, .list vs => .arr (vs.map item.json).toArray
-  | .map key value, .list vs => .arr (vs.map fun
-      | .ctor 0 [k, v] => .arr #[key.json k, value.json v]
+variable (types : List (String × Decl))
+
+/-- A value read with its type, as JSON, nested at most `fuel` more; `null` where it does not
+fit. -/
+def jsonAt : Nat → Ty → Value → Json
+  | _, .nat, .nat n => .num n
+  | _, .int, .int i => .num i
+  | _, .string, .string s => .str s
+  | _, .bytes, .bytes b => .str (Bytes.hex b)
+  | _, .unit, .ctor 0 [] => .null
+  | 0, _, _ => .null
+  | d + 1, .list item, .list vs => .arr (vs.map (jsonAt d item)).toArray
+  | d + 1, .map key value, .list vs => .arr (vs.map fun
+      | .ctor 0 [k, v] => .arr #[jsonAt d key k, jsonAt d value v]
       | _ => .null).toArray
-  | .record _ _ fields, .ctor 0 vs => .obj (jsonFields fields vs).toArray
-  | .sum _ _ ctors, .ctor k vs => jsonCtor ctors k vs
-  | .dependent index, .ctor 0 [i, v] => .arr #[index.json i, v.json]
-  | _, _ => .null
-
-def jsonFields : List (Field Schema) → List Value → List (String × Json)
-  | ⟨name, _, s, _⟩ :: fs, v :: vs => (name, s.json v) :: jsonFields fs vs
-  | _, _ => []
-
-def jsonCtor : List (Ctor Schema) → Nat → List Value → Json
-  | ⟨name, _, []⟩ :: _, 0, _ => .str name
-  | ⟨name, _, fields⟩ :: _, 0, vs => .obj #[(name, .obj (jsonFields fields vs).toArray)]
-  | _ :: cs, k + 1, vs => jsonCtor cs k vs
-  | [], _, _ => .null
+  | d + 1, .dependent index, .ctor 0 [i, v] => .arr #[jsonAt d index i, v.json]
+  | d + 1, .ref name, .ctor k vs =>
+    let fieldsJson := fun (fields : List (Field Ty)) =>
+      ((fields.zip vs).map fun (f, v) => (f.name, jsonAt d f.schema v)).toArray
+    match types.lookup name with
+    | some (.record _ fields) => if k = 0 then .obj (fieldsJson fields) else .null
+    | some (.sum _ ctors) =>
+      match ctors[k]? with
+      | some ⟨name, _, []⟩ => .str name
+      | some ⟨name, _, fields⟩ => .obj #[(name, .obj (fieldsJson fields))]
+      | none => .null
+    | none => .null
+  | _, _, _ => .null
 
 end
+
+/-- A value read with its schema, as JSON; `null` where it does not fit. -/
+def json (s : Schema) (v : Value) : Json := jsonAt s.types displayDepth s.root v
 
 end Schema
 

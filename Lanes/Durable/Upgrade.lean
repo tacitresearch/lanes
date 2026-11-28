@@ -181,8 +181,9 @@ that started at boot, and its journal has at least its prelude. -/
 
 theorem Entry.fits_handed (input : Codec σ.In) : Entry.fits input .handed = true := by
   simp [Entry.fits, Entry.write, Body.encode, Entry.schema, Schema.Of.map, Schema.Of.variants,
-    Schema.Ctors.cons, Schema.Fields.nil, Body.write, Body.writeAt, Body.writeNum, Body.writeFields, Body.natBytes,
-    Body.writeNat, Frame.fits, Kind.limits, Body.within]
+    Schema.Ctors.cons, Schema.Fields.cons, Schema.Fields.nil, Body.write, Body.writeAt,
+    Body.writeNum, Body.writeFields, Body.natBytes, Body.writeNat, Frame.fits, Kind.limits,
+    Body.within]
 
 namespace Disk
 

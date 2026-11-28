@@ -284,7 +284,7 @@ def extTreeMap {κ : Type} (key : Codec κ) (value : Codec α)
     Codec (Std.ExtTreeMap κ α cmp) :=
   let c := (list (pair key value)).map (·.toList) (fun entries => some (.ofList entries cmp))
     (fun t => congrArg some (extTreeMap_ofList_toList t))
-  { c with schema := .map key.schema value.schema }
+  { c with schema := Schema.map key.schema value.schema }
 
 end Codec
 
@@ -396,7 +396,7 @@ meta def fieldsTerm (fields : Array FieldSpec) : MacroM (TSyntax `term) := do
     `(Lanes.Schema.Fields.cons $(nameLit name) [$aliases,*] (Lanes.Codec.toOf $codec) $default
         $acc)
 
-/-- The codec of structure `T`, whose type parameters have the schemas `args`. -/
+/-- The codec of structure `T`, whose type parameters have the types `args`. -/
 meta def structTerm (T : Ident) (args : Array (TSyntax `term)) (fields : Array FieldSpec) :
     MacroM (TSyntax `term) := do
   let names := fields.map (·.1)
@@ -434,7 +434,7 @@ meta def sumBytes (T : Ident) (ctors : Array CtorSpec) : MacroM (TSyntax `term) 
   `(Lanes.Codec.map $sum (fun x => $casesOn:ident (motive := fun _ => _) x $cases*) $back
       (by intro x; cases x <;> rfl))
 
-/-- The codec of inductive type `T`, whose type parameters have the schemas `args`. -/
+/-- The codec of inductive type `T`, whose type parameters have the types `args`. -/
 meta def sumTerm (T : Ident) (args : Array (TSyntax `term)) (ctors : Array CtorSpec) :
     MacroM (TSyntax `term) := do
   if ctors.isEmpty then Macro.throwError "Codec.sum% needs at least one constructor"
