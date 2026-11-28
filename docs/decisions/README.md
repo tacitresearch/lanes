@@ -70,7 +70,7 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D43. One gate: `serve` runs the gate joined in front](D43-one-gate.md)
 - [D80. Every parser has an oracle and every model a recorded run, in one place, and lint keeps the list](D80-oracles.md)
 - [D83. PostgreSQL over TLS, with channel binding, and a pool of connections](D83-postgres-over-tls.md)
-- [D68. PostgreSQL is spoken in Lean, and a transactional store is a model](D68-postgres-protocol-in-lean.md)
+- [D68. PostgreSQL is spoken in Lean, and a transactional store is a model](D68-postgres-protocol-in-lean.md): partly superseded by D111-typed-store.md (the store model: typed tables, keys and scans replace the key-value model for new code)
 - [D98. A small proof surface, and each property written once](D98-proof-surface.md)
 - [D14. Proofs of system invariants go through per-event lemmas](D14-proofs-of-system-invariants-go-through.md)
 - [D108. Reads from the state](D108-reads-from-state.md): partly superseded by D110-volatile-actors.md (its reasons: a read no longer skips a journal's sync, and waves are gone)
