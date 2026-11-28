@@ -1,4 +1,6 @@
-# D?. Layered packages in one repository, one version, prebuilt builds (proposal)
+# D99. Layered packages in one repository, one version, prebuilt builds (proposal)
+
+Status: Accepted
 
 This is the proposal of issue #101, item E of the design direction (#93). It is a proposal for
 the owner to accept or edit, part by part. No file moves in this change. It adds
