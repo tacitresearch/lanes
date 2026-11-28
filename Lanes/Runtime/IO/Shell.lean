@@ -38,7 +38,7 @@ here perform the model's transitions (`TRUSTED.md`, which says how each is atomi
 - The inbox is bounded: at most `inboxCapacity` inputs wait for their actor (`Sched.Ledger`),
   and `input` waits for room while `tryInput` refuses (rule 3.8). Neither takes an input while
   `mailHighWater` messages between actors wait; past `mailCapacity`, `onOverflow` ends the process
-  (`docs/decisions/new-runtime-limits.md`).
+  (`docs/decisions/D123-runtime-limits.md`).
 - Each step is told the moment (D101): the time, the wall clock read at the start plus the
   monotonic time since, and a seed from its worker's generator, seeded from the operating
   system. The record has the moment as a tick before the step, so a replay gives each step what
