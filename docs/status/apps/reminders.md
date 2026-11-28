@@ -1,4 +1,20 @@
-| Reminders (`examples/reminders/Reminders/App.lean`) | Reminders over HTTP, each a job of the scheduler that posts its text to a notification service at its time and retries until it is taken, gives up or is cancelled; a periodic sweep, scheduled at every start and held as one job; on a journal | The reminders and the jobs within their bounds in every run (`Reminders.bounded`, `Reminders.jobs_bounded`), and every reminder's delivery ends in a fair run in which the scheduler does not crash (`Reminders.delivery_ends`), and is answered to the reminders, sent, given up on or cancelled, when they do not crash either and the link to them loses nothing (`Reminders.delivery_answered`); model-checked beside a service that answers `200`, `503` or `unknown`, late or never; over HTTP, a reminder refused twice is sent on its third attempt under one key, and a restart on the journal keeps what was sent and what waits |
+### Reminders
 
-- No form token: anyone who can reach the server can schedule and cancel.
+Where: `examples/reminders/Reminders/App.lean`.
+
+Reminders over HTTP, each a job of the scheduler that posts its text to a notification service at its time and retries until it is taken, gives up or is cancelled; a periodic sweep, scheduled at every start and held as one job; on a journal.
+
+Checked:
+
+- Model-checked beside a service that answers `200`, `503` or `unknown`, late or never.
+- Over HTTP, a reminder refused twice is sent on its third attempt under one key, and a restart on the journal keeps what was sent and what waits.
+
+Proved:
+
+- Every reminder's delivery ends in a fair run in which the scheduler does not crash (`Reminders.delivery_ends`), and is answered to the reminders, sent, given up on or cancelled, when they do not crash either and the link to them loses nothing (`Reminders.delivery_answered`).
+- The reminders and the jobs within their bounds in every run (`Reminders.bounded`, `Reminders.jobs_bounded`).
+
+Known limits:
+
 - After a start the sweep runs at once, and a reminder due while the process was down is late.
+- No form token: anyone who can reach the server can schedule and cancel.
