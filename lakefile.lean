@@ -9,6 +9,15 @@ package lanes where
   keywords := #["software-verification", "actors", "model-checking", "distributed-systems", "web"]
   license := "Apache-2.0"
   testDriver := "lanesTest"
+  -- Lake's local artifact cache (D99, section 6): each output is stored once per toolchain, by
+  -- its content, and shared by every checkout and application on the machine (AGENTS.md, "Build
+  -- and checks"). A dependency that sets neither option takes the workspace root's.
+  enableArtifactCache := true
+  -- The outputs are also hard-linked into `.lake/build`, where `lake exe`, `lanesInventory`,
+  -- `docs/api`, CI's caches and the scripts read them.
+  restoreAllArtifacts := true
+  -- No remote cache yet (#98). It goes here: `downloadCacheService := "<name>"`, with a
+  -- `cache_service <name> := …` declared below the package.
 
 require cslib from git "https://github.com/leanprover/cslib" @ "910210f7d155e22a2244591e394bd16fbb0ddbb3"
 
@@ -43,9 +52,28 @@ lean_lib Lanes where
   roots := #[`Lanes, `Lanes.Proofs, `Lanes.Semantics, `Lanes.Testing]
   moreLinkObjs := #[native, tls, verify, sign]
 
+/-! Files that modules embed with `include_str`, which Lake does not track. A library that `needs`
+them mixes their hashes into each of its modules' traces, so that neither `.lake/build` nor the
+artifact cache serves a module built from older copies. A new `include_str` adds its file here. -/
+
+/-- The template of `lanes new`, embedded by `LanesCli.New` and `Tests.New`. -/
+input_dir templates where
+  text := true
+
+/-- The `lean-toolchain` that `LanesCli.New` copies into a new app. -/
+input_file leanToolchain where
+  path := "lean-toolchain"
+  text := true
+
+/-- The test keys `Tests.Sign` embeds. -/
+input_dir botocoreKeys where
+  path := "oracles/botocore/keys"
+  text := true
+
 @[default_target]
 lean_lib Tests where
   globs := #[.submodules `Tests]
+  needs := #[`@/templates, `@/botocoreKeys]
 
 @[default_target]
 lean_exe lanesTest where
@@ -74,6 +102,7 @@ lean_exe lanesServiceOracle where
 
 lean_lib LanesCli where
   globs := #[.submodules `LanesCli]
+  needs := #[`@/templates, `@/leanToolchain]
 
 /-- The `lanes` command. -/
 @[default_target]

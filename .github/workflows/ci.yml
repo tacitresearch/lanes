@@ -84,6 +84,10 @@ jobs:
         uses: ./.github/actions/lean
       - name: Build
         run: lake build --wfail
+      # The Actions caches of `.lake/build` stay what jobs start from. Lake's artifact cache is
+      # the job's own and starts empty (.github/actions/lean), so that `--wfail` sees every
+      # warning. A remote cache (D99, section 6; #98) would be filled here, with `lake build -o`
+      # and `lake cache put`. There is none yet.
       - name: native/tls.c declares OpenSSL as its headers do
         run: python3 scripts/tls-declarations.py
       - if: steps.lean.outputs.packages-hit != 'true'

@@ -101,7 +101,9 @@ On the machine (`infra/ec2-runner.sh`):
   runner's last job; a work directory with no build yet starts from the warm one. When a change
   bumps a dependency, the first job with the new key fetches and builds the new packages under
   the lock while the others wait, and later jobs use them. `sudo /opt/lanes/ec2-runner.sh warm`
-  refreshes the warm build from `main`.
+  refreshes the warm build from `main`. The runners do not share Lake's artifact cache: each job
+  starts an empty one in its work directory (`.github/actions/lean`), because Lake does not
+  replay the warnings of a module it takes from the cache, and `--wfail` must see them.
 - **Registration across stops.** The token of step 1 is kept in Secrets Manager. At every boot
   `lanes-register.service` asks GitHub which runners it knows and registers again any it has
   removed (GitHub removes runners offline for 14 days), with a registration token it makes from

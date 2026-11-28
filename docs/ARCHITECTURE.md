@@ -49,7 +49,7 @@ proved function tells it to.
 | Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
-| Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, the body of a value read back as written and written one way (`Body.read_eq_ok_iff`), `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
+| Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, the body of a value read back as written and written one way (`Body.read_eq_ok_iff`), old data read by name, with defaults and former names (`Schema.Plan.of_insertIdx`, `Schema.Plan.of_rename`), `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
 | Sign-in with OAuth 2.0 and OpenID Connect | `Lanes/Web/Auth/{Jose,IdToken,OAuth}.lean`, `Lanes/Web/IO/SignIn.lean` | `OAuth.check_ok`, `OAuth.Used.accepted_once`, `OAuth.Used.length_claim`, `OAuth.IdToken.verify_accepted`, `Jose.verify_ok`, `OAuth.Keys.no_fetch_within`; the edge is trusted, tested end to end against a provider run in the test |
 | Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Native.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean`; `native/sign.c`, `Lanes/Lib/Crypto/Sign.lean` | trusted; tested against the Lean references and published vectors |
 | TLS client | `native/tls.c`, `Lanes/Web/IO/Tls.lean` | trusted; tested against `openssl s_server` |
@@ -973,7 +973,10 @@ A codec carries its type's `Schema`, the names of its fields and constructors wi
 defaults and former names (`docs/decisions/D103-lanes-data-aliases.md`), and a map each way to
 `Value`; `lake exe lanes journal schema --type T` prints it. The body writes a `Value` as bytes
 with its schema, which holds every name, so the bytes hold none, and reads it back under
-`Codec.Limits` (`docs/decisions/D97-data-format.md`); the journal does not use it yet. The
+`Codec.Limits` (`docs/decisions/D97-data-format.md`). Data written under an older schema is
+read by name (`Lanes/Data/Match.lean`): `Schema.Plan.of` matches the writer's schema with the
+reader's once, refusing what cannot be read with a `Codec.Error` that names it, and
+`Body.decodeWith` reads each value through the plan. The journal does not use either yet. The
 standard library is in `Lanes/Lib/`: encodings, addresses and URLs, time, media types,
 metrics, rate limits, the PostgreSQL protocol (below) and cryptography, with the C it binds
 (Bound C). All of it is total and `Std`-only. A parser or encoder is proved against its
@@ -990,6 +993,7 @@ Where: `Lanes/Data/`, `Lanes/Lib/`, `native/`, `oracles/`.
 | A codec reads back what it writes | The law is a field of `Codec` (`Lanes/Data/Codec.lean`), so every codec, those `lanes_data` derives among them, carries its proof | None | proved (by its type) |
 | A value read back from its schema's `Value` is itself | The law `ofValue (toValue a) = some a` is a field of `Schema.Of` (`Lanes/Data/Schema.lean`), so every codec's schema carries its proof; `Tests/Schema.lean` | None | proved (by its type) |
 | A body reads as a value exactly when the value writes as that body, so each value has one body and what is written reads back; a type's value decodes as itself | `Body.read_eq_ok_iff`, `Body.decode_encode`, `Body.encode_decode`, `Lanes/Data/BodySound.lean`; gate `Tests/Axioms/Data.lean` | Within `Codec.Limits`: the writer refuses what the reader would | proved |
+| Data written under an older schema reads by name: with the same schema a value reads back as itself; a field added with a default, anywhere, keeps every old field's value and takes its default; a renamed constructor reads through its former name; a type changed with a declared migration reads as the migrated value | `Body.decodeWith_encode_self`, `Schema.Plan.of_insertIdx`, `Schema.Plan.of_rename`, `Body.decodeWith_migrate`, `Lanes/Data/MatchSound.lean`; gate `Tests/Axioms/Data.lean` | Names unique within a record or a sum, and no former name that is another's current one | proved |
 
 Also:
 

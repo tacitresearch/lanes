@@ -257,7 +257,9 @@ memory.
 - **The local artifact cache.** With `enableArtifactCache`, outputs are stored once per
   toolchain in Lake's cache directory (`LAKE_CACHE_DIR`), and shared by every checkout on the
   machine. `restoreAllArtifacts` copies them back into `.lake/build` for tools that read them
-  there. `LAKE_NO_CACHE=1` turns all of this off, and the build is from source.
+  there. `LAKE_NO_CACHE=1` (`--no-cache`) stops downloads only (`getTryCache`, used in
+  `Lake/Build/Package.lean`): what the local cache holds is still used. `LAKE_CACHE_DIR=`, set
+  and empty, gives a checkout an empty cache of its own in `.lake/cache`.
 - **CI artifacts and caches.** The Actions cache (which `.github/actions/lean/action.yml`
   already uses for `.lake/packages` and `.lake/build`) and workflow artifacts serve CI's own
   jobs. Downloading an artifact takes a GitHub token, so an application's build cannot use them.
@@ -274,11 +276,11 @@ In `/tmp/pkgexp`, with a local HTTP server standing in for the service:
 | 12 | The application at a later commit whose outputs were not uploaded | Lake found the previous commit's mappings, built what had changed, warned of nothing, and `--wfail` passed |
 | 13 | `LAKE_NO_CACHE=1` | Built from source; nothing was requested |
 | 14 | A second application on the same machine, at a commit never uploaded, with the same Lake cache directory | `Reused Core`, with no network |
+| 15 | Step 1 in this repository (`enableArtifactCache`, `restoreAllArtifacts`): a new worktree at a commit another worktree built | Nothing built, the C objects of `lakefile.lean` included: 5 s against 8 min 38 s from source, and its `.lake/build` is hard links, with 13 MiB of its own |
 
-Not checked: the C targets of `lakefile.lean` (`buildO` and `moreLinkObjs`) with the artifact
-cache, which may simply rebuild (seconds); a real S3 or R2 bucket (Lake signs for the region
-`auto`, `Lake/Config/Cache.lean`, line 639, which R2 accepts; whether AWS S3 accepts it is not
-checked); macOS; a `cache_service` written in a Lean `lakefile`.
+Not checked: a real S3 or R2 bucket (Lake signs for the region `auto`, `Lake/Config/Cache.lean`,
+line 639, which R2 accepts; whether AWS S3 accepts it is not checked); macOS; a `cache_service`
+written in a Lean `lakefile`.
 
 ### What works before the first tag
 
@@ -304,8 +306,9 @@ every commit CI uploads (experiment 11):
    reach the bucket, without `preferReleaseBuild`.
 
 Trust: an application that fetches outputs trusts CI's build of Lanes' proofs. To check them,
-`LAKE_NO_CACHE=1 lake build` builds from source, and `lake check` (in this toolchain) replays
-the exported declarations through the kernel in a sandbox. `docs/RELEASING.md` should say both.
+`LAKE_CACHE_DIR= LAKE_NO_CACHE=1 lake build`, with no `.lake/build`, builds from source, and
+`lake check` (in this toolchain) replays the exported declarations through the kernel in a
+sandbox. `docs/RELEASING.md` should say both.
 
 ## 7. The moves of #83, folded in
 

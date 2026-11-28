@@ -229,4 +229,32 @@ theorem getElem?_append_of_map {l m : List α} {g : α → β} {n : Nat} {b : β
     | some _ => exact (List.getElem?_eq_some_iff.mp hn).1
   exact List.getElem?_append_left this
 
+theorem map_insertIdx (f : α → β) (x : α) :
+    ∀ (i : Nat) (l : List α), (l.insertIdx i x).map f = (l.map f).insertIdx i (f x)
+  | 0, l => by simp [List.insertIdx_zero]
+  | _ + 1, [] => rfl
+  | i + 1, y :: l => by simp [List.insertIdx_succ_cons, map_insertIdx f x i l]
+
+theorem filterMap_insertIdx {f : α → Option β} {x : α} (hx : f x = none) :
+    ∀ (i : Nat) (l : List α), (l.insertIdx i x).filterMap f = l.filterMap f
+  | 0, l => by simp [List.insertIdx_zero, hx]
+  | _ + 1, [] => rfl
+  | i + 1, y :: l => by
+    simp only [List.insertIdx_succ_cons, List.filterMap_cons, filterMap_insertIdx hx i l]
+
+theorem idxOf?_getElem [BEq α] [LawfulBEq α] {l : List α} (h : l.Nodup) {i : Nat}
+    (hi : i < l.length) : l.idxOf? l[i] = some i :=
+  List.idxOf?_eq_some_iff.mpr ⟨hi, rfl, fun j hj e => by
+    have := (h.getElem_inj (hi := by omega) (hj := hi)).mp e
+    omega⟩
+
+theorem filterMap_eq_range {f : α → Option Nat} {l : List α}
+    (h : ∀ j (hj : j < l.length), f l[j] = some j) : l.filterMap f = List.range l.length := by
+  have hm : l.map f = (List.range l.length).map some := by
+    apply List.ext_getElem (by simp)
+    intro j h1 _
+    simp only [List.getElem_map, List.getElem_range]
+    exact h j (by simpa using h1)
+  simpa [List.filterMap_map] using congrArg (List.filterMap id) hm
+
 end Lanes
