@@ -4,7 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes
+public import Lanes.Web.IO.Client
+public import Lanes.Web.IO.Server
 
 /-!
 What a test over HTTP keeps writing: a server of a handler on a local port, a request a

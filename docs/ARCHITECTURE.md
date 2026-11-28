@@ -34,7 +34,7 @@ proved function tells it to.
 | Proof tools for systems | `Lanes/Proof/{Lift,Ghost,Monotone,Equiv,Deed}.lean` | `System.invariant_of_actor`, `Inductive.of_monotone`, `System.Invariant.of_ghost` |
 | The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers,Wave}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed`, `Kernel.runWaves_eq` |
 | The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,PeekSound,Mailbox,MailboxSound,Pace}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Batch.run_spread`, `Batch.run_erase_peeks`, `Batch.chain_peek_after`, `Mailbox.batch_since_take`; the shell itself is trusted |
-| Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame,Reading}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash`, `Journal.Disk.Torn.load_readings` |
+| Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame,Reading}.lean`, `Lanes/Runtime/Log.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash`, `Journal.Disk.Torn.load_readings` |
 | Migrations | `Lanes/Durable/{Migration,Upgrade}.lean` | `Migration.inv_exec`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.holds`, `Journal.Upgrade.inv_load` |
 | Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left`, `System.Run.Fair.right` |
 | Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound,Handshake,HandshakeSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent`, `Peers.Handshake.Reachable.ready_proved` |
@@ -201,11 +201,12 @@ Also:
 
 Durability is a journal of what the kernel was asked, not of actor states (D24): replaying it
 through the same pure kernel gives the same state, so a restart is not a fault any proof has to
-account for. Pure, in `Lanes/Durable/Journal.lean` and `Lanes/Durable/Frame.lean`: a file reads back
-as the entries written (`Journal.open?_file`); a file cut at any byte opens and gives exactly the
-entries wholly written before the cut, and anything else wrong with it is refused, not repaired
-(`Journal.open?_cut`); recovery rebuilds exactly the kernel those entries lead to
-(`Journal.recover_kernel`), and hands over again exactly what was produced after the last mark
+account for. Pure, in `Lanes/Durable/Journal.lean` and `Lanes/Durable/Frame.lean`: a file reads
+back as the entries written (`Journal.open?_file`); a file cut at any byte opens and gives exactly
+the entries wholly written before the cut, and anything else wrong with it is refused, not
+repaired (`Journal.open?_cut`). In `Lanes/Runtime/Log.lean`, what the entries ask of the kernel,
+which the runtime needs without a journal: recovery rebuilds exactly the kernel those entries
+lead to (`Journal.recover_kernel`), and hands over again exactly what was produced after the last mark
 (`Journal.recover_handed`).
 
 The files are in format 2 (`Lanes/Durable/Format.lean`, D97): each begins with a header, a
@@ -290,14 +291,15 @@ local journal had after that many entries and hands nothing over
 (`Journal.Restore.journal_restores`, from `Journal.resumeIds_eq_recoverIds`), a restored copy
 under D105. The thread that puts is `Lanes/Durable/IO/Ship.lean`, trusted (`TRUSTED.md`).
 
-Where: `Lanes/Durable/`, `Lanes/Durable/IO/Journal.lean`, `examples/migration`.
+Where: `Lanes/Durable/`, `Lanes/Runtime/Log.lean`, `Lanes/Durable/IO/Journal.lean`,
+`examples/migration`.
 
 ### Claims
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
 | A journal cut at any byte opens and gives the entries written before the cut; other damage is refused | `Journal.open?_cut`, `Lanes/Durable/Journal.lean`; gate `Tests/Axioms/Durable.lean` | A checksum makes a damaged entry unlikely, not impossible, to pass (TRUSTED) | proved |
-| Recovery rebuilds the kernel the journal describes; a snapshot gives what a full replay gives | `Journal.recover_kernel`, `Journal.resume_eq_recover`; gate `Tests/Axioms/Durable.lean` | None | proved |
+| Recovery rebuilds the kernel the journal describes; a snapshot gives what a full replay gives | `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Lanes/Runtime/Log.lean`; gate `Tests/Axioms/Runtime.lean` | None | proved |
 | A process that dies anywhere in an append or a save leaves files that load as the kernel it had | `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.save_crash`, `Journal.Disk.Torn.mend`, `Lanes/Durable/Disk.lean`; gate `Tests/Axioms/Durable.lean`; a child killed with SIGKILL while it works, `Tests/Durable.lean` | The file system behaves as the model: flushed bytes stay, a torn append leaves a prefix, a rename is atomic | proved over a model; the model trusted; tested |
 | A start whose read of the journal or the snapshot fails refuses, and one whose reads do not loads the kernel the shard had: a read error never loses committed entries | `Journal.Disk.Torn.load_readings`, `Journal.Disk.ofReadings_eq`, `Lanes/Durable/Reading.lean`; gate `Tests/Axioms/Durable.lean`; a journal that is a link to itself refused and left as it was, `Tests/Durable.lean` | A read that fails says so, and only "no such file" is read as a file not there (`Lanes/Durable/IO/Journal.lean`, trusted) | proved over a model; tested |
 | A start on the files of an older version replays them as that version did, migrates the kernel, and dying anywhere in the migration's writes gives the same migrated kernel at the next start | `Journal.Upgrade.begin_torn`, `Journal.Upgrade.begin_crash`, `Lanes/Durable/Upgrade.lean`; gate `Tests/Axioms/Durable.lean`; `examples/migration/Check.lean` (version 1 stopped, version 2 started on its files, a migration cut after its first write) | The old shard started at boot and its journal has its prelude; the old and new labels differ; the store reads the old label with the old system's codecs; the file system behaves as the model | proved over a model; tested |
@@ -906,7 +908,8 @@ that the runtime fires a timer no earlier than its delay, are premises (`TRUSTED
 `docs/decisions/D79-work-that-is-due-later-is-a-job-of-the-scheduler.md`).
 
 Where: `Lanes/Behaviours/Server.lean`, `Lanes/Behaviours/Once/`, `Lanes/Behaviours/Jobs/`,
-`Lanes/Behaviours/Schedule/`, `Lanes/Semantics/{Service,Once,Jobs,Schedule}.lean`.
+`Lanes/Web/IO/Jobs.lean`, `Lanes/Behaviours/Schedule/`,
+`Lanes/Semantics/{Service,Once,Jobs,Schedule}.lean`.
 
 ### Claims
 
@@ -1071,7 +1074,7 @@ RFC and compared with a reference implementation on generated inputs, and every 
 decided (rule 5.9, D50, `docs/decisions/D80-oracles.md`); `oracles/README.md` names the oracle
 of each module, and `lake exe lanesOracle` asks them.
 
-Where: `Lanes/Data/`, `Lanes/Lib/`, `native/`, `oracles/`.
+Where: `Lanes/Data/`, `Lanes/Lib/`, `Lanes/Lib/Net/Percent.lean`, `native/`, `oracles/`.
 
 ### Claims
 
@@ -1174,11 +1177,17 @@ the numbers of new ones), runs the model checks (`lanes check`), prints the inve
 evidence, read from the built modules; lint fails on one of `Lanes/` without evidence that is
 not on `docs/inventory-none.md`), prints the schema of a type's codec as the build derives
 it (`lanes journal schema`, `LanesCli/Journal.lean`), and prints or checks a journal or a snapshot
-file by its own schema (`lanes journal dump` and `lanes journal verify`, over `Journal.inspect`). CI (`.github/`) runs the build with
-warnings as errors, lint, the tests, the model checks, the differential tests against the
-oracles, the examples and a generated app on every pull request, and the build and tests on
-macOS; a pull request that changes only documentation is built and linted only. Model checks
-run at small bounds on a pull request and at large bounds nightly (`.github/workflows/large.yml`).
+file by its own schema (`lanes journal dump` and `lanes journal verify`, over `Journal.inspect`).
+Lint's rule `layering` keeps each module
+of `Lanes/` from importing a package above its own: `LanesCli/Layers.lean` gives the packages of
+`docs/decisions/D99-layered-packages.md`, what each requires, and each file's package by the
+longest prefix of its path. The runtime requires std, for the HMAC of the courier's handshake
+(`Lanes/Net/Handshake.lean`), and the framing of files and links (`Lanes/Durable/Frame.lean`) is
+in std, for its SHA-256 checksum. CI (`.github/`) runs the build with warnings as errors, lint,
+the tests, the model checks, the differential tests against the oracles, the examples and a
+generated app on every pull request, and the build and tests on macOS; a pull request that
+changes only documentation is built and linted only. Model checks run at small bounds on a pull
+request and at large bounds nightly (`.github/workflows/large.yml`).
 The axiom gate (`Tests/Axioms.lean`) stops compiling when a `sorry` or a new axiom reaches a
 headline theorem.
 
@@ -1190,6 +1199,7 @@ Where: `LanesCli/`, `Lanes/Core/ByCases.lean`, `.github/`, `infra/`, `scripts/`,
 | --- | --- | --- | --- |
 | The number of trusted lines, and each trusted file's size | Written by `lake exe lanes lint --fix`; lint `trusted-size` fails when a file differs |  | checked |
 | Each known way of breaking trusted code fails a test | `scripts/mutants.py`, nightly (`.github/workflows/mutants.yml`) | A list of known mutants, not a measure of coverage | tested |
+| No module of `Lanes/` imports a module of a package its own does not require | `LanesCli/Layers.lean`, `Cli.Lint.checkLayers`; lint `layering`; `Tests/Lint.lean`; a file in no package is reported too |  | checked |
 | Every public definition has a status and its evidence | `lake exe lanes inventory`, computed from the built modules; lint `inventory`, `inventory-none` | Those with none are on `docs/inventory-none.md` | checked |
 
 Also:

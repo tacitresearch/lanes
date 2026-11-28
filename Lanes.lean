@@ -65,6 +65,7 @@ public import Lanes.Lib.Encoding.Json
 public import Lanes.Lib.Metrics
 public import Lanes.Lib.Mime.MediaType
 public import Lanes.Lib.Net.Ip
+public import Lanes.Lib.Net.Percent
 public import Lanes.Lib.Net.Url
 public import Lanes.Lib.Postgres.Bytes
 public import Lanes.Lib.Postgres.Conn
@@ -112,6 +113,7 @@ public import Lanes.Runtime.Batch
 public import Lanes.Runtime.IO.Park
 public import Lanes.Runtime.IO.Shell
 public import Lanes.Runtime.Kernel
+public import Lanes.Runtime.Log
 public import Lanes.Runtime.Pace
 public import Lanes.Runtime.Shard
 public import Lanes.Runtime.Wave
@@ -151,6 +153,7 @@ public import Lanes.Web.S3.Post
 public import Lanes.Web.S3.Xml
 public import Lanes.Web.Transcode
 public import Lanes.Web.IO.Client
+public import Lanes.Web.IO.Jobs
 public import Lanes.Web.IO.Ops
 public import Lanes.Web.IO.S3
 public import Lanes.Web.IO.SignIn

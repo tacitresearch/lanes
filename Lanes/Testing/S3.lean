@@ -5,6 +5,9 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Testing.Http
+public import Lanes.Web.IO.S3
+public import Lanes.Web.S3.Post
+public import Lanes.Lib.Crypto.Md5
 
 /-!
 A fake S3 for tests, over plain HTTP on a local port: one bucket, named by path, whose objects

@@ -156,7 +156,13 @@ argument.
 
 1.6 **Layers run one way.** Runtime modules import `Std` only; Mathlib, CSLib and proof modules
 (`Lanes.Semantics`, `…Proofs`) are imported only by proof files (lint `layering`). No cycles.
-*Why:* executable code that imports the proof layer links all of Mathlib (over 150 MB).
+Each module of `Lanes/` is in one package of `docs/decisions/D99-layered-packages.md`, and imports modules of Lanes only from its
+package and those below it: the semantics and the checker; actors, and the standard library
+beside them; the runtime; durability; the web and PostgreSQL; the umbrella `Lanes`
+(`LanesCli/Layers.lean` gives each file's package, lint `layering`). A definition that a lower
+layer needs moves down, or the lower layer takes it as a parameter. *Why:* executable code
+that imports the proof layer links all of Mathlib (over 150 MB), and a layer that imports one
+above it cannot be used, or built, without it.
 
 1.7 **One concept, one name**, in code, specs and docs; names state units and bounds
 (`timeout_ms`, `maxBatch`).
