@@ -60,21 +60,13 @@ def waitFor (port : UInt16) (text : String) (patience_ms : Nat := 8000) : Async 
 
 def shows (shown text : String) : Bool := (shown.splitOn text).length > 1
 
-def deployment (postgres : Postgres.Client.Config) (notifyPort : UInt16) : Serve.Deployment :=
+def deployment (postgres : Postgres.Client.Config) (notifyPort : UInt16)
+    (migrations : List (String × String)) : Serve.Deployment :=
   { config := { jobs := { attempts_max := 4, lease_ms := 3000, backoff_ms := 50, backoff_max_ms := 200 } }
     server := { port := 0 }
     postgres
     notify := { host := "127.0.0.1", port := notifyPort, request := { method := .post, path := ["notify"] } }
-    attempt_ms := 1000, poll_ms := 50 }
-
-/-- Drop the table and make it again from `migrations/`. -/
-def fresh (cfg : Postgres.Client.Config) : IO (List String) := do
-  let .ok s ← (Postgres.connect cfg).block | return ["cannot connect"]
-  discard <| (s.exec (.statement { sql := "DROP TABLE IF EXISTS reminders" })).block
-  let errors ← (Postgres.Typed.migrate s [← IO.FS.readFile "migrations/0001_reminders.sql"]).block
-  let diff ← (Postgres.Typed.checkSchema s schema).block
-  (s.close).block
-  return errors ++ diff.filter fun d => (d.splitOn "reminders").length > 1
+    attempt_ms := 1000, poll_ms := 50, migrations }
 
 def live : IO (List (String × Bool)) := do
   let some spec ← IO.getEnv "LANES_POSTGRES"
@@ -83,12 +75,13 @@ def live : IO (List (String × Bool)) := do
   let pg : Postgres.Client.Config :=
     { host, port := portText.toNat!.toUInt16, sslmode := .disable,
       conn := { user := "lanes_trust", database := "lanes_test" } }
-  let errors ← fresh pg
-  unless errors.isEmpty do return [(s!"reminders on postgres: the migrations make the schema's table: {errors}", false)]
+  let migrations ← Postgres.Typed.readMigrations "migrations"
+  let errors ← (Postgres.Typed.reset pg schema (migrations.map (·.1))).block
+  unless errors.isEmpty do return [(s!"reminders on postgres: the table is dropped: {errors}", false)]
   Lanes.block do
     let service ← serve (Server.system notify) notifyBridge { port := 0 }
     let some notifyPort := service.port | return [("the notification service reports its port", false)]
-    let d := deployment pg notifyPort
+    let d := deployment pg notifyPort migrations
     let first ← Serve.start d
     let some port := first.server.port | return [("the server reports its port", false)]
     post port ["remind"] "text=tea&in=0"
