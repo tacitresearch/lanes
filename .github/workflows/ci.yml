@@ -257,10 +257,10 @@ jobs:
         with:
           path: examples/rookery/.lake/build
           key: ${{ steps.lean.outputs.system-key }}
-      - name: PostgreSQL 16
+      - name: PostgreSQL (the distribution's version)
         run: |
-          if ! ls /usr/lib/postgresql/16/bin/initdb >/dev/null 2>&1; then
-            sudo apt-get update -q && sudo apt-get install -yq postgresql-16
+          if ! ls /usr/lib/postgresql/*/bin/initdb >/dev/null 2>&1; then
+            sudo apt-get update -q && sudo apt-get install -yq postgresql
           fi
       - name: Model checks, and the application over HTTP on PostgreSQL, through a restart
         run: ../../scripts/with-postgres lake test
