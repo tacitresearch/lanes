@@ -1,4 +1,5 @@
 import Rookery
+import Lanes.Testing
 
 /-!
 # Model checks
@@ -441,18 +442,21 @@ end Bridge
 
 /-! ## Running them -/
 
-def timed {S L : Type} (name : String) (ok : Check.Report S L → Bool)
-    (render : Check.Report S L → String) (report : Unit → Check.Report S L) : IO Bool := do
+/-- A check, printed as it ends unless the output is JSON, and its result. -/
+def timed {S L : Type} (json : Bool) (name : String) (ok : Check.Report S L → Bool)
+    (render : Check.Report S L → String) (report : Unit → Check.Report S L) :
+    IO Testing.Result := do
   let start ← IO.monoMsNow
   let r := report ()
   let passed := ok r
   let ms := (← IO.monoMsNow) - start
-  IO.println s!"== {name}: {if passed then "as expected" else "NOT AS EXPECTED"} ({ms} ms)"
-  IO.println (render r)
-  (← IO.getStdout).flush
-  return passed
+  unless json do
+    IO.println s!"== {name}: {if passed then "as expected" else "NOT AS EXPECTED"} ({ms} ms)"
+    IO.println (render r)
+    (← IO.getStdout).flush
+  return .ofBool .check name passed (render r)
 
-def passes {S L : Type} (r : Check.Report S L) : Bool := r.ok && r.complete
+def passes {S L : Type} (r : Check.Report S L) : Bool := r.ok
 
 def violates {S L : Type} (property : String) (r : Check.Report S L) : Bool :=
   match r.failure with
@@ -467,52 +471,55 @@ def renderSystem {sys : System (sig N C)} [sys.Inspect] (r : Check.Report (World
   r.renderSystem
 
 def main (args : List String) : IO UInt32 := do
+  let json := Testing.wantsJson args
+  let args := args.filter (· != "--json")
   let all := args.isEmpty
-  let mut results := #[]
+  let mut results : Array Testing.Result := #[]
   if all || args.contains "spec" then
-    results := results.push (← timed "the spec: posts, follows, timelines and a delete" passes
+    results := results.push (← timed json "the spec: posts, follows, timelines and a delete" passes
       renderSpec fun _ => checkSpec social (socialWitnesses (·.answered)))
-    results := results.push (← timed "the spec: bots, retries, tokens and the rate limit" passes
+    results := results.push (← timed json "the spec: bots, retries, tokens and the rate limit" passes
       renderSpec fun _ => checkSpec bots botWitnesses)
-    results := results.push (← timed "the spec: locks, sessions and refusals" passes
+    results := results.push (← timed json "the spec: locks, sessions and refusals" passes
       renderSpec fun _ => checkSpec abuse (abuseWitnesses (·.answered)))
   if all || args.contains "system" then
-    results := results.push (← timed "the system: posts, follows, timelines and a delete"
+    results := results.push (← timed json "the system: posts, follows, timelines and a delete"
       passes renderSystem fun _ =>
         check social (systemClaims quiet ++ systemWitnesses quiet socialWitnesses))
-    results := results.push (← timed "the system: bots, retries, tokens and the rate limit"
+    results := results.push (← timed json "the system: bots, retries, tokens and the rate limit"
       passes renderSystem fun _ => check bots (systemClaims quiet))
-    results := results.push (← timed "the system: locks, sessions and refusals, timers at any moment"
+    results := results.push (← timed json "the system: locks, sessions and refusals, timers at any moment"
       passes renderSystem fun _ =>
         check abuse (systemClaims config ++ systemWitnesses config abuseWitnesses))
   if all || args.contains "faults" then
-    results := results.push (← timed "the system with a crash anywhere: a delete and timelines"
+    results := results.push (← timed json "the system with a crash anywhere: a delete and timelines"
       passes renderSystem fun _ => check social (systemClaims quiet) crashing 1)
-    results := results.push (← timed "the system with a crash anywhere: bots and retries"
+    results := results.push (← timed json "the system with a crash anywhere: bots and retries"
       passes renderSystem fun _ => check bots (systemClaims quiet) crashing 1)
-    results := results.push (← timed
+    results := results.push (← timed json
       "the system with requests lost and reordered and a crash anywhere: a delete and timelines"
       passes renderSystem fun _ => check social (systemClaims quiet) lossyIn 1)
   if all || args.contains "bridge" then
     for (name, ok) in Bridge.tests do
-      IO.println s!"== {name}: {if ok then "as expected" else "NOT AS EXPECTED"}"
-      results := results.push ok
+      unless json do IO.println s!"== {name}: {if ok then "as expected" else "NOT AS EXPECTED"}"
+      results := results.push (.ofBool .test name ok)
   if all || args.contains "bugs" then
     let spec := "every response and every deadline is one the spec allows"
-    results := results.push (← timed "seeded: a timeline that keeps a deleted post"
+    results := results.push (← timed json "seeded: a timeline that keeps a deleted post"
       (violates spec) renderSystem fun _ => check (sys := keepsDeletedSystem) social [matchesSpec])
-    results := results.push (← timed "seeded: a delete by another account"
+    results := results.push (← timed json "seeded: a delete by another account"
       (violates spec) renderSystem fun _ => check (sys := anyoneDeletesSystem) social [matchesSpec])
-    results := results.push (← timed "seeded: a rate limit off by one"
+    results := results.push (← timed json "seeded: a rate limit off by one"
       (violates spec) renderSystem fun _ => check (sys := offByOneSystem) bots [matchesSpec])
     let claims := "each claim holds of every request"
-    results := results.push (← timed "seeded, in the spec alone: a delete by another account"
+    results := results.push (← timed json "seeded, in the spec alone: a delete by another account"
       (violates claims) renderSpec fun _ =>
         Check.search (specModel social anyoneDeletes) specClaims {} id)
-    results := results.push (← timed "seeded, in the spec alone: a rate limit off by one"
+    results := results.push (← timed json "seeded, in the spec alone: a rate limit off by one"
       (violates "no account has more than maxPerWindow posts accepted in a window") renderSpec
       fun _ => Check.search (specModel bots offByOne) (specClaims.drop 1) {} id)
-  return if results.all id then 0 else 1
+  Testing.report (if json then ["--json"] else []) results.toList
+    (shown := if json then 0 else results.size)
 
 end Rookery.Check
 

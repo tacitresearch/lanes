@@ -126,6 +126,12 @@ costlier work goes the way that has been faster, and the other is measured again
 A batch is the same whatever the choice (`Batch.run_spread`), so the timing and the choice are
 trusted only for speed (`docs/decisions/D73-adaptive-waves.md`).
 
+Waves are as wide as an application spreads its work over actors. `Lanes/Runtime/WavePlan.lean`
+splits a batch of journal entries, each touching several actors, into waves whose entries share
+no actor, each actor's entries in the journal's order (`WavePlan.levels_lt`), and
+`examples/videos` measures its journal with it (`lake exe videosWaves`,
+`docs/decisions/D107-waves-premise.md`).
+
 ## Journal, snapshots and the disk model
 
 Durability is a journal of what the kernel was asked, not of actor states (D24): replaying it
@@ -552,7 +558,9 @@ replays any run.
 What a result means is proved: the checker lists exactly the enabled events
 (`SysState.mem_successors_iff`); a complete PASS means each `always` property holds in every
 reachable world of the instance (`Check.search_sound`, `Check.system_sound_of_respects`, under
-lawful `==`); a reported violation is a real run (`Check.system_violated`); and a complete PASS of
+lawful `==` and `Model.Respects`: properties and a constraint that give one verdict on the worlds
+the checker merges); a bounded pass is not a complete one: it prints `PASS (bounded)` and the
+runner exits 2 (`Check.Report.verdict`); a reported violation is a real run (`Check.system_violated`); and a complete PASS of
 a refinement check means every run's inputs and outputs are a trace of the spec
 (`Check.refines_sound`, `Check.refines_traces`). Under D45 a PASS finds bugs; the claim rests on a
 theorem.

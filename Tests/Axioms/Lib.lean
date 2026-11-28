@@ -10,6 +10,10 @@ import Lanes.Semantics
 /-- info: 'Lanes.Bytes.unhex?_hex' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Bytes.unhex?_hex
 
+-- Lanes.Lib.Crypto.Native
+/-- info: 'Lanes.Bytes.same_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Bytes.same_iff
+
 -- Lanes.Lib.Crypto.PublicKey
 /-- info: 'Lanes.Bytes.size_ofNat' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Bytes.size_ofNat

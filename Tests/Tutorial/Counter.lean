@@ -7,7 +7,9 @@ import Lanes
 /-!
 # A counter service
 
-The spec, the actor and its proof. This file is logic only: no IO (Lanes rule 2.4).
+The spec and the actor. This file is logic only: no IO (Lanes rule 2.4), and no theorems, so
+that `Check.lean` and `Main.lean`, which import it, build while a proof is broken. The theorems
+are in `Tut/Proofs.lean`.
 -/
 
 namespace Tut
@@ -57,15 +59,5 @@ def service (config : Config) : Service sig.In sig.Out Nat where
 
 abbrev system (config : Config) : System sig :=
   Server.system (service config)
-
-/-- The counter never exceeds its limit. -/
-theorem counter_le_limit (config : Config) :
-    (Server.actor (service config)).Invariant fun count => count ≤ config.limit := by
-  actor_invariant [Server.actor, service]
-
-/-- In every reachable state of the system, under any environment model. -/
-theorem system_le_limit (config : Config) (env : EnvModel sig) :
-    (system config).Invariant env fun c => c.state () ≤ config.limit :=
-  System.invariant_of_actor (system config) () (counter_le_limit config) env
 
 end Tut

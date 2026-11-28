@@ -130,11 +130,11 @@ def tests : List (String × Bool) :=
   let plain := check false
   let lost := check false faulty 1
   [ ("kv: without caching the store refines the map spec",
-      plain.ok && plain.complete),
+      plain.ok),
     ("kv: the check is not vacuous: reads see both the empty store and the written value",
       plain.witnesses.length == 2),
     ("kv: with messages lost and reordered and a crash, the store still refines the map spec",
-      lost.ok && lost.complete && lost.witnesses.length == 2),
+      lost.ok && lost.witnesses.length == 2),
     ("kv: a request handed to a front end twice breaks refinement",
       violated (check false (repeating fun src _ => src.isNone))),
     ("kv: a put handed to the store twice breaks refinement: it is acknowledged twice",
@@ -150,12 +150,12 @@ def tests : List (String × Bool) :=
       | some (.violated _ t) =>
         t.labels.map Event.render == (staleRead (0 : K) (1 : V) (0 : F)).map Event.render
       | _ => false),
-    ("kv once: with every link duplicating, the store that remembers refines the map spec once per request",
+    ("kv once: with every link duplicating, the store that remembers refines the map spec once per request, to depth 12",
       let r := checkOnce (onceSystem K V F) (repeating fun _ _ => true) requests
-      r.ok && r.witnesses.length == 2),
-    ("kv once: and with every link losing and reordering too, and a crash",
+      r.passed && r.witnesses.length == 2),
+    ("kv once: and with every link losing and reordering too, and a crash, to depth 10",
       let r := checkOnce (onceSystem K V F) chaos overwrite 1 10
-      r.ok && r.witnesses.length == 2),
+      r.passed && r.witnesses.length == 2),
     ("kv once: a client that retries its first write after its second gets one effect of each",
       let r := checkOnce (onceSystem K V F) {} retried 0 20
       !violatedOnce r && r.complete),

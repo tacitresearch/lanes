@@ -14,6 +14,7 @@ lake build            # the site, the proofs and the tests
 lake test             # model checks at small bounds, the bridge, and the site over HTTP against a fake S3 and worker, under a minute
 lake exe videosTest pipeline   # only the model checks whose names contain a word; `http`, only the site
 lake exe videosTest large      # the model checks at large bounds, nightly in CI: about ten minutes
+lake exe videosWaves           # how wide the waves of the journal are, as it runs and split by member
 ```
 
 ## How it works

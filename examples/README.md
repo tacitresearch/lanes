@@ -109,6 +109,10 @@ and `sign-in` and `videos` the presets in `integrations/`).;
 `upload`'s test drives its front end with no socket, and `lake exe upload 8080` serves it:
 `curl -T file http://127.0.0.1:8080/upload`).
 
+Each example's test program prints through `Lanes.Testing.report`: a line for each result, with
+its kind (check or test), and the counts. It exits 1 when a result failed and 2 when a model
+check passed but hit a bound, and `lake test -- --json` prints the results as JSON.
+
 ## Testing a front end
 
 `Http.Loopback` drives an application's front end with no socket: a request is written as a

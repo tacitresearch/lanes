@@ -67,7 +67,7 @@ def tests : List (String × Bool) :=
   let constrained := search bitmask [] { constraint := fun s => s < 16 }
   let dead := search counter [] { checkDeadlock := true }
   let live := search counter [] { checkDeadlock := true, terminal := (· == 3) }
-  [ ("bitmask: 256 states", r.states == 256 && r.ok && r.complete),
+  [ ("bitmask: 256 states", r.states == 256 && r.ok),
     ("bitmask: 2048 transitions, depth 8", r.transitions == 2048 && r.depth == 8),
     ("diehard: 16 states", witness.states == 16),
     ("diehard: invariant violated by a shortest trace of 6 steps",
@@ -91,8 +91,8 @@ def tests : List (String × Bool) :=
       | _ => false),
     ("terminal state is not a deadlock", live.ok),
     ("maxStates bounds the states stored, initial states included, and marks the report incomplete",
-      capped.states == 10 && !capped.complete && capped.ok
-        && cappedInit.states == 3 && !cappedInit.complete && cappedInit.ok),
+      capped.states == 10 && !capped.complete && capped.passed
+        && cappedInit.states == 3 && !cappedInit.complete && cappedInit.passed),
     ("a comparison without spaces still parses in a file that imports Lanes",
       tight 1 2 && !tight 2 1) ]
 

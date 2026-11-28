@@ -83,6 +83,10 @@ import Lanes.Semantics
 /-- info: 'Lanes.Check.systemReduced_sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Check.systemReduced_sound
 
+-- Lanes.Check.Search
+/-- info: 'Lanes.Check.Report.ok_iff' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Check.Report.ok_iff
+
 -- Lanes.Check.SearchSound
 /-- info: 'Lanes.Check.search_violated' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Check.search_violated
