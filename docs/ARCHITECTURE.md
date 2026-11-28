@@ -1255,7 +1255,7 @@ Where: `Lanes/Testing/`.
 ## Tooling
 
 The `lanes` command (`LanesCli/`) creates an application (`lanes new`, which writes
-`templates/app/`, its types declared with `lanes_data`), checks the text of a project
+`templates/app/`, its table declared with `lanes_data`), checks the text of a project
 (`lanes lint`, `LanesCli/Lint.lean`: the rules `AGENTS.md` lists, among them that every
 repository path a doc cites exists), writes what is derived from other files (`--fix`,
 `LanesCli/Generated.lean`: the line counts of `TRUSTED.md`, the index of decisions and

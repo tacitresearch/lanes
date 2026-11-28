@@ -31,13 +31,13 @@ the runs are written by hand (`oracles/README.md`).
 
 namespace Lanes.Idempotent
 
-lanes_data structure Keyed (K Q : Type) where
+structure Keyed (K Q : Type) where
   key : Option K
   request : Q
   deriving DecidableEq, Repr, Hashable
 
 /-- An effect the service may have had. -/
-lanes_data structure Slot (K Q A : Type) where
+structure Slot (K Q A : Type) where
   key : Option K
   request : Q
   /-- The first answer given about it, which every repeat that is answered gets. -/
@@ -46,7 +46,7 @@ lanes_data structure Slot (K Q A : Type) where
 
 /-- How a call is answered: from slot `slot`, as the call that made it (`first`) or as a
 repeat, with the same request as the first (`same`) or another, which only a refusal answers. -/
-lanes_data structure Route where
+structure Route where
   call : Nat
   slot : Nat
   first : Bool

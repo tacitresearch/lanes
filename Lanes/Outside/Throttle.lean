@@ -34,13 +34,13 @@ Not yet checked against a real service: no run recorded from one that answers `4
 
 namespace Lanes.Throttle
 
-lanes_data inductive Answer (A : Type) where
+inductive Answer (A : Type) where
   | ok (a : A)
   /-- The request was not executed: call again in `retryAfter` ticks. -/
   | throttled (retryAfter : Nat)
   deriving DecidableEq, Repr, Hashable
 
-lanes_data inductive Event (E : Type) where
+inductive Event (E : Type) where
   /-- A tick of time passed. -/
   | tick
   | inner (e : E)

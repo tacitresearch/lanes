@@ -26,14 +26,14 @@ answers each call at most once (`Rpc.answered_le_called`) and may answer any cal
 
 namespace Lanes.Rpc
 
-lanes_data structure Call (Q : Type) where
+structure Call (Q : Type) where
   id : Nat
   /-- How long the adapter waits for the answer before it says `unknown`. -/
   deadline_ms : Nat
   request : Q
   deriving DecidableEq, Repr, Hashable
 
-lanes_data inductive Reply (A : Type) where
+inductive Reply (A : Type) where
   | answer (a : A)
   /-- No answer by the deadline: the request may or may not have taken effect. -/
   | unknown

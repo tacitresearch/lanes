@@ -28,31 +28,31 @@ open Lanes
 /-- Identifies a client request, so a response can be matched to it (rule 1.5). -/
 abbrev ReqId := Nat
 
-lanes_data structure Transfer (A : Type) where
+structure Transfer (A : Type) where
   req : ReqId
   src : A
   dst : A
   amount : Nat
   deriving DecidableEq, Repr, Hashable
 
-lanes_data inductive Request (A : Type) where
+inductive Request (A : Type) where
   | transfer (t : Transfer A)
   | balance (req : ReqId) (account : A)
   deriving DecidableEq, Repr, Hashable
 
-lanes_data inductive Outcome where
+inductive Outcome where
   /-- The source account was debited and the credit is on its way. -/
   | accepted
   | insufficient
   | balance (amount : Int)
   deriving DecidableEq, Repr, Hashable
 
-lanes_data structure Response where
+structure Response where
   req : ReqId
   outcome : Outcome
   deriving DecidableEq, Repr, Hashable
 
-lanes_data inductive Msg (A : Type) where
+inductive Msg (A : Type) where
   | transfer (req : ReqId) (dst : A) (amount : Nat)
   | credit (amount : Nat)
   | query (req : ReqId)
@@ -64,7 +64,7 @@ abbrev sig (A : Type) [DecidableEq A] : Signature where
   In := Request A
   Out := Response
 
-lanes_data structure Account where
+structure Account where
   balance : Int
   deriving DecidableEq, Repr, Hashable
 

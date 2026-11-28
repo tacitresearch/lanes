@@ -24,7 +24,7 @@ namespace Lanes.Auth
 
 /-- Failed log-ins since the account was last unlocked. At `limit` the account locks, and stays
 locked until the application unlocks it, by a timer or by hand. -/
-lanes_data structure Attempts where
+structure Attempts where
   failures : Nat := 0
   locked : Bool := false
   deriving DecidableEq, Repr, Hashable
@@ -95,7 +95,7 @@ structure Lifetime where
   deriving DecidableEq, Repr
 
 /-- A session: its number, when it began and when it was last used, in seconds. -/
-lanes_data structure Session where
+structure Session where
   id : Nat
   started_s : Nat := 0
   used_s : Nat := 0
@@ -119,7 +119,7 @@ theorem Session.expired_none {now_s : Nat} {e : Session} : e.expired {} now_s = 
 oldest. A session is named by a number the application never uses twice. Time is what the
 application passes, the time a request arrived; `seen_s`, the latest it passed to a write, is the
 earliest time expiry is judged at, so a clock that steps back does not bring a session back. -/
-lanes_data structure Sessions where
+structure Sessions where
   entries : List Session := []
   seen_s : Nat := 0
   deriving DecidableEq, Repr, Hashable

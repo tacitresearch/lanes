@@ -304,10 +304,11 @@ soundness theorems. Tests and the examples' proofs import what they cite. `impor
 Lanes.Testing` is the test kit, for tests only, so that no binary that serves links it; a
 service's fake is beside it (`Lanes.Services.S3.Testing`).
 
-Declare the messages, inputs, outputs and states of a system, and the types of its JSON and its
-tables, with `lanes_data`: the ordinary declaration with a prefix, whose `deriving` also takes
-classes Lean cannot derive without linking `Lean` into the binary, and, for a structure, a
-`table` line.
+Declare a type with `lanes_data` when it derives what Lean cannot derive without linking `Lean`
+into the binary: JSON, CBOR, `Enum`, a field-by-field `LawfulBEq`, or, for a structure, a
+table (a `table` line). It is the ordinary declaration with a prefix. A type that derives only
+Lean's own classes (`DecidableEq`, `Repr`, `Hashable`) is a plain `structure` or `inductive`:
+the prefix would pass it through unchanged.
 
 ```lean
 lanes_data structure Todo where

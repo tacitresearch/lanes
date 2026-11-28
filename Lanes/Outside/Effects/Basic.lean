@@ -80,7 +80,7 @@ def Lifecycle.reaches (lifecycle : Lifecycle St) (a b : St) : Bool :=
 def Lifecycle.seen (lifecycle : Lifecycle St) (st : St) : Bool :=
   (Enum.all (α := St)).any fun a => lifecycle.first a && lifecycle.reaches a st
 
-lanes_data inductive Answer (R St : Type) where
+inductive Answer (R St : Type) where
   | made (id : R) (state : St)
   /-- A repeat under a key refused for now, with no effect. -/
   | refused
@@ -91,14 +91,14 @@ def Answer.isRefused {R : Type} : Answer R St → Bool
   | .made .. => false
 
 /-- An event: thing `id`, made by a request with parameters `params`, is in state `state`. -/
-lanes_data structure Report (R St P : Type) where
+structure Report (R St P : Type) where
   id : R
   state : St
   params : P
   deriving DecidableEq, Repr, Hashable
 
 /-- A thing that has been seen, made by the request of slot `slot`. -/
-lanes_data structure Thing (R St P : Type) where
+structure Thing (R St P : Type) where
   id : R
   slot : Nat
   params : P

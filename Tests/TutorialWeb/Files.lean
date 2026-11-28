@@ -37,7 +37,7 @@ lanes_data structure Counter where
 
 def schema : Schema := [uploads.table, counters.table]
 
-lanes_data inductive Request where
+inductive Request where
   | list (who : String) (at_s : Nat)
   /-- Begin an upload: the answer is a form to post the file to the store. -/
   | begin (who : String) (at_s : Nat)
@@ -46,7 +46,7 @@ lanes_data inductive Request where
   | delete (who : String) (file : Int64)
   deriving DecidableEq, Repr, Hashable
 
-lanes_data inductive Answer where
+inductive Answer where
   | shelf (viewer : String) (files : List Upload) (at_s : Nat)
   | form (viewer : String) (file : Int64) (at_s : Nat)
   | listed (file : Int64)

@@ -139,7 +139,7 @@ def schema (config : Config) : Schema :=
 
 /-! ## Requests and replies -/
 
-lanes_data inductive Action where
+inductive Action where
   | post (body : {s : String // Body.valid s})
   | delete (post : Int64)
   | follow (whom : {s : String // Name.valid s})
@@ -158,7 +158,7 @@ def Action.text : Action → String
 /-- A log-in's password, checked by the server against the stored hash before the request
 enters (`Web.checkPassword`): wrong, or right, with a new hash to store when the stored one is
 not as the deployment makes one now. -/
-lanes_data inductive Checked where
+inductive Checked where
   | wrong
   | right (rehash : Option String)
   deriving DecidableEq, Repr, Hashable
@@ -166,7 +166,7 @@ lanes_data inductive Checked where
 /-- `name` is never read from a request's body: the bridge takes it from a session cookie or an
 API token it has verified, or from the form of a sign-up or a log-in. No request carries a
 password: a sign-up carries its hash, a log-in what checking it gave. -/
-lanes_data inductive Request where
+inductive Request where
   | signUp (name : {s : String // Name.valid s}) (hash : String) (bot : Bool)
   | logIn (name : {s : String // Name.valid s}) (checked : Checked)
   | logOut (name : {s : String // Name.valid s}) (session : Int64)
