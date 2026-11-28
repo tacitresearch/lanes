@@ -184,7 +184,7 @@ What to do with the commands taken at once is `Batch.run`, a pure function with 
 the turns it asks of the kernel, and the acts to perform for them, in order. This loop reads
 the clock, takes every command that has arrived, and performs the acts: one exchange with the
 other threads and one write to the journal for however many inputs arrived together. With a
-journal the kernel starts as the journal describes (`Journal.resume`).
+journal the kernel starts as the journal describes (`Journal.resumeIds`).
 -/
 private def loop (rt : Runtime sys) (onOutput : Journal.OutputId → σ.Out → Async Unit)
     (waiting : IO.Ref (Array (Bool × IO.Promise Bool))) (journal : Option (Journal.Log sys)) :
