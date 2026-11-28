@@ -24,9 +24,11 @@ system's timers need no invariant tying them to the state (`Rookery.System`). Ho
 or a session lasts is the timers' delay in `Config`, which the semantics does not model.
 
 An API request carries a sequence number its bot chooses. The board acts once on each change:
-the same number again gets the answer it got, without acting, and an older one gets `stale`
-(`Lanes.Once.Memo`, D48), so a bot that retries a post it got no answer to posts it once. A read
-is answered afresh, so that no answer remembered shows a post deleted since.
+the same change with the same number again gets the answer it got, without acting, another
+change with that number gets `reused`, and an older number gets `stale` (`Lanes.Once.Memo`,
+D48), so a bot that retries a post it got no answer to posts it once, and one that reuses a
+number by mistake is told so rather than handed another change's answer. A read is answered
+afresh, so that no answer remembered shows a post deleted since.
 -/
 
 namespace Rookery
@@ -64,10 +66,11 @@ lanes_data inductive Op (N : Type) where
 API token it has verified, or from the form of a sign-up or a log-in. -/
 lanes_data inductive Request (N C : Type) where
   | signUp (req : ReqId) (name : N) (credential : C) (bot : Bool)
-  | logIn (req : ReqId) (name : N) (credential : C)
+  /-- `at_s` is when the request arrived, in seconds: the session's cookie is signed then. -/
+  | logIn (req : ReqId) (name : N) (credential : C) (at_s : Nat)
   | logOut (req : ReqId) (name : N) (session : Sid)
-  /-- A new API token for the account; every earlier one stops working. -/
-  | newToken (req : ReqId) (name : N) (session : Sid)
+  /-- A new API token for the account, signed at `at_s`; every earlier one stops working. -/
+  | newToken (req : ReqId) (name : N) (session : Sid) (at_s : Nat)
   | web (req : ReqId) (name : N) (session : Sid) (op : Op N)
   /-- `token` is the generation of the token the request carried; `seq` its sequence number. -/
   | api (req : ReqId) (name : N) (token : Nat) (seq : Nat) (op : Op N)
@@ -80,15 +83,19 @@ lanes_data inductive Reply (N : Type) where
   | signedUp
   | nameTaken
   | full
-  | loggedIn (name : N) (session : Sid)
+  /-- A session opened at `at_s`, when its cookie is signed. -/
+  | loggedIn (name : N) (session : Sid) (at_s : Nat)
   /-- Wrong name or wrong credential: which one is not said. -/
   | refused
   | locked
   | loggedOut
   | noSession
-  | token (name : N) (generation : Nat)
+  /-- A new API token, signed at `at_s`. -/
+  | token (name : N) (generation : Nat) (at_s : Nat)
   | badToken
   | stale
+  /-- The sequence number was used for another change. -/
+  | reused
   | posted (post : PostId)
   | rateLimited
   | tooManyPosts
@@ -135,8 +142,8 @@ lanes_data structure Board (N C : Type) where
   accounts : List (N × Profile N C) := []
   /-- The id the next post accepted gets. -/
   next : PostId := 0
-  /-- The last API request acted on for each account, and its reply. -/
-  memo : Once.Memo N (Reply N) := {}
+  /-- The last API change acted on for each account, and its reply. -/
+  memo : Once.Memo N (Op N × Reply N) := {}
   deriving DecidableEq, Repr, Hashable, Codable
 
 /-- The settings the spec and the system are built with. Every bound is here (rule 2.6). -/
@@ -222,12 +229,12 @@ def signUp (config : Config) (b : Board N C) (n : N) (c : C) (bot : Bool) :
     if config.maxAccounts ≤ b.accounts.length then (b, .full, {})
     else ({ b with accounts := b.accounts ++ [(n, { credential := c, bot })] }, .signedUp, {})
 
-def logIn (config : Config) (n : N) (req : ReqId) (p : Profile N C) (c : C) :
+def logIn (config : Config) (n : N) (req : ReqId) (p : Profile N C) (c : C) (at_s : Nat) :
     Profile N C × Reply N × Timers :=
   if p.attempts.locked then (p, .locked, {})
   else if c = p.credential then
     let (sessions, closed) := p.sessions.start config.maxSessions req
-    ({ p with attempts := p.attempts.succeed, sessions }, .loggedIn n req,
+    ({ p with attempts := p.attempts.succeed, sessions }, .loggedIn n req at_s,
       { opened := some req, closed })
   else
     let attempts := p.attempts.fail config.maxFailures
@@ -271,6 +278,13 @@ def withSession (b : Board N C) (n : N) (session : Sid)
   | some p => if p.sessions.live session then f p else (b, .noSession, {})
   | none => (b, .noSession, {})
 
+/-- The answer the memo gives a change sent again with its sequence number: the one remembered,
+if the change is the one remembered, and `reused` if not. -/
+def recalled (op : Op N) (remembered : List (Op N × Reply N)) : Reply N :=
+  match remembered with
+  | [(op', reply)] => if op' = op then reply else .reused
+  | _ => .reused
+
 /-- An API request: a read is answered afresh; a change is acted on once for each sequence
 number (`Lanes.Once.Memo`). A read answered from the memo could show a post deleted since. -/
 def api (config : Config) (b : Board N C) (n : N) (p : Profile N C) (token seq : Nat)
@@ -279,22 +293,22 @@ def api (config : Config) (b : Board N C) (n : N) (p : Profile N C) (token seq :
   else if op = .timeline then b.act config n p op
   else
     match b.memo.seen n seq with
-    | .again replies => (b, replies.headD .stale, {})
+    | .again remembered => (b, recalled op remembered, {})
     | .stale => (b, .stale, {})
     | .fresh =>
       let (b', reply, timers) := b.act config n p op
-      ({ b' with memo := b'.memo.record n seq [reply] }, reply, timers)
+      ({ b' with memo := b'.memo.record n seq [(op, reply)] }, reply, timers)
 
 def handle (config : Config) (b : Board N C) : Request N C → Board N C × Reply N × Timers
   | .signUp _ n c bot => b.signUp config n c bot
-  | .logIn req n c =>
+  | .logIn req n c at_s =>
     match b.get? n with
-    | some p => let (p, reply, timers) := logIn config n req p c; (b.set n p, reply, timers)
+    | some p => let (p, reply, timers) := logIn config n req p c at_s; (b.set n p, reply, timers)
     | none => (b, .refused, {})
   | .logOut _ n session => b.withSession n session fun p =>
     (b.set n { p with sessions := p.sessions.close session }, .loggedOut, { closed := [session] })
-  | .newToken _ n session => b.withSession n session fun p =>
-    (b.set n { p with token := p.token + 1 }, .token n (p.token + 1), {})
+  | .newToken _ n session at_s => b.withSession n session fun p =>
+    (b.set n { p with token := p.token + 1 }, .token n (p.token + 1) at_s, {})
   | .web _ n session op => b.withSession n session fun p => b.act config n p op
   | .api _ n token seq op =>
     match b.get? n with
@@ -346,7 +360,7 @@ end Board
 
 /-- The account whose secrets a reply carries: a session or the generation of a token. -/
 def Reply.secretOf {N : Type} : Reply N → Option N
-  | .loggedIn n _ | .token n _ => some n
+  | .loggedIn n .. | .token n .. => some n
   | _ => none
 
 end Rookery

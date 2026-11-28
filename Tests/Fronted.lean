@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes
 import Lanes.Proofs
 import Tests.Durable
+import Tests.Peers
 import Tests.Web
 import Tests.Fixtures.BankWeb
 
@@ -329,7 +330,8 @@ def live : Async (List (String × Bool)) := do
     let peers : Peers.Config (sig Acct) := {
       listen := { port := 0 }
       home := fun account => return (← peerPorts.get)[shardOf account]?.map fun port => { port }
-      id := Codec.fin, msg := (actors Codec.fin 100).msg }
+      id := Codec.fin, msg := (actors Codec.fin 100).msg, system := "the bank on two shards"
+      schema := "Tests.Fixtures.Bank", key := Tests.Peers.key }
     let (server, peers) ← serveShard (bank Acct 100) (shardOf · == k) Tests.Fixtures.BankWeb.bridge
       peers { port := 0, gate := { requestTimeout_ms := 300 } } { record := true }
     peerPorts.modify (·.push peers.port)
@@ -380,7 +382,7 @@ def busyTest : Async (List (String × Bool)) := do
   let entered : IO.Promise Unit ← IO.Promise.new
   let release : IO.Promise Unit ← IO.Promise.new
   let server ← serveFronted (Server.system desk) bridge { port := 0 } { inboxCapacity := 1 }
-    fun _ => do
+    fun _ _ => do
       entered.resolve ()
       discard <| await release.result?
   let some port := server.port | return [("fronted: the server reports its port", false)]
@@ -407,7 +409,8 @@ def busyTest : Async (List (String × Bool)) := do
       during == 2 && answers.all (·.startsWith "HTTP/1.1 200") && after == 0) ]
 
 def deskPeers (port : UInt16) : Peers.Config deskSig :=
-  { listen := { port }, home := fun _ => pure none, id := Codec.unit, msg := fun _ => Ask.codec }
+  { listen := { port }, home := fun _ => pure none, id := Codec.unit, msg := fun _ => Ask.codec
+    system := "the desk", schema := "Tests.Fronted.Ask", key := Tests.Peers.key }
 
 /-- One process of the desk. Its memos are neither responses nor parcels. And a second process
 that wants the first one's HTTP port does not start. -/
@@ -451,7 +454,8 @@ def nodeDurable : Async (List (String × Bool)) := do
           input := Codec.sum (Codec.pair Codec.nat Request.codec)
             (Codec.sum (Tests.Fixtures.Bank.Request.codec Codec.fin) (Codec.sigma Codec.fin msg)) }
       let (server, peers) ← serveShard (bank Acct 100) here Tests.Fixtures.BankWeb.bridge
-        { listen := { port := 0 }, home := fun _ => pure none, id := Codec.fin, msg }
+        { listen := { port := 0 }, home := fun _ => pure none, id := Codec.fin, msg
+          system := "the bank", schema := "Tests.Fixtures.Bank", key := Tests.Peers.key }
         { port := 0 } (log := some log)
       let answer ← Tests.Web.fetch (server.port.getD 0) path' (method := method) (body := body)
       peers.stop

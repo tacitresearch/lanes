@@ -61,5 +61,5 @@ one lane and neither.
 
 `Lanes/Lib/Crypto/Sodium.lean` became `Lanes/Lib/Crypto/Native.lean`, the bound cryptography,
 named for what it is rather than for whose it is. Every declaration keeps its name and type.
-`Lanes.Lib.Crypto.Sodium` stays as a module that imports `Native`, for code that imported it, and
-can go in a later release.
+`Lanes.Lib.Crypto.Sodium` stayed for a while as a module that imported `Native`, for code that
+imported it; it was removed before 0.1.0 (#107).

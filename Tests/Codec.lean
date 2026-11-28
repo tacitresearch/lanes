@@ -119,8 +119,24 @@ def index (keys : List String) : Index :=
 
 def fruit : List String := ["pear", "apple", "fig", "quince", "apple", "é"]
 
+/-- A count no input could hold: a reader that repeats as often as it says would not end. -/
+def huge : ByteArray := (toString (10 ^ 18)).toUTF8
+
 def tests : List (String × Bool) :=
-  [ ("codec: a structure and an inductive type read back as written, leaving what follows",
+  [ ("codec: a list whose count is larger than the records left is refused before any is read",
+      ((Codec.list Codec.nat).read [huge, "1".toUTF8]).isNone
+        && ((Codec.list Codec.unit).read [huge]).isNone
+        && ((Codec.list Codec.unit).read (huge :: List.replicate 3 .empty)).isNone
+        && ((Codec.list (Codec.list Codec.unit)).read ["1".toUTF8, huge]).isNone
+        && (Index.codec.read [huge, "k".toUTF8, "0".toUTF8]).isNone),
+    ("codec: a list of values written as no records takes a record each, and reads back",
+      let units := List.replicate 3 ()
+      (Codec.list Codec.unit).write units == ["3".toUTF8, .empty, .empty, .empty]
+        && (Codec.list Codec.unit).read ((Codec.list Codec.unit).write units ++ trailing)
+          == some (units, trailing)
+        && ((Codec.list Codec.unit).read ["1".toUTF8, "x".toUTF8]).isNone
+        && (Codec.list Codec.nat).write [4, 5] == ["2".toUTF8, "4".toUTF8, "5".toUTF8]),
+    ("codec: a structure and an inductive type read back as written, leaving what follows",
       shapes.all fun shape =>
         Shape.codec.read (Shape.codec.write shape ++ trailing) == some (shape, trailing)),
     ("codec: a list of them reads back in order",

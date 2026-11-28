@@ -312,7 +312,8 @@ lanes_data structure View where
   deriving DecidableEq, Repr, Hashable, Codable
 
 lanes_data inductive Reply where
-  | signedIn (member : Member) (session : Sid)
+  /-- A session opened at `at_s`: the bridge signs its cookie then. -/
+  | signedIn (member : Member) (session : Sid) (at_s : Nat)
   | full
   | signedOut
   | noSession
@@ -481,7 +482,7 @@ def signIn (s : Site) (req : ReqId) (issuer subject name : String) (at_s : Nat) 
   let start (m : Member) (ch : Channel) : Site × List Out :=
     let (sessions, _) := ch.sessions.start config.maxSessions req at_s config.lifetime
     ({ s with channels := (m, { ch with name, sessions }) :: s.channels.filter (·.1 != m) },
-      answer req (some (m, req)) (.signedIn m req))
+      answer req (some (m, req)) (.signedIn m req at_s))
   match s.channels.find? fun (_, ch) => ch.issuer == issuer && ch.subject == subject with
   | some (m, ch) => start m ch
   | none =>

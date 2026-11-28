@@ -398,7 +398,13 @@ def check :=
 def tests : List (String × Bool) :=
   requestTests ++ responseTests ++ readingTests ++ roundTripTests ++
   [ ("http client: a caller is right against everything a service may do, answers or not",
-      check.ok && check.complete) ]
+      check.ok && check.complete),
+    ("http client: a call takes an output's id as its idempotency key, unless it has one",
+      let call : Client.Call := { host := "127.0.0.1", port := 80, request := { method := .post, path := [] } }
+      let own := { call with request := { call.request with headers := [("Idempotency-Key", "mine")] } }
+      (call.keyed "j-3-0").request.headers == [("idempotency-key", "j-3-0")]
+        && (own.keyed "j-3-0").request.headers == [("Idempotency-Key", "mine")]
+        && Journal.OutputId.key ⟨"j", ⟨3, 0⟩⟩ == "j-3-0") ]
 
 /-- A server on a local port. To whoever connects it sends `reply` (nothing, when that is
 empty) and then holds the connection open until the other side leaves. -/
@@ -428,8 +434,8 @@ def fetchAll (config : Client.Config) (ports : List UInt16) (patience_ms : Nat) 
     Async (List (Nat × Option Nat) × Nat) := do
   let reported ← IO.mkRef #[]
   let all ← IO.Promise.new
-  let rt ← Runtime.startWith caller {} fun rt out => do
-    Client.handler port config rt out
+  let rt ← Runtime.startWith caller {} fun rt outputId out => do
+    Client.handlerKeyed port config rt outputId out
     if let .done id status := out then
       if (← reported.modifyGet fun r => ((r.push (id, status)).size, r.push (id, status)))
           == ports.length
@@ -504,7 +510,7 @@ def live : Async (List (String × Bool)) := do
   let some tcpPort := server.port | return [("http client: the server reports its port", false)]
   let reported ← IO.mkRef #[]
   let all ← IO.Promise.new
-  let rt ← Runtime.startWith caller { record := true } fun rt out => do
+  let rt ← Runtime.startWith caller { record := true } fun rt _ out => do
     Client.handler port { timeout_ms := 3000 } rt out
     if let .done id status := out then
       if (← reported.modifyGet fun r => ((r.push (id, status)).size, r.push (id, status))) == 4

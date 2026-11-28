@@ -86,6 +86,10 @@ def args (c : Cluster) (k : Nat) (journal : System.FilePath := c.journal k) : Ar
       journal.toString]
     ++ (Array.range 3).map fun i => toString (c.base + 10 + i)
 
+/-- The key the nodes share, in the environment `raftNode` reads it from. -/
+def env : Array (String × Option String) :=
+  #[("RAFT_KV_KEY", some "the key of the tests' raft nodes")]
+
 def binary : IO System.FilePath :=
   return (← IO.appPath).parent.getD "." / "raftNode"
 
@@ -93,7 +97,7 @@ def binary : IO System.FilePath :=
 to start does. One that is still running then is killed. -/
 def exitCode (args : Array String) : IO (Option UInt32) := do
   let child ← IO.Process.spawn
-    { cmd := (← binary).toString, args, stdin := .null, stdout := .null, stderr := .null }
+    { cmd := (← binary).toString, args, env, stdin := .null, stdout := .null, stderr := .null }
   for _ in [0:100] do
     if let some code ← child.tryWait then return some code
     IO.sleep 50
@@ -105,7 +109,7 @@ def exitCode (args : Array String) : IO (Option UInt32) := do
 printed nothing in ten seconds. -/
 def spawn (c : Cluster) (k : Nat) (new : Bool := false) : IO (Cluster × Bool) := do
   let child : Node ← IO.Process.spawn
-    { cmd := (← binary).toString, args := (if new then #["new"] else #[]) ++ c.args k
+    { cmd := (← binary).toString, args := (if new then #["new"] else #[]) ++ c.args k, env
       stdin := .null, stdout := .piped, stderr := .inherit }
   let line ← IO.asTask (prio := .dedicated) child.stdout.getLine
   for _ in [0:500] do

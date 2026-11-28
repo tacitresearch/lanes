@@ -94,13 +94,14 @@ theorem timeline_complete {b : Board N C} {n : N} {following : List N} {x : N ×
 
 /-- Every answer the memo of API requests remembers is quiet. -/
 def Quiet (b : Board N C) : Prop :=
-  ∀ e ∈ b.memo.entries, ∀ r ∈ e.2.2, r.quiet = true
+  ∀ e ∈ b.memo.entries, ∀ r ∈ e.2.2, r.2.quiet = true
 
 theorem quiet_init : (({} : Board N C)).Quiet := by
   intro e he
   simp at he
 
-theorem mem_of_seen {memo : Once.Memo N (Reply N)} {n : N} {seq : Nat} {replies : List (Reply N)}
+theorem mem_of_seen {memo : Once.Memo N (Op N × Reply N)} {n : N} {seq : Nat}
+    {replies : List (Op N × Reply N)}
     (h : memo.seen n seq = .again replies) : ∃ e ∈ memo.entries, e.2.2 = replies := by
   unfold Once.Memo.seen Once.Memo.find? at h
   split at h
@@ -112,13 +113,29 @@ theorem mem_of_seen {memo : Once.Memo N (Reply N)} {n : N} {seq : Nat} {replies 
     · split at h <;> cases h
   · cases h
 
-theorem Quiet.headD {b : Board N C} (h : b.Quiet) {n : N} {seq : Nat}
-    {replies : List (Reply N)} (hs : b.memo.seen n seq = .again replies) :
-    (replies.headD .stale).quiet = true := by
+theorem Quiet.recalled {b : Board N C} (h : b.Quiet) {n : N} {seq : Nat}
+    {replies : List (Op N × Reply N)} (hs : b.memo.seen n seq = .again replies) (op : Op N) :
+    (Board.recalled op replies).quiet = true := by
   obtain ⟨e, he, rfl⟩ := mem_of_seen hs
-  cases hr : e.2.2 with
-  | nil => rfl
-  | cons r rs => exact h e he r (hr ▸ List.mem_cons_self)
+  unfold Board.recalled
+  split
+  · next op' reply hr =>
+    split
+    · exact h e he (op', reply) (hr ▸ List.mem_singleton_self _)
+    · rfl
+  · rfl
+
+/-- What the memo answers other than `reused` it answers to the one change it holds. -/
+theorem eq_of_recalled_ne {op : Op N} {rs : List (Op N × Reply N)}
+    (h : recalled op rs ≠ .reused) :
+    rs = [(op, recalled op rs)] := by
+  match rs, h with
+  | [(op₀, reply)], h =>
+    by_cases h₀ : op₀ = op
+    · subst h₀; simp [recalled]
+    · simp [recalled, h₀] at h
+  | [], h => exact absurd rfl h
+  | _ :: _ :: _, h => exact absurd rfl h
 
 theorem act_memo (b : Board N C) (n : N) (p : Profile N C) (op : Op N) :
     (b.act config n p op).1.memo = b.memo := by
@@ -137,14 +154,14 @@ theorem act_quiet (b : Board N C) (n : N) (p : Profile N C) {op : Op N} (hop : o
   | unfollow whom => rfl
   | timeline => exact absurd rfl hop
 
-theorem Quiet.record {b : Board N C} (h : b.Quiet) (n : N) (seq : Nat) {r : Reply N}
-    (hr : r.quiet = true) : ∀ e ∈ (b.memo.record n seq [r]).entries, ∀ r' ∈ e.2.2,
-      r'.quiet = true := by
+theorem Quiet.record {b : Board N C} (h : b.Quiet) (n : N) (seq : Nat) (op : Op N) {r : Reply N}
+    (hr : r.quiet = true) : ∀ e ∈ (b.memo.record n seq [(op, r)]).entries, ∀ r' ∈ e.2.2,
+      r'.2.quiet = true := by
   intro e he r' hr'
   simp only [Once.Memo.record, List.mem_cons, List.mem_filter] at he
   rcases he with rfl | ⟨he, _⟩
   · simp only [List.mem_singleton] at hr'
-    exact hr' ▸ hr
+    subst hr'; exact hr
   · exact h e he r' hr'
 
 theorem Quiet.withSession {b : Board N C} (h : b.Quiet) {n : N} {session : Sid}
@@ -167,8 +184,8 @@ theorem Quiet.handle {b : Board N C} (h : b.Quiet) (r : Request N C) :
     · split
       · exact h
       · exact h
-  | logIn req n c => simp only [Board.handle]; split; exact h; exact h
-  | logOut req n session | newToken req n session => exact h.withSession fun _ => rfl
+  | logIn req n c at_s => simp only [Board.handle]; split; exact h; exact h
+  | logOut req n session | newToken req n session at_s => exact h.withSession fun _ => rfl
   | web req n session op => exact h.withSession fun p => act_memo config b n p op
   | api req n token seq op =>
     simp only [Board.handle]
@@ -186,7 +203,7 @@ theorem Quiet.handle {b : Board N C} (h : b.Quiet) (r : Request N C) :
           · have hq := act_quiet config b n p hop
             intro e he
             simp only [act_memo] at he
-            exact h.record n seq hq e he
+            exact h.record n seq op hq e he
     · exact h
   | profile req n json => exact h
 
@@ -216,13 +233,13 @@ theorem handle_feed {b : Board N C} (hq : b.Quiet) {r : Request N C} {list : Lis
   cases r with
   | signUp req n c bot =>
     simp only [handle, signUp] at h; split at h; cases h; split at h <;> cases h
-  | logIn req n c =>
+  | logIn req n c at_s =>
     simp only [handle, logIn] at h; split at h
     · split at h; cases h; split at h <;> cases h
     · cases h
   | logOut req n session =>
     simp only [handle, withSession] at h; split at h; split at h <;> cases h; cases h
-  | newToken req n session =>
+  | newToken req n session at_s =>
     simp only [handle, withSession] at h; split at h; split at h <;> cases h; cases h
   | web req n session op =>
     simp only [handle, withSession] at h
@@ -244,7 +261,7 @@ theorem handle_feed {b : Board N C} (hq : b.Quiet) {r : Request N C} {list : Lis
         · next hop =>
           split at h
           · next replies hs =>
-            have := hq.headD hs
+            have := hq.recalled hs op
             simp only at h
             rw [h] at this
             cases this
@@ -299,7 +316,7 @@ theorem handle_secret {b : Board N C} (hq : b.Quiet) {r : Request N C} {m : N}
   cases r with
   | signUp req n c bot =>
     simp only [Board.handle, signUp] at h; split at h; cases h; split at h <;> cases h
-  | logIn req n c =>
+  | logIn req n c at_s =>
     simp only [Board.handle, logIn] at h; split at h
     · split at h
       · cases h
@@ -310,7 +327,7 @@ theorem handle_secret {b : Board N C} (hq : b.Quiet) {r : Request N C} {m : N}
     · cases h
   | logOut req n session =>
     simp only [Board.handle, withSession] at h; split at h; split at h <;> cases h; cases h
-  | newToken req n session =>
+  | newToken req n session at_s =>
     simp only [Board.handle, withSession] at h; split at h
     · split at h
       · simp only [Reply.secretOf, Option.some.injEq] at h
@@ -334,7 +351,7 @@ theorem handle_secret {b : Board N C} (hq : b.Quiet) {r : Request N C} {m : N}
       · split at h
         · exact (nope (act_secret config b n p op) h).elim
         · split at h
-          · next replies hs => exact (nope (secretOf_of_quiet (hq.headD hs)) h).elim
+          · next replies hs => exact (nope (secretOf_of_quiet (hq.recalled hs op)) h).elim
           · cases h
           · exact (nope (act_secret config b n p op) h).elim
     · cases h

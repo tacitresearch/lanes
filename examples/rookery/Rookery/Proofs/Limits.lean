@@ -6,8 +6,9 @@ import Rookery.Proofs.Reads
 - No account gets more than `maxPerWindow` posts accepted in a window: from a board where its
   window holds `w`, at most `maxPerWindow - w` of any requests are accepted as its posts before
   its window deadline passes (`rate_limit`).
-- An API change sent twice with one sequence number is acted on once: the second gets the
-  first's answer and changes nothing (`handle_api_again`).
+- An API change sent twice with one sequence number is acted on once: the second changes
+  nothing and gets the first's answer (`handle_api_again`); another change with that number
+  changes nothing either and is answered `reused` (`handle_api_reused`).
 - Every bound of `Config` holds of every board the requests and deadlines reach (`Bounded`).
 -/
 
@@ -118,14 +119,14 @@ theorem handle_window (b : Board N C) (r : Request N C) :
           windowOf_of_get? (p := { credential := c, bot }) (lookup_append_self hn _)
         rw [h, show b.windowOf n = 0 by simp [windowOf, hn]]
         exact .same
-  | logIn req n c =>
+  | logIn req n c at_s =>
     simp only [handle, Request.name]
     split
     · next p hp => exact same_set hp (logIn_window ..)
     · exact .same
   | logOut req n session =>
     exact withSession_window config (n := n) session fun p hp => same_set hp rfl
-  | newToken req n session =>
+  | newToken req n session at_s =>
     exact withSession_window config (n := n) session fun p hp => same_set hp rfl
   | web req n session op =>
     exact withSession_window config session fun p hp => act_window config hp op
@@ -239,18 +240,18 @@ theorem act_token {b : Board N C} {n : N} {p : Profile N C} (hp : b.get? n = som
   | unfollow whom => exact ⟨_, get?_set_self hp _, rfl⟩
   | timeline => exact ⟨p, hp, rfl⟩
 
-theorem seen_record (memo : Once.Memo N (Reply N)) (n : N) (seq : Nat) (reply : Reply N) :
-    (memo.record n seq [reply]).seen n seq = .again [reply] := by
+theorem seen_record {E : Type} (memo : Once.Memo N E) (n : N) (seq : Nat) (effs : List E) :
+    (memo.record n seq effs).seen n seq = .again effs := by
   simp [Once.Memo.seen]
 
 /-- A change sent through the API twice with one sequence number is acted on once: the second
-time it changes nothing and gets the first's answer, whatever else the two ask. -/
+time it changes nothing, whatever it asks, and gets the first's answer if it asks the same. -/
 theorem handle_api_again (b : Board N C) (req req' : ReqId) (n : N) (token seq : Nat)
     {op op' : Op N} (hop : op ≠ .timeline) (hop' : op' ≠ .timeline) :
     ((b.handle config (.api req n token seq op)).1.handle config (.api req' n token seq op')).1
         = (b.handle config (.api req n token seq op)).1 ∧
-      ((b.handle config (.api req n token seq op)).1.handle config
-          (.api req' n token seq op')).2.1 = (b.handle config (.api req n token seq op)).2.1 := by
+      (op' = op → ((b.handle config (.api req n token seq op)).1.handle config
+          (.api req' n token seq op')).2.1 = (b.handle config (.api req n token seq op)).2.1) := by
   cases hp : b.get? n with
   | none => simp [Board.handle, hp]
   | some p =>
@@ -260,14 +261,50 @@ theorem handle_api_again (b : Board N C) (req req' : ReqId) (n : N) (token seq :
     · simp [ht, hp]
     · simp only [ht, hop, ite_false]
       cases hs : b.memo.seen n seq with
-      | again replies => simp [hp, ht, hop', hs]
+      | again replies =>
+        simp only [hp, ht, hop', hs, true_and, ite_false]
+        rintro rfl
+        rfl
       | stale => simp [hp, ht, hop', hs]
       | fresh =>
         obtain ⟨p', hp', htoken⟩ := act_token config hp op
         have hp'' : ({ (b.act config n p op).1 with
-            memo := (b.act config n p op).1.memo.record n seq [(b.act config n p op).2.1] } :
+            memo := (b.act config n p op).1.memo.record n seq [(op, (b.act config n p op).2.1)] } :
               Board N C).get? n = some p' := hp'
-        simp [hp'', htoken, ht, hop', seen_record]
+        simp only [hp'', htoken, ht, hop', seen_record, true_and, ite_false]
+        rintro rfl
+        simp [recalled]
+
+/-- Another change sent through the API with the sequence number of one the board acted on is
+refused: it is answered `reused`. -/
+theorem handle_api_reused (b : Board N C) (req req' : ReqId) (n : N) (token seq : Nat)
+    {op op' : Op N} (hop : op ≠ .timeline) (hop' : op' ≠ .timeline) (hne : op' ≠ op)
+    (hacted : (b.handle config (.api req n token seq op)).2.1 ≠ .stale ∧
+      (b.handle config (.api req n token seq op)).2.1 ≠ .badToken ∧
+      (b.handle config (.api req n token seq op)).2.1 ≠ .reused) :
+    ((b.handle config (.api req n token seq op)).1.handle config
+      (.api req' n token seq op')).2.1 = .reused := by
+  obtain ⟨hs₁, hb₁, hr₁⟩ := hacted
+  cases hp : b.get? n with
+  | none => simp [Board.handle, hp] at hb₁
+  | some p =>
+    simp only [Board.handle, hp] at hs₁ hb₁ hr₁ ⊢
+    unfold api at hs₁ hb₁ hr₁ ⊢
+    by_cases ht : p.token = 0 ∨ token ≠ p.token
+    · simp [ht] at hb₁
+    · simp only [ht, hop, ite_false] at hs₁ hb₁ hr₁ ⊢
+      cases hs : b.memo.seen n seq with
+      | again replies =>
+        simp only [hs] at hr₁
+        obtain ⟨r, rfl⟩ : ∃ r, replies = [(op, r)] := ⟨_, eq_of_recalled_ne hr₁⟩
+        simp [hp, ht, hop', hs, recalled, Ne.symm hne]
+      | stale => simp [hs] at hs₁
+      | fresh =>
+        obtain ⟨p', hp', htoken⟩ := act_token config hp op
+        have hp'' : ({ (b.act config n p op).1 with
+            memo := (b.act config n p op).1.memo.record n seq [(op, (b.act config n p op).2.1)] } :
+              Board N C).get? n = some p' := hp'
+        simp [hp'', htoken, ht, hop', seen_record, recalled, Ne.symm hne]
 
 /-! ## The bounds -/
 
@@ -350,8 +387,8 @@ theorem close_fine {p : Profile N C} (f : Fine config p) (session : Sid) :
     Fine config { p with sessions := p.sessions.close session } :=
   { f with sessions := Nat.le_trans (Auth.Sessions.length_close_le ..) f.sessions }
 
-theorem logIn_fine (n : N) (req : ReqId) {p : Profile N C} (c : C) (f : Fine config p) :
-    Fine config (logIn config n req p c).1 := by
+theorem logIn_fine (n : N) (req : ReqId) {p : Profile N C} (c : C) (at_s : Nat) (f : Fine config p) :
+    Fine config (logIn config n req p c at_s).1 := by
   unfold logIn
   split
   · exact f
@@ -378,14 +415,14 @@ theorem Bounded.handle {b : Board N C} (h : b.Bounded config) (r : Request N C) 
           subst hx
           exact ⟨Nat.zero_le _, Nat.zero_le _, Nat.zero_le _, Nat.zero_le _,
             by simp [Auth.Attempts.Bounded]; omega⟩
-  | logIn req n c =>
+  | logIn req n c at_s =>
     simp only [Board.handle]
     split
-    · next p hp => exact h.set config hp (logIn_fine config n req c)
+    · next p hp => exact h.set config hp (logIn_fine config n req c at_s)
     · exact h
   | logOut req n session =>
     exact h.withSession config fun p hp => h.set config hp fun f => close_fine config f session
-  | newToken req n session =>
+  | newToken req n session at_s =>
     exact h.withSession config fun p hp => h.set config hp fun f => { f with }
   | web req n session op => exact h.withSession config fun p hp => act_bounded config h hp op
   | api req n token seq op =>

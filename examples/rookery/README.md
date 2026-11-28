@@ -28,7 +28,8 @@ curl -H "Authorization: Bearer $TOKEN" localhost:8080/api/timeline
 ```
 
 `seq` is a number the bot increases with each change it asks for (a clock in milliseconds will
-do); the same `seq` again is answered as the first time and changes nothing.
+do); the same change with the same `seq` again is answered as the first time and changes
+nothing, and another change with that `seq` is refused (`422`).
 
 ## The claims
 
@@ -45,12 +46,12 @@ the claims to its runs.
 | Only a post's author can delete it: a request changes no account but the one it is made as | `Board.handle_get?_ne`, `Board.handle_keeps` |
 | A timeline is exactly the posts of the account and those it follows, newest first, bounded, and the newest of them | `Board.mem_feed`, `Board.mem_timeline`, `Board.sorted_timeline`, `Board.length_timeline`, `Board.timeline_complete` |
 | No account gets more than `maxPerWindow` posts accepted in a window | `Board.rate_limit` |
-| A change a bot sends twice with one `seq` is acted on once | `Board.handle_api_again` |
+| A change a bot sends twice with one `seq` is acted on once, and another change with that `seq` is refused | `Board.handle_api_again`, `Board.handle_api_reused` |
 | One account sees no other account's secrets: a reply carries a session or a token only of the account it answers, and none carries a credential (`Reply` does not mention its type) | `Board.handle_secret` |
 | Every bound of `Config` holds in every state of every run | `Board.Bounded.handle`, `board_invariant` |
 | The system implements its spec: every behaviour it shows, deadlines included, is one the spec allows, with requests lost and reordered and the board crashing, where the link from outside does not duplicate a request. The gate in front is not part of it | `implements` |
 | Of every run of the system: no response carries another account's secrets, every list of posts is a read of a board the spec reaches, and a post deleted through the web is in no read asked for after the delete was answered | `output_secret`, `output_read`, `deleted_unread` |
-| Of every run of the system: a post answered `posted` to a web post, or shown in a read, is in the board of every later read until a delete of it arrives; between two passes of an account's window its web posts are answered `posted` with at most `maxPerWindow` ids; the API changes of one account with one `seq` get one reply, or `stale` or `badToken` | `posted_kept`, `shown_kept`, `rate_limit_run`, `api_once` |
+| Of every run of the system: a post answered `posted` to a web post, or shown in a read, is in the board of every later read until a delete of it arrives; between two passes of an account's window its web posts are answered `posted` with at most `maxPerWindow` ids; the API changes of one account with one `seq` are one change and get one reply, or `stale`, `badToken` or `reused` | `posted_kept`, `shown_kept`, `rate_limit_run`, `api_once` |
 
 What the claims rest on, and what is not proved, is at the end of this section.
 
@@ -76,10 +77,10 @@ are in the theorem.
   arrives (`posted_kept`, `shown_kept`; a read lists at most `timelineMax` posts, so the claim
   is of the board, and `timeline_complete` says which posts the read shows); after a pass of an
   account's window and before the next, its web posts are answered `posted` with at most
-  `maxPerWindow` ids (`rate_limit_run`); and the API changes of one account with one `seq` get
-  one reply but for `stale` and `badToken` (`api_once`). An API post's `posted` and an API
-  delete's `deleted` are not covered: a repeated `seq` is answered with the first reply,
-  whatever the second request asks and whenever it comes.
+  `maxPerWindow` ids (`rate_limit_run`); and the API changes of one account with one `seq` are
+  one change and get one reply but for `stale`, `badToken` and `reused` (`api_once`). An API
+  post's `posted` and an API delete's `deleted` are not covered: a repeat of the change with
+  its `seq` is answered with the first reply, whenever it comes.
 - **The gate in front.** `implements` is about `system`; that `Http.served system` implements the
   same spec through the gate is checked by the gate's own theorems for answers
   (`Http.served_answered_le_arrived`), not proved as a refinement (as for the ledger).
@@ -111,9 +112,12 @@ request is one call of `Board.handle`; one deadline passing one call of `Board.f
   one that passes with nothing to end changes nothing; so the system's timers need no invariant
   tying them to the state, and a crash, which loses timers, cannot leave a timer the spec does
   not have.
-- An API change is acted on once per `seq`; an API read is answered afresh, so that no answer
-  the memo remembers shows a post deleted since. The first version answered reads from the memo
-  too; stating `Board.handle_feed_gone` found it, and the bots' script now retries a read.
+- An API change is acted on once per `seq`, and another change with a `seq` already used is
+  answered `reused`: the memo keeps the change with its reply, so that a bot that reuses a
+  number by mistake is not handed another change's answer. An API read is answered afresh, so
+  that no answer the memo remembers shows a post deleted since. The first version answered
+  reads from the memo too; stating `Board.handle_feed_gone` found it, and the bots' script now
+  retries a read.
 
 ## The actors, and why
 
@@ -159,13 +163,13 @@ that lose and reorder. Every `always` has `sometimes` witnesses beside it.
 | Scenario | States | Result |
 | --- | --- | --- |
 | Spec: posts, a follow, timelines as posts land, a delete, a read of an account, a delete by another | 5,493 | pass |
-| Spec: a bot's token, a post retried with one `seq`, an older `seq`, the window full and ending, a wrong token, a read retried after a delete | 2,731 | pass |
+| Spec: a bot's token, a post retried with one `seq`, an older `seq`, the window full and ending, a wrong token, a read retried after a delete, a `seq` used again for another change | 4,095 | pass |
 | Spec: locks, a session closed by another log-in, a session for another account, log-out, expiry | 106 | pass |
 | System: posts, follows, timelines, a delete | 7,429 | pass |
-| System: bots, retries, tokens, the rate limit, a read retried after a delete | 11,313 | pass |
+| System: bots, retries, tokens, the rate limit, a read retried after a delete, a `seq` used again | 16,209 | pass |
 | System: locks and sessions, timers firing at any moment | 429 | pass |
 | System, a crash anywhere: posts and a delete | 27,314 | pass |
-| System, a crash anywhere: bots and retries | 46,673 | pass |
+| System, a crash anywhere: bots and retries | 66,077 | pass |
 | System, requests lost and reordered and a crash anywhere | 31,905 | pass |
 | Seeded: fan-out on write, a delete that leaves the copy | | found in 31 steps |
 | Seeded: a delete that finds the post in any account | | found in 34 steps (spec alone: 11) |
@@ -177,9 +181,10 @@ token of another session is refused; a session cookie is no API token; an API ch
 `seq` is refused; a password enters the system only as its digest; what enters holds no
 password, no cookie and no token; a verified header a client sends itself is dropped.
 
-And over HTTP (`rookeryLive`, 18 checks): sign-up of a person and a bot, posts, follows both
+And over HTTP (`rookeryLive`, 20 checks): sign-up of a person and a bot, posts, follows both
 ways, timelines newest first, text escaped, a bot posting with a token, a retry posted once, a
-delete gone from every read, another account's delete refused, the rate limit, a stale `seq`,
+delete gone from every read, another account's delete refused, the rate limit, a `seq` used
+for another post refused, a stale `seq`,
 a forged token, a form without its token, then SIGKILL and a restart on the journal with the
 same timelines, the token and the rate limit's window kept, and a log-out.
 
@@ -192,10 +197,12 @@ asks for its posts every five seconds and whenever a post of the page's is answe
 
 - Passwords: Argon2id from OpenSSL in the bridge's `prepare`, salted with an HMAC of the name
   under a pepper of the deployment, as the ledger does (D44).
-- Sessions: a cookie holding a signed token of the session id and the name; `HttpOnly`,
-  `SameSite=Lax`. At most four sessions an account, each ended by log-out or after a day.
+- Sessions: a cookie holding a signed token of the session id and the name, which expires after
+  `session_s`; `HttpOnly`, `SameSite=Lax`. At most four sessions an account, each ended by
+  log-out or after a day.
 - API tokens: a signed token of the account's token generation and its name
-  (`Auth.sign`, purpose `api`); a new token ends every earlier one. The board stores only the
+  (`Auth.sign`, purpose `api`), which expires after `apiToken_s`; a new token ends every earlier
+  one. The board stores only the
   generation, so no token is on disk.
 - Forms carry a token bound to the session and must come from this origin.
 

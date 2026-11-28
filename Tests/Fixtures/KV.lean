@@ -7,6 +7,8 @@ import Lanes
 /-!
 # Reference app: a key-value store behind front ends
 
+The system of `examples/kv-cache/KV.lean`, copied (`Tests/Copies.lean`).
+
 Clients talk to front-end actors; one store actor owns the data. The service spec is five lines:
 a map, where `put` writes and `get` reads (`spec`). The system must look like that map to its
 clients, however requests interleave.

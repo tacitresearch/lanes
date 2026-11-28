@@ -37,7 +37,7 @@ proved function tells it to.
 | Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame,Reading}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash`, `Journal.Disk.Torn.load_readings` |
 | Migrations | `Lanes/Durable/{Migration,Upgrade}.lean` | `Migration.inv_exec`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.holds`, `Journal.Upgrade.inv_load` |
 | Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left`, `System.Run.Fair.right` |
-| Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent` |
+| Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound,Handshake,HandshakeSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent`, `Peers.Handshake.Reachable.ready_proved` |
 | The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Waiting,Conn,ConnSound,Stream,Sse,SseSound,Loopback}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes`, `Http.Conn.read_streamed`, `Http.Sse.parse_written` |
 | Metrics, health and the access log | `Lanes/Lib/Metrics.lean`, `Lanes/Web/Http/{Ops,OpsSound}.lean`, `Lanes/Web/IO/Ops.lean` | `Metrics.Histogram.observeAll_eq`, `Metrics.readLabelValue_escapeLabel`, `Http.Ops.route?_default`, `Http.Ops.route?_metrics`, `Http.Ops.answer_ready`, `Http.Ops.Access.parse_line`; that none of it reaches a system is trusted and tested |
 | Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/{Clock,IO/Clock}.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
@@ -49,7 +49,7 @@ proved function tells it to.
 | Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
-| Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
+| Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, the body of a value read back as written and written one way (`Body.read_eq_ok_iff`), `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
 | Sign-in with OAuth 2.0 and OpenID Connect | `Lanes/Web/Auth/{Jose,IdToken,OAuth}.lean`, `Lanes/Web/IO/SignIn.lean` | `OAuth.check_ok`, `OAuth.Used.accepted_once`, `OAuth.Used.length_claim`, `OAuth.IdToken.verify_accepted`, `Jose.verify_ok`, `OAuth.Keys.no_fetch_within`; the edge is trusted, tested end to end against a provider run in the test |
 | Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Native.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean`; `native/sign.c`, `Lanes/Lib/Crypto/Sign.lean` | trusted; tested against the Lean references and published vectors |
 | TLS client | `native/tls.c`, `Lanes/Web/IO/Tls.lean` | trusted; tested against `openssl s_server` |
@@ -197,6 +197,18 @@ entries wholly written before the cut, and anything else wrong with it is refuse
 (`Journal.recover_kernel`), and hands over again exactly what was produced after the last mark
 (`Journal.recover_handed`).
 
+Each output carries an id: its journal's, made at random when the journal is begun, and its
+origin, the place in the history of the entry that produced it and its place among that entry's
+outputs (`docs/decisions/D105-output-ids.md`). A batch hands an output over with the origin its
+history gives it (`Batch.run_ids`), however its waves are spread (`Batch.run_ids_spread`), and a
+restart hands it over again with the same one (`Journal.recoverIds_suffix`,
+`Journal.recoverIds_handed`, from a snapshot `Journal.resumeIds_eq_recoverIds`), so a driver
+passes the id on as the idempotency key: in `Idempotency-Key` (`Http.Client.handlerKeyed`), as a
+conditional write to S3 (`S3.Op.put` with `ifAbsent`), or as SES's adapter's own record of what
+it sent (`Aws.Ses.handlerOnce`). A copy of the files restored elsewhere, production into
+staging, starts with `Journal.Store.restored`: it hands over nothing it owes and takes a new
+journal id.
+
 A snapshot is the kernel's image (`Lanes/Durable/Snapshot.lean`), saved with codecs the
 application gives for its actors; a shard that saves goes on with the restored kernel, so a
 snapshot is a restart without the crash (D29). Starting from a snapshot gives what replaying the
@@ -291,8 +303,15 @@ events (`Lanes/Net/CourierSound.lean`): one write at a time on a connection, wri
 it dialed and only what it was sent, in order and at most once
 (`Peers.Courier.written_sublist_sent`), a bounded queue, everything closed at `stop`
 (`Peers.Courier.stop_closes`), and what it delivers is what its reader makes of the bytes
-(`Peers.Courier.delivered_read`). `Lanes/Net/IO/Peers.lean` only performs. That the running
-processes implement `System.shards` is trusted.
+(`Peers.Courier.delivered_read`). Every connection opens with a handshake,
+`Peers.Handshake.step` (`Lanes/Net/Handshake.lean`), also pure: each side sends the magic, the
+handshake's version, the system's name, the SHA-256 of `Peers.Config.schema` and a fresh nonce,
+refuses a hello that differs (`Peers.Handshake.hear_differs`), and is connected only once the
+other side has sent the HMAC-SHA-256, under the shared `Peers.Config.key`, of its role and of
+both hellos, its own nonce included (`Peers.Handshake.Reachable.ready_proved`), so a replayed
+handshake does not check. The parcels after it are neither signed nor encrypted.
+`Lanes/Net/IO/Peers.lean` only performs. That the running processes implement `System.shards`
+is trusted.
 
 Where: `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`,
 `Lanes/Semantics/FairJoin.lean`, `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`,
@@ -307,6 +326,7 @@ Where: `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`,
 | Any number of shards joined behave as the one system | `System.SplitReachable.merged`, `System.ShardsReachable.unsharded`; gate `Tests/Axioms/Runtime.lean` | Well-routed runs, booting under `System.SteadyBoot`, states up to `SysState.Equiv` | proved |
 | Processes joined by TCP implement `System.shards` | None |  | trusted |
 | The transport's decisions: one write at a time, only what it was sent, in order, at most once, a bounded queue | `Peers.Courier.written_sublist_sent` and the others of `Lanes/Net/CourierSound.lean`; gate `Tests/Axioms/Net.lean` | The IO of `Lanes/Net/IO/Peers.lean` performs what the courier says | proved; the IO trusted |
+| A connection between peers carries parcels only once the other side has sent the HMAC-SHA-256, under the shared key, of its role and of both hellos, its own nonce included; a hello of another system, version or schema is refused | `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs`, `Lanes/Net/HandshakeSound.lean`; gate `Tests/Axioms/Net.lean`; `Tests/Peers.lean` (`docs/decisions/D102-peer-handshake.md`) | That nobody without the key makes the tag (HMAC); the parcels after the handshake are neither signed nor encrypted | proved |
 
 Also:
 
@@ -434,10 +454,14 @@ from, so text stays text (`Html.lex_render`, against a model of the HTML tokeniz
 attributes limited to `Html.allowedSchemes` (`Html.safeUrl_scheme`), and a template macro
 (`Lanes/Web/Html/Syntax.lean`, trusted); htmx attributes taken from routes (`Hx.request_match?`);
 cookies a browser stores with exactly the attributes they name (`Http.readSetCookie_header`,
-against RFC 6265's algorithm); and `Lanes/Web/Auth/`: signed tokens and form tokens that accept
-exactly what was signed for their purpose and session (`Auth.verify_eq_some`,
-`Auth.checkForm_iff`) and another's only through an HMAC collision (`Auth.verify_sign_other`,
-`Auth.checkForm_other`), Argon2id password digests, failed attempts that lock at their limit
+against RFC 6265's algorithm); and `Lanes/Web/Auth/`: signed tokens and form tokens that name
+the key they are checked with, so keys rotate (`Auth.verify_rotate`), and accept exactly what
+was signed for their purpose and session, a token before its expiry (`Auth.verify_eq_some`,
+`Auth.verify_expired`, `Auth.checkForm_iff`), and another's only through an HMAC collision
+(`Auth.verify_sign_other`, `Auth.checkForm_other`); Argon2id password hashes stored as PHC
+strings, which carry their cost and salt and read back as written (`Auth.Phc.parse?_encode`),
+checked under what they carry and asked to be hashed again at a new cost
+(`Auth.Password.verify_phc`); failed attempts that lock at their limit
 (`Auth.Attempts.locked_unlock_repeat`) and sessions that keep the newest (`Auth.Sessions.ids_starts`)
 and end after a lifetime, judged at the time a request arrived, so that one over is never let in
 again (`Auth.Sessions.accepts_iff`, `Auth.Sessions.Ended.run`).
@@ -485,7 +509,8 @@ Also:
 - The claims of an ID token checked are its issuer, audience, authorized party, expiry, `nbf`
   within a skew and nonce; JWK Sets are cached and fetched again at most once a minute
   (`OAuth.Keys.no_fetch_within`): proved.
-- Password digests by Argon2id are compared with OpenSSL's `CRYPTO_memcmp`; a session ends
+- Password hashes by Argon2id, stored as PHC strings (`Auth.Phc`), are compared with OpenSSL's
+  `CRYPTO_memcmp`; a session ends
   after an idle or absolute lifetime, checked on use and swept on write, with no timer, and the
   oldest is closed when a user has too many (`Auth.Sessions.ids_starts`).
 
@@ -613,7 +638,8 @@ the size a presigned put cannot: the policy a form carries reads back, as S3 rea
 exactly the conditions and the expiry given (`S3.Post.form_policy`, `S3.Post.expiration_parse`),
 and a file S3 admits under it is within its size range and before its expiry
 (`S3.Post.admitted_bounded`); tested against AWS's documented example and botocore, and its
-forms posted to moto, which reads them but checks no policy. Large
+forms posted to moto, which reads them but checks no policy. A form may also name where S3
+sends the browser after the upload, or the status it answers, both signed in its policy. Large
 objects go in parts (`Lanes/Web/S3/Multipart.lean`): a plan proved to cut a body into at most
 10,000 parts, each but the last of at least 5 MiB, together the body in order
 (`Plan.count_le`, `Plan.range_full`, `Plan.range_next`, `Plan.range_last`); links for a
@@ -664,8 +690,10 @@ are ones the model allows; SES takes no key, so each send is a request without o
 calls (`Aws.Sqs`: create a queue, send, receive, delete) are data, with no handler.
 CloudFront's signed URLs and cookies (`Aws.CloudFront`) are pure: a canned policy is the
 document AWS gives for the URL and the time (`CloudFront.cannedPolicy_eq`), CloudFront's base64
-reads back (`CloudFront.decode_encode`) and every cookie is valid (`CloudFront.cookies_valid`);
-the policy and the link, signature included, are botocore's on generated links.
+reads back (`CloudFront.decode_encode`) and every cookie is valid, for a path and a domain
+that need no escaping (`CloudFront.cookies_valid`); a domain lets a distribution on another
+host of the site's get them. The policy and the link, signature included, are botocore's on
+generated links.
 
 Where: `integrations/aws/`.
 
@@ -679,7 +707,7 @@ Where: `integrations/aws/`.
 | A message sent through SES carries exactly the recipients given | `Aws.Ses.toAddresses_json`, `Aws.Ses.json_parse`, `integrations/aws/Aws/SesSound.lean`; a fake SES that reads them from the JSON | That SES reads the document as `Json.parse` does | proved; tested against a fake |
 | SES does only what the email model allows | A run through `Ses.handler` against a fake SES checked with `Outside.allows`, `integrations/aws/Checks/Ses.lean`; and against moto's SES, a sender refused then verified, a send timed out, `oracles/moto/ses.jsonl` | That moto answers as SES does; not run against SES | trusted; tested against moto's SES, nightly |
 | A CloudFront canned policy is byte for byte the document AWS gives for the URL and the time | `Aws.CloudFront.cannedPolicy_eq`, `integrations/aws/Aws/CloudFrontSound.lean`; gate `integrations/aws/Aws/Axioms.lean` | That AWS's document is botocore 1.44.12's and AWS's SDKs' (`docs/decisions/D82-cloudfront-signed-urls.md`); not run against CloudFront | proved |
-| CloudFront's base64 reads back, and every parameter and cookie of a signed link needs no escaping, so every cookie is set | `Aws.CloudFront.decode_encode`, `Aws.CloudFront.fields_safe`, `Aws.CloudFront.cookies_valid`; gate `integrations/aws/Aws/Axioms.lean` | None | proved |
+| CloudFront's base64 reads back, and every parameter and cookie of a signed link needs no escaping, so every cookie is set, for a path and a domain that need no escaping | `Aws.CloudFront.decode_encode`, `Aws.CloudFront.fields_safe`, `Aws.CloudFront.cookies_valid`; gate `integrations/aws/Aws/Axioms.lean` | None | proved |
 | A CloudFront signed URL is the one botocore writes, signature included | `integrations/aws/Checks/CloudFront.lean` against botocore 1.44.12's `CloudFrontSigner` with `cryptography`'s signatures on generated links, canned and custom, RSA and P-256, SHA-1 and SHA-256; every difference a resource ours refuses | That botocore and AWS's SDKs write what CloudFront takes; not run against CloudFront | tested |
 
 Also:
@@ -939,10 +967,16 @@ Also:
 
 ## Data and the standard library
 
-What every layer uses is in `Lanes/Data/`: `Enum`, codecs and `lanes_data`, the queue and
-quorums. The standard library is in `Lanes/Lib/`: encodings, addresses and URLs, time, media
-types, metrics, rate limits, the PostgreSQL protocol (below) and cryptography, with the C it
-binds (Bound C). All of it is total and `Std`-only. A parser or encoder is proved against its
+What every layer uses is in `Lanes/Data/`: `Enum`, codecs and `lanes_data`, schemas and values
+(`Lanes/Data/Schema.lean`), the body of a value (`Lanes/Data/Body.lean`), the queue and quorums.
+A codec carries its type's `Schema`, the names of its fields and constructors with their
+defaults and former names (`docs/decisions/D103-lanes-data-aliases.md`), and a map each way to
+`Value`; `lake exe lanes journal schema --type T` prints it. The body writes a `Value` as bytes
+with its schema, which holds every name, so the bytes hold none, and reads it back under
+`Codec.Limits` (`docs/decisions/D97-data-format.md`); the journal does not use it yet. The
+standard library is in `Lanes/Lib/`: encodings, addresses and URLs, time, media types,
+metrics, rate limits, the PostgreSQL protocol (below) and cryptography, with the C it binds
+(Bound C). All of it is total and `Std`-only. A parser or encoder is proved against its
 RFC and compared with a reference implementation on generated inputs, and every difference is
 decided (rule 5.9, D50, `docs/decisions/D80-oracles.md`); `oracles/README.md` names the oracle
 of each module, and `lake exe lanesOracle` asks them.
@@ -954,6 +988,8 @@ Where: `Lanes/Data/`, `Lanes/Lib/`, `native/`, `oracles/`.
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
 | A codec reads back what it writes | The law is a field of `Codec` (`Lanes/Data/Codec.lean`), so every codec, those `lanes_data` derives among them, carries its proof | None | proved (by its type) |
+| A value read back from its schema's `Value` is itself | The law `ofValue (toValue a) = some a` is a field of `Schema.Of` (`Lanes/Data/Schema.lean`), so every codec's schema carries its proof; `Tests/Schema.lean` | None | proved (by its type) |
+| A body reads as a value exactly when the value writes as that body, so each value has one body and what is written reads back; a type's value decodes as itself | `Body.read_eq_ok_iff`, `Body.decode_encode`, `Body.encode_decode`, `Lanes/Data/BodySound.lean`; gate `Tests/Axioms/Data.lean` | Within `Codec.Limits`: the writer refuses what the reader would | proved |
 
 Also:
 
@@ -965,7 +1001,7 @@ Also:
 - Media types (RFC 9110 §8.3.1, `MediaType.parse_format`, case-insensitive by `MediaType.parse_format_eq`), compared with Go's standard library on generated cases.
 - Metrics in the Prometheus text format, whose histograms' buckets count the observations at or below their bounds (`Metrics.Histogram.observeAll_eq`) and whose label values and help text a reader reads back as written (`Metrics.readLabelValue_escapeLabel`, `Metrics.readHelp_escapeHelp`), tested against text checked by hand and against Prometheus's `expfmt`, which parses what it writes.
 - RFC 3339 and HTTP dates (`TimeFormat.parseRfc3339_print`, `TimeFormat.parseHttpDate_print`), compared with Go's standard library on generated cases.
-- SHA-256, HMAC-SHA-256, the comparison of byte strings, and Argon2id from OpenSSL's libcrypto (`Native`, bound from `native/lanes.c`), secure random bytes from Lean's runtime, with SHA-256, HMAC-SHA-256 and the comparison also in pure Lean as references, both tested against the NIST and RFC 4231 vectors and compared on thousands of random inputs (`Bytes.same_iff`, `Bytes.unhex?_hex` proved).
+- SHA-256, HMAC-SHA-256, the comparison of byte strings, and Argon2id from OpenSSL's libcrypto (`Native`, bound from `native/lanes.c`), random bytes from its `RAND_bytes` (`Lanes.randomBytes`), with SHA-256, HMAC-SHA-256 and the comparison also in pure Lean as references, both tested against the NIST and RFC 4231 vectors and compared on thousands of random inputs (`Bytes.same_iff`, `Bytes.unhex?_hex` proved).
 - The token bucket of x/time/rate with exact arithmetic (`RateLimit.allowed_le`: at most `burst + rate · w` in a window of `w`; `RateLimit.allow_after_reserve`), compared with Go's on generated cases.
 - URI references (RFC 3986: `Url.parse_print`, resolution as §5.2 with §5.4's examples evaluated and no dot segment left, `Url.dotFree_resolve`, idempotent normalization, `Url.normalize_normalize`), compared with Go's standard library on generated cases.
 - `Frame` (length and checksum framing with the torn-write theorem).
@@ -978,8 +1014,9 @@ Also:
 ## Bound C
 
 What Lean cannot express or check is bound, as other languages bind it (D46): `fsync`, and from
-OpenSSL's libcrypto SHA-256, HMAC-SHA-256, constant-time comparison and Argon2id
-(`native/lanes.c`, declared in `Lanes/Lib/Crypto/Native.lean` and `Lanes/Durable/IO/Journal.lean`). A bound
+OpenSSL's libcrypto SHA-256, HMAC-SHA-256, constant-time comparison, Argon2id and random bytes
+(`RAND_bytes`, as `Lanes.randomBytes`: `IO.getRandomBytes` makes no promise that its bytes are
+fit for keys) (`native/lanes.c`, declared in `Lanes/Lib/Crypto/Native.lean` and `Lanes/Durable/IO/Journal.lean`). A bound
 function with a Lean reference (`Sha256.reference`, `Hmac.reference`, `Bytes.sameReference`) has
 that reference as its body, so its theorems (`Bytes.same_iff`) are about the reference, and what
 is trusted is that the C computes the same, which `Tests/Crypto.lean` tests.
@@ -1041,13 +1078,17 @@ The `lanes` command (`LanesCli/`) creates an application (`lanes new`, which wri
 (`lanes lint`, `LanesCli/Lint.lean`: the rules `AGENTS.md` lists, among them that every
 repository path a doc cites exists), writes what is derived from other files (`--fix`,
 `LanesCli/Generated.lean`: the line counts of `TRUSTED.md`, the index of decisions and
-the numbers of new ones), runs the model checks (`lanes check`), and prints the inventory
+the numbers of new ones), runs the model checks (`lanes check`), prints the inventory
 (`lanes inventory`, `LanesCli/Inventory.lean`: every public definition with its status and its
 evidence, read from the built modules; lint fails on one of `Lanes/` without evidence that is
-not on `docs/inventory-none.md`). CI (`.github/`) runs the build with warnings as errors, lint,
-the tests, the model checks, the differential tests against the oracles, the examples and a
-generated app on every pull request, and the build and tests on macOS. The axiom gate
-(`Tests/Axioms.lean`) stops compiling when a `sorry` or a new axiom reaches a headline theorem.
+not on `docs/inventory-none.md`), and prints the schema of a type's codec as the build derives
+it (`lanes journal schema`, `LanesCli/Journal.lean`). CI (`.github/`) runs the build with
+warnings as errors, lint, the tests, the model checks, the differential tests against the
+oracles, the examples and a generated app on every pull request, and the build and tests on
+macOS; a pull request that changes only documentation is built and linted only. Model checks
+run at small bounds on a pull request and at large bounds nightly (`.github/workflows/large.yml`).
+The axiom gate (`Tests/Axioms.lean`) stops compiling when a `sorry` or a new axiom reaches a
+headline theorem.
 
 Where: `LanesCli/`, `Lanes/Core/ByCases.lean`, `.github/`, `infra/`, `scripts/`, `Tests/Axioms.lean`.
 
@@ -1085,8 +1126,9 @@ memo in the map (`RaftKV.implementsMachine_once`); `examples/ledger`, a multi-us
 `examples/sign-in`, members of a video site signed in with Google or GitHub, with sessions;
 and `examples/rookery`, a small social network for bots whose claims are proved of its spec,
 which it is proved to implement with deadlines (`Rookery.implements`); the theorem that joins the
-two is not written. The tests use copies of the small ones' systems, and the bank's two
-theorems, in `Tests/Fixtures/`, so an example can change for its reader alone. Each application
+two is not written. The tests import none of them; the systems of `examples/kv-cache`,
+`examples/election` and `examples/watchdog` are copied into `Tests/Fixtures/`, and
+`Tests/Copies.lean` fails when a copy differs from its example. Each application
 below has its claims, their evidence and premises, and its limits.
 
 ### Counter
@@ -1347,10 +1389,10 @@ Where: `examples/rookery`, a package of its own.
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| Rookery: posts never lost and deleted only by their author, a deleted post in no read, timelines exactly the newest posts followed, the rate limit, API changes acted on once per `seq`, no other account's secrets, every bound | `examples/rookery/Rookery/Proofs/` (`Board.run_keeps`, `Board.Gone.run`, `Board.timeline_complete`, `Board.rate_limit`, `Board.handle_api_again`, `Board.handle_secret`, `Board.Bounded.handle` and the rest); gate `examples/rookery/Rookery/Proofs/Axioms.lean` | Statements about the spec's functions (`Board.handle`, `Board.fire`) and every sequence of them, for every configuration | proved, of the spec |
+| Rookery: posts never lost and deleted only by their author, a deleted post in no read, timelines exactly the newest posts followed, the rate limit, API changes acted on once per `seq` and another change with a `seq` used refused, no other account's secrets, every bound | `examples/rookery/Rookery/Proofs/` (`Board.run_keeps`, `Board.Gone.run`, `Board.timeline_complete`, `Board.rate_limit`, `Board.handle_api_again`, `Board.handle_api_reused`, `Board.handle_secret`, `Board.Bounded.handle` and the rest); gate `examples/rookery/Rookery/Proofs/Axioms.lean` | Statements about the spec's functions (`Board.handle`, `Board.fire`) and every sequence of them, for every configuration | proved, of the spec |
 | Rookery: the system implements its spec with deadlines | `Rookery.implements`, `examples/rookery/Rookery/Proofs/Refines.lean`; same gate | The link from outside to the board does not duplicate; requests may be lost and reordered and the board may crash | proved |
 | Rookery, of every run of the system: a response carries the secrets of no account but the one its request, which arrived before it, was made as; every list of posts handed over is a read of a board the spec's functions reach (so the timeline claims above apply to it); once a delete made through the web is answered `deleted`, no read whose request arrives afterwards shows the post | `Rookery.output_secret`, `Rookery.output_read`, `Rookery.deleted_unread`, `examples/rookery/Rookery/Proofs/Traces.lean`, from `Rookery.implements` and `System.Implements.history`; same gate | The link from outside to the board does not duplicate; for the third, requests have distinct ids. Of `system`, not of `Http.served system` (the gate's refinement is not proved) | proved |
-| Rookery, of every run of the system: a post answered `posted` to a web post, or shown in a read, is on its author's account in the board of every read whose request arrives later, until a request made as its author to delete it arrives (the read lists at most `timelineMax` posts, so it is the board that holds the post, and the timeline claims say which the read shows); after a position where an account's window passes and before the next, the web posts it makes that arrive after it are answered `posted` with at most `maxPerWindow` distinct ids; of the API changes one account sends with one `seq`, every reply but `stale` and `badToken` is the same | `Rookery.posted_kept`, `Rookery.shown_kept`, `Rookery.rate_limit_run`, `Rookery.api_once`, `examples/rookery/Rookery/Proofs/Runs.lean`, from `Rookery.implements` and `System.Implements.history` (which passes each deadline where the run shows it, `System.Implements.Explains.fired`, `fires`); same gate | The link from outside to the board does not duplicate; requests have distinct ids. Of `system`, not of `Http.served system`. The rate limit counts web posts only, and `posted_kept` starts from a web post or a read: an API post's repeated `seq` is answered `posted` from the memo, after the post was deleted or in a later window | proved |
+| Rookery, of every run of the system: a post answered `posted` to a web post, or shown in a read, is on its author's account in the board of every read whose request arrives later, until a request made as its author to delete it arrives (the read lists at most `timelineMax` posts, so it is the board that holds the post, and the timeline claims say which the read shows); after a position where an account's window passes and before the next, the web posts it makes that arrive after it are answered `posted` with at most `maxPerWindow` distinct ids; of the API changes one account sends with one `seq`, every two replies but `stale`, `badToken` and `reused` are the same, to the same change | `Rookery.posted_kept`, `Rookery.shown_kept`, `Rookery.rate_limit_run`, `Rookery.api_once`, `examples/rookery/Rookery/Proofs/Runs.lean`, from `Rookery.implements` and `System.Implements.history` (which passes each deadline where the run shows it, `System.Implements.Explains.fired`, `fires`); same gate | The link from outside to the board does not duplicate; requests have distinct ids. Of `system`, not of `Http.served system`. The rate limit counts web posts only, and `posted_kept` starts from a web post or a read: an API post's repeated `seq` is answered `posted` from the memo, after the post was deleted or in a later window | proved |
 | Rookery: a request is made as the account its cookie or token verifies; no secret reaches the journal | `examples/rookery/Check.lean` (`bridge`), `lake exe rookeryLive` (CI) | HMAC is a pseudorandom function | tested |
 
 Also:
