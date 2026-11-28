@@ -902,7 +902,7 @@ Also:
 ## The typed store
 
 Durable state in PostgreSQL through typed tables and pure transactions
-(`docs/decisions/new-typed-store.md`). A table (`Lanes/Db/Basic.lean`) has typed columns of
+(`docs/decisions/D111-typed-store.md`). A table (`Lanes/Db/Basic.lean`) has typed columns of
 64-bit integers, bytes, text compared byte by byte and booleans, each nullable or not, a primary
 key on its first columns, and secondary indexes, unique or not. The query subset
 (`Lanes/Db/Query.lean`) is a row by key, a scan on the key or an index with equality on its first

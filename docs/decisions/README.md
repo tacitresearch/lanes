@@ -101,6 +101,7 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D59. Threads park, and a connection's loop runs where it is told something](D59-threads-park.md)
 - [D23. Time is data, and a shard is a thread](D23-time-is-data.md): partly superseded by D110-volatile-actors.md (a shard on one thread: the scheduler becomes free-running)
 - [D10. Toolchain and pins](D10-toolchain-and-pins.md): partly superseded by D99-layered-packages.md and D110-volatile-actors.md (CSLib and Mathlib)
+- [D111. The typed store: pure transactions over typed tables, at SERIALIZABLE](D111-typed-store.md)
 - [D38. Types are declared inside a command that derives what Lean's handlers cannot](D38-types-are-declared-inside-a-command.md): partly superseded by D110-volatile-actors.md (the binary codec `Codable`: `lanes_data` derives JSON and database rows)
 - [D17. URL attributes are rendered through `Html.safeUrl`](D17-url-attributes-are-rendered-through-html.md)
 - [D58. URLs, media types and rate limits against Go, and where they depart from it](D58-urls-media-types-rate-limits-against-go.md)

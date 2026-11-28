@@ -1,4 +1,4 @@
-# D?. The typed store: pure transactions over typed tables, at SERIALIZABLE
+# D111. The typed store: pure transactions over typed tables, at SERIALIZABLE
 
 Status: Accepted
 
