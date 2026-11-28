@@ -87,6 +87,7 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D98. A small proof surface, and each property written once](D98-proof-surface.md)
 - [D14. Proofs of system invariants go through per-event lemmas](D14-proofs-of-system-invariants-go-through.md)
 - [D54. Raft acts once on a command its client names, and an answer it no longer keeps is not handed over](D54-raft-acts-once.md)
+- [D108. Reads from the state](D108-reads-from-state.md)
 - [D51. An actor at rest is released, and the kernel's theorems hold up to the starts that bring it back](D51-release-actors-at-rest.md)
 - [D44. A request is prepared before it is journalled](D44-request-prepared-before-journal.md)
 - [D22. Routes are values with a proof; htmx attributes come from them](D22-routes-are-values-with-a-proof.md)

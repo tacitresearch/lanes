@@ -140,6 +140,7 @@ public import Lanes.Web.Http.SharedCache
 public import Lanes.Web.Http.Sse
 public import Lanes.Web.Http.Stream
 public import Lanes.Web.Http.SigV4
+public import Lanes.Web.Http.View
 public import Lanes.Web.Http.Waiting
 public import Lanes.Web.Http.Wire
 public import Lanes.Web.Http.WireSpec
