@@ -1,4 +1,4 @@
-# D?. CBOR is the standard binary encoding, derived by `lanes_data` as JSON is
+# D118. CBOR is the standard binary encoding, derived by `lanes_data` as JSON is
 
 Status: Accepted
 

@@ -1023,7 +1023,7 @@ mappings out of the process, each derived by `lanes_data` from its declaration w
 `Lanes/Lib/Encoding/Json/Derive.lean`), rows for the typed store (a `table` line, through
 `Lanes/Db/Columns.lean`), and CBOR, the standard binary encoding, for messages, files and caches
 (`deriving ToCbor, FromCbor`, through `Lanes/Lib/Encoding/Cbor/Derive.lean`;
-`docs/decisions/new-cbor.md`). JSON and CBOR are built by the same code from the same pieces
+`docs/decisions/D118-cbor.md`). JSON and CBOR are built by the same code from the same pieces
 (`Lanes/Lib/Encoding/Fields.lean`), so a type's CBOR has the shape of its JSON. CBOR is not in
 `import Lanes`: a program imports `Lanes.Lib.Encoding.Cbor` to build and link it.
 The standard library is in `Lanes/Lib/`: encodings, addresses and URLs, time, media types,
