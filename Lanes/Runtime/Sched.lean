@@ -245,12 +245,10 @@ def free (n : Nat) (l : Ledger W I) : List W × Ledger W I :=
   if n == 0 then ([], l)
   else (l.waiting, { l with inputs := l.inputs - n, waiting := [] })
 
-/-- A step is done: it took its item off the mailbox if `consumed`, dropped `dropped` items, and
-left `before` pending timers `after`. The idle waiters now answered. -/
-def done (consumed : Bool) (dropped before after : Nat) (l : Ledger W I) : List I × Ledger W I :=
-  { l with
-    items := l.items - (if consumed then 1 else 0) - dropped
-    timers := l.timers + after - before }.settle
+/-- Steps are done: they took `gone` items off mailboxes or dropped them, and left `before`
+pending timers `after`. The idle waiters now answered. -/
+def done (gone before after : Nat) (l : Ledger W I) : List I × Ledger W I :=
+  { l with items := l.items - gone, timers := l.timers + after - before }.settle
 
 /-- Take no more inputs. Every sender waiting for room and every idle waiter is to be told. -/
 def close (l : Ledger W I) : (List W × List I) × Ledger W I :=

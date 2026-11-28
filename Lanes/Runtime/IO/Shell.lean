@@ -213,13 +213,21 @@ private def ending (rt : Runtime sys) : BaseIO Bool := do
   if ← rt.stopping.get then return (← rt.ledger.get).inputs == 0
   return false
 
+/-- What the steps of a turn did to the ledger's counts, given to it once at the turn's end: the
+items taken off or dropped, and the pending timers before and after. -/
+private structure Tally where
+  gone : Nat := 0
+  before : Nat := 0
+  after : Nat := 0
+
 /-- One step of `i`, which worker `w` holds, with `held` the state it kept from the step before:
-`none` when the mailbox was empty, else the state to keep. A state kept in the worker's hands
+`none` when the mailbox was empty, else the state to keep and what the step did to the counts. A state kept in the worker's hands
 between two steps is updated in place; one written back to the slot is seen by other threads,
 and Lean copies it at its next update. So it goes back to the slot only when the worker lets go
 of the actor, which nothing can tell: no other thread reads the state of an actor held. -/
 private def step (rt : Runtime sys) (w : Nat) (onOutput : σ.Out → Async Unit) (i : σ.Id)
-    (b : IO.Ref (Box sys i)) (held : Option (sys.State i)) : BaseIO (Option (Option (sys.State i))) := do
+    (b : IO.Ref (Box sys i)) (held : Option (sys.State i)) :
+    BaseIO (Option (Option (sys.State i) × Tally)) := do
   let now ← rt.clock
   let (taken, before) ← b.modifyGet fun bx =>
     let pending := bx.slot.pending
@@ -227,10 +235,7 @@ private def step (rt : Runtime sys) (w : Nat) (onOutput : σ.Out → Async Unit)
     | (t, s) => ((t, pending), { bx with slot := s })
   match taken with
   | .empty => return none
-  | .stale =>
-    let idle ← rt.ledgerDo (Sched.Ledger.done true 0 0 0)
-    for p in idle do p.resolve true
-    return some held
+  | .stale => return some (held, { gone := 1 })
   | .job j =>
     let j := match held with | some s => { j with state := s } | none => j
     let (state, effects) := j.run
@@ -254,9 +259,8 @@ private def step (rt : Runtime sys) (w : Nat) (onOutput : σ.Out → Async Unit)
     else if sends then rt.sending.unlockRead
     rt.arm i c.armed
     handOver onOutput c.outputs
-    let idle ← rt.ledgerDo (Sched.Ledger.done j.work.consumes c.dropped before after)
-    for p in idle do p.resolve true
-    return some (some state)
+    return some (some state,
+      { gone := (if j.work.consumes then 1 else 0) + c.dropped, before, after })
 
 /-- Worker `w` steps `i` on up to `budget` items, then lets it go, writing its state back. -/
 private def serve (rt : Runtime sys) (w : Nat) (onOutput : σ.Out → Async Unit) (i : σ.Id) :
@@ -266,11 +270,15 @@ private def serve (rt : Runtime sys) (w : Nat) (onOutput : σ.Out → Async Unit
     return
   let mut n := 0
   let mut held := none
+  let mut tally : Tally := {}
   while n < max 1 rt.config.budget do
-    if ← rt.ending then break
-    let some next ← rt.step w onOutput i b held | break
+    let some (next, t) ← rt.step w onOutput i b held | break
     held := next
+    tally := { gone := tally.gone + t.gone, before := tally.before + t.before
+               after := tally.after + t.after }
     n := n + 1
+    if n % 8 == 0 then
+      if ← rt.ending then break
   let keep := rt.config.record
   let (again, retired, readers, state) ← b.modifyGet fun bx =>
     let s := match held with
@@ -284,6 +292,9 @@ private def serve (rt : Runtime sys) (w : Nat) (onOutput : σ.Out → Async Unit
   answer readers state
   if retired then (rt.shardOf i).modify (·.erase i)
   if again then rt.enqueue w i
+  if tally.gone != 0 || tally.before != tally.after then
+    let idle ← rt.ledgerDo (Sched.Ledger.done tally.gone tally.before tally.after)
+    for p in idle do p.resolve true
 
 /-- The next actor for worker `w`: the first on its run queue, or one stolen from another's. -/
 private def next (rt : Runtime sys) (w : Nat) : BaseIO (Option σ.Id) := do

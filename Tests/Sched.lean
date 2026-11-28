@@ -80,9 +80,9 @@ def ledgerTests : List (String × Bool) :=
   let (c, l) := l.offerOrWait 2 70
   let (quiet, l) := l.idle false 50
   let (room, l) := l.free 1
-  let (idle, l) := l.done true 0 0 0
+  let (idle, l) := l.done 1 0 0
   let (room', l) := l.free 1
-  let (idle', l) := l.done true 0 0 0
+  let (idle', l) := l.done 1 0 0
   let (now, l) := l.idle false 51
   let ((told, idlers), l) := ({ l with idlers := [(true, 60)] } : L).close
   [ ("ledger: the inbox takes up to its capacity, then a sender waits",
