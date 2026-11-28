@@ -79,6 +79,7 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D22. Routes are values with a proof; htmx attributes come from them](D22-routes-are-values-with-a-proof.md)
 - [D96. One model with proofs, and runtimes proved against it](D96-runtime-contract.md): partly superseded by D110-volatile-actors.md (the default runtime, and the contract's clauses that rest on a journal: one order, output ids, no acknowledged input lost across a restart)
 - [D71. S3 and Signature Version 4, in Lanes as the protocol of a class of object stores](D71-s3-and-signature-version-4.md)
+- [D113. A vendor service gets a model only when a proof depends on it](D113-service-models.md)
 - [D72. Sign-in with OAuth 2.0 and OpenID Connect, done where a request arrives](D72-sign-in-with-oauth.md): partly superseded by D110-volatile-actors.md (each provider a Lake package of its own: Google and GitHub are presets of `Services/Oidc`)
 - [D52. A service behind actors is proved with one simulation, and an application gives only its steps](D52-standard-simulation.md)
 - [D5. Start is recovery](D5-start-is-recovery.md)

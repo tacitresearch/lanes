@@ -3,7 +3,7 @@
 What a particular vendor needs (`docs/decisions/D110-volatile-actors.md`, "The environment, in
 three layers"). Each service is a folder here, in the same Lake package as the core, with a
 README that names its client, its model and its oracle, and says which of two it is
-(`docs/decisions/new-service-models.md`):
+(`docs/decisions/D113-service-models.md`):
 
 - **checked: model plus oracle**: a client, a model of the service built from a shape of the
   core (`Lanes/Outside/`), and an oracle that checks the model against the real service or an

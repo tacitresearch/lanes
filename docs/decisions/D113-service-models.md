@@ -1,4 +1,4 @@
-# D?. A vendor service gets a model only when a proof depends on it
+# D113. A vendor service gets a model only when a proof depends on it
 
 Status: Accepted
 

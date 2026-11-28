@@ -1,7 +1,7 @@
 # Stripe
 
 Status: **checked: model plus oracle**, because `examples/payments` proves a property against the
-model (`docs/decisions/new-service-models.md`); the client and the oracle are still owed, so the
+model (`docs/decisions/D113-service-models.md`); the client and the oracle are still owed, so the
 model is not yet checked against Stripe.
 
 - **Client**: none yet.

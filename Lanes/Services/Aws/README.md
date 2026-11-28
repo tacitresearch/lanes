@@ -1,7 +1,7 @@
 # AWS
 
 Status: SES is **checked: model plus oracle**; the role credentials, SQS and CloudFront are
-**client only** (`docs/decisions/D74-aws-integration.md`, `docs/decisions/new-service-models.md`).
+**client only** (`docs/decisions/D74-aws-integration.md`, `docs/decisions/D113-service-models.md`).
 Its tests are in `Tests/Aws/`.
 
 | Part | Client | Model | Oracle | Status |

@@ -565,7 +565,7 @@ imports a service: lint `layering` fails otherwise (`LanesCli/Layers.lean`). An 
 imports the services it calls (`import Lanes.Services.Postgres`), and Lake builds only those.
 HTTP, Signature Version 4, OAuth and OpenID Connect are protocols, not services, and stay in the
 core. A service gets a model and an oracle of its own only when an application's proof depends
-on how it behaves (`docs/decisions/new-service-models.md`): Postgres, S3, SES and payments are
+on how it behaves (`docs/decisions/D113-service-models.md`): Postgres, S3, SES and payments are
 checked, a model plus an oracle; the sign-in presets, AWS's role credentials, CloudFront and SQS
 are clients only, with tests, and SQS's calls are paired with the queue shape when an
 application needs it.

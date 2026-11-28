@@ -267,7 +267,7 @@ each area. A file that performs IO is in an `IO/` directory of its area and name
 `TRUSTED.md`. What is a vendor's (a client, a model of its service, its fake, a preset) is a
 service, in `Lanes/Services/<Name>/`, whose README names its client, its model, its oracle and
 whether it is checked (model plus oracle) or a client only (`Lanes/Services/README.md`,
-`docs/decisions/new-service-models.md`); a protocol (HTTP, Signature Version 4, OAuth) and the
+`docs/decisions/D113-service-models.md`); a protocol (HTTP, Signature Version 4, OAuth) and the
 shape of a service (`Lanes/Outside/`) are core. Code under `Lanes/` imports `Std` only, but for
 the proof layer (rule 1.6).
 

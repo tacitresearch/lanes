@@ -5,7 +5,7 @@ Connect (`Lanes/Web/Auth/OAuth.lean`, `Lanes/Web/Auth/Jose.lean`, `Lanes/Web/IO/
 `docs/decisions/D72-sign-in-with-oauth.md`). A preset is a `Provider`: its endpoints, its
 issuers and where the identity comes from: configuration, tested against responses recorded
 from the vendor or written from its documentation. Status: **client only**
-(`docs/decisions/new-service-models.md`); the protocol's proofs stay in `Lanes/Web/Auth/`. Its
+(`docs/decisions/D113-service-models.md`); the protocol's proofs stay in `Lanes/Web/Auth/`. Its
 tests are in `Tests/Oidc/`.
 
 | Preset | Client | The protocol's model, in the core | Tested against | Status |
