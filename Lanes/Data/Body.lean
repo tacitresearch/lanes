@@ -83,6 +83,8 @@ inductive Error.Problem where
   | ambiguous (data : String)
   /-- A constructor of the data that the reader's type does not have. -/
   | absent
+  /-- A named type that the schema uses and does not declare. -/
+  | undeclared (name : String)
   deriving Repr, DecidableEq, Inhabited
 
 /-- An error of the body: the byte where it is, the path to it, outermost first, and what. -/
@@ -114,11 +116,12 @@ def Problem.text : Problem → String
   | .changed data reader => s!"the data's type is {data}, the reader's {reader}"
   | .ambiguous data => s!"takes the data's {data}, which another takes too"
   | .absent => "a constructor of the data that the reader's type does not have"
+  | .undeclared name => s!"the type {name}, which the schema does not declare"
 
 /-- Whether the problem is at a byte. One found by matching the writer's schema with the
 reader's is not. -/
 def Problem.atByte : Problem → Bool
-  | .noDefault | .changed _ _ | .ambiguous _ | .absent => false
+  | .noDefault | .changed _ _ | .ambiguous _ | .absent | .undeclared _ => false
   | _ => true
 
 /-- The path as text: `Shape.circle.centre / Point.x`, a type inside another after a slash. -/
@@ -229,17 +232,24 @@ def readCount (limits : Limits) (bytes : ByteArray) (consumes : Bool) (pos : Nat
 
 /-! Values. -/
 
-mutual
+section
 
-/-- Whether every value of the schema is written as at least one byte. -/
-def consumes : Schema → Bool
-  | .unit => false
-  | .record _ _ fields => consumesFields fields
-  | .nat | .int | .string | .bytes | .list _ | .map _ _ | .sum _ _ _ | .dependent _ => true
+variable (types : List (String × Schema.Decl))
 
-def consumesFields : List (Schema.Field Schema) → Bool
-  | [] => false
-  | f :: fs => consumes f.schema || consumesFields fs
+/-- Whether every value of the type is written as at least one byte, at most `depth` deep: past
+it, `false`, which is always safe. -/
+def consumes : Nat → Schema.Ty → Bool
+  | _, .unit => false
+  | 0, .ref _ => false
+  | d + 1, .ref name =>
+    match types.lookup name with
+    | some (.record _ fields) => fields.any fun f => consumes d f.schema
+    | some (.sum _ _) => true
+    | none => false
+  | _, _ => true
+
+def consumesFields (depth : Nat) (fields : List (Schema.Field Schema.Ty)) : Bool :=
+  fields.any fun f => consumes types depth f.schema
 
 end
 
@@ -253,20 +263,21 @@ def Tag.ctor : UInt8 := 5
 
 section
 
-variable (limits : Limits)
+variable (limits : Limits) (types : List (String × Schema.Decl))
 
 mutual
 
-/-- `v` with schema `s` after `acc`, nested at most `depth` more. -/
-def writeAt (depth : Nat) (s : Schema) (v : Value) (acc : ByteArray) : Except Error ByteArray :=
+/-- `v` of type `s` after `acc`, nested at most `depth` more, with the named types `types`. -/
+def writeAt (depth : Nat) (s : Schema.Ty) (v : Value) (acc : ByteArray) :
+    Except Error ByteArray :=
   match depth, s, v with
   | _, .nat, .nat n => writeNum limits acc n
   | _, .int, .int i => writeNum limits acc (zigzag i)
   | _, .string, .string t => writeBlob limits acc t.toUTF8
   | _, .bytes, .bytes b => writeBlob limits acc b
   | _, .unit, .ctor 0 [] => .ok acc
-  | 0, .list _, _ | 0, .map _ _, _ | 0, .record _ _ _, _ | 0, .sum _ _ _, _
-  | 0, .dependent _, _ => fail acc.size (.limit "maxDepth" limits.maxDepth)
+  | 0, .list _, _ | 0, .map _ _, _ | 0, .ref _, _ | 0, .dependent _, _ =>
+    fail acc.size (.limit "maxDepth" limits.maxDepth)
   | d + 1, .list item, .list vs =>
     match writeCount limits acc vs.length with
     | .ok acc => writeItems d item vs 0 acc
@@ -275,14 +286,18 @@ def writeAt (depth : Nat) (s : Schema) (v : Value) (acc : ByteArray) : Except Er
     match writeCount limits acc es.length with
     | .ok acc => writeEntries d key value es 0 acc
     | .error e => .error e
-  | d + 1, .record type _ fields, .ctor 0 vs => within (.type type) (writeFields d fields vs acc)
-  | d + 1, .sum type _ ctors, .ctor k vs =>
-    match ctors[k]? with
-    | none => fail acc.size .misfit
-    | some c =>
-      match writeNum limits acc k with
-      | .ok acc => within (.type type) (within (.ctor c.name) (writeFields d c.fields vs acc))
-      | .error e => .error e
+  | d + 1, .ref name, .ctor k vs =>
+    match types.lookup name with
+    | none => fail acc.size (.undeclared name)
+    | some (.record type fields) =>
+      if k = 0 then within (.type type) (writeFields d fields vs acc) else fail acc.size .misfit
+    | some (.sum type ctors) =>
+      match ctors[k]? with
+      | none => fail acc.size .misfit
+      | some c =>
+        match writeNum limits acc k with
+        | .ok acc => within (.type type) (within (.ctor c.name) (writeFields d c.fields vs acc))
+        | .error e => .error e
   | d + 1, .dependent index, .ctor 0 [i, x] =>
     match within (.item 0) (writeAt d index i acc) with
     | .ok acc => within (.item 1) (writeTagged d x acc)
@@ -290,7 +305,7 @@ def writeAt (depth : Nat) (s : Schema) (v : Value) (acc : ByteArray) : Except Er
   | _, _, _ => fail acc.size .misfit
 termination_by (depth, 0, 0)
 
-def writeFields (depth : Nat) (fields : List (Schema.Field Schema)) (vs : List Value)
+def writeFields (depth : Nat) (fields : List (Schema.Field Schema.Ty)) (vs : List Value)
     (acc : ByteArray) : Except Error ByteArray :=
   match fields, vs with
   | [], [] => .ok acc
@@ -301,7 +316,7 @@ def writeFields (depth : Nat) (fields : List (Schema.Field Schema)) (vs : List V
   | _, _ => fail acc.size .misfit
 termination_by (depth, 1, vs.length)
 
-def writeItems (depth : Nat) (item : Schema) (vs : List Value) (index : Nat)
+def writeItems (depth : Nat) (item : Schema.Ty) (vs : List Value) (index : Nat)
     (acc : ByteArray) : Except Error ByteArray :=
   match vs with
   | [] => .ok acc
@@ -312,7 +327,7 @@ def writeItems (depth : Nat) (item : Schema) (vs : List Value) (index : Nat)
 termination_by (depth, 1, vs.length)
 
 /-- The entries of a map, each a key and a value: `.ctor 0 [k, v]`. -/
-def writeEntries (depth : Nat) (key value : Schema) (es : List Value) (index : Nat)
+def writeEntries (depth : Nat) (key value : Schema.Ty) (es : List Value) (index : Nat)
     (acc : ByteArray) : Except Error ByteArray :=
   match es with
   | [] => .ok acc
@@ -363,8 +378,8 @@ variable (bytes : ByteArray)
 
 mutual
 
-/-- The value with schema `s` at `pos`, nested at most `depth` more, and where it ends. -/
-def readAt (depth : Nat) (s : Schema) (pos : Nat) : Except Error (Value × Nat) :=
+/-- The value of type `s` at `pos`, nested at most `depth` more, and where it ends. -/
+def readAt (depth : Nat) (s : Schema.Ty) (pos : Nat) : Except Error (Value × Nat) :=
   match depth, s with
   | _, .nat =>
     match readNat limits bytes pos with
@@ -386,36 +401,39 @@ def readAt (depth : Nat) (s : Schema) (pos : Nat) : Except Error (Value × Nat) 
     | .ok (b, stop) => .ok (.bytes b, stop)
     | .error e => .error e
   | _, .unit => .ok (.ctor 0 [], pos)
-  | 0, .list _ | 0, .map _ _ | 0, .record _ _ _ | 0, .sum _ _ _ | 0, .dependent _ =>
+  | 0, .list _ | 0, .map _ _ | 0, .ref _ | 0, .dependent _ =>
     fail pos (.limit "maxDepth" limits.maxDepth)
   | d + 1, .list item =>
-    match readCount limits bytes (consumes item) pos with
+    match readCount limits bytes (consumes types d item) pos with
     | .ok (n, pos) =>
       match readItems d item n 0 pos with
       | .ok (vs, stop) => .ok (.list vs, stop)
       | .error e => .error e
     | .error e => .error e
   | d + 1, .map key value =>
-    match readCount limits bytes (consumes key || consumes value) pos with
+    match readCount limits bytes (consumes types d key || consumes types d value) pos with
     | .ok (n, pos) =>
       match readEntries d key value n 0 pos with
       | .ok (es, stop) => .ok (.list es, stop)
       | .error e => .error e
     | .error e => .error e
-  | d + 1, .record type _ fields =>
-    match within (.type type) (readFields d fields pos) with
-    | .ok (vs, stop) => .ok (.ctor 0 vs, stop)
-    | .error e => .error e
-  | d + 1, .sum type _ ctors =>
-    match readNat limits bytes pos with
-    | .error e => .error e
-    | .ok (k, start) =>
-      match ctors[k]? with
-      | none => within (.type type) (fail pos (.index k ctors.length))
-      | some c =>
-        match within (.type type) (within (.ctor c.name) (readFields d c.fields start)) with
-        | .ok (vs, stop) => .ok (.ctor k vs, stop)
-        | .error e => .error e
+  | d + 1, .ref name =>
+    match types.lookup name with
+    | none => fail pos (.undeclared name)
+    | some (.record type fields) =>
+      match within (.type type) (readFields d fields pos) with
+      | .ok (vs, stop) => .ok (.ctor 0 vs, stop)
+      | .error e => .error e
+    | some (.sum type ctors) =>
+      match readNat limits bytes pos with
+      | .error e => .error e
+      | .ok (k, start) =>
+        match ctors[k]? with
+        | none => within (.type type) (fail pos (.index k ctors.length))
+        | some c =>
+          match within (.type type) (within (.ctor c.name) (readFields d c.fields start)) with
+          | .ok (vs, stop) => .ok (.ctor k vs, stop)
+          | .error e => .error e
   | d + 1, .dependent index =>
     match within (.item 0) (readAt d index pos) with
     | .error e => .error e
@@ -425,7 +443,7 @@ def readAt (depth : Nat) (s : Schema) (pos : Nat) : Except Error (Value × Nat) 
       | .error e => .error e
 termination_by (depth, 0, 0)
 
-def readFields (depth : Nat) (fields : List (Schema.Field Schema)) (pos : Nat) :
+def readFields (depth : Nat) (fields : List (Schema.Field Schema.Ty)) (pos : Nat) :
     Except Error (List Value × Nat) :=
   match fields with
   | [] => .ok ([], pos)
@@ -438,7 +456,7 @@ def readFields (depth : Nat) (fields : List (Schema.Field Schema)) (pos : Nat) :
       | .error e => .error e
 termination_by (depth, 1, fields.length)
 
-def readItems (depth : Nat) (item : Schema) (n index pos : Nat) :
+def readItems (depth : Nat) (item : Schema.Ty) (n index pos : Nat) :
     Except Error (List Value × Nat) :=
   match n with
   | 0 => .ok ([], pos)
@@ -451,7 +469,7 @@ def readItems (depth : Nat) (item : Schema) (n index pos : Nat) :
       | .error e => .error e
 termination_by (depth, 1, n)
 
-def readEntries (depth : Nat) (key value : Schema) (n index pos : Nat) :
+def readEntries (depth : Nat) (key value : Schema.Ty) (n index pos : Nat) :
     Except Error (List Value × Nat) :=
   match n with
   | 0 => .ok ([], pos)
@@ -533,7 +551,7 @@ end
 /-- The bytes of `v`, a value of `s`; refused where the reader with the same limits would refuse
 them. -/
 def write (limits : Limits) (s : Schema) (v : Value) : Except Error ByteArray :=
-  match writeAt limits limits.maxDepth s v .empty with
+  match writeAt limits s.types limits.maxDepth s.root v .empty with
   | .ok bytes =>
     if bytes.size ≤ limits.maxBytes then .ok bytes
     else fail 0 (.limit "maxBytes" limits.maxBytes)
@@ -543,17 +561,17 @@ def write (limits : Limits) (s : Schema) (v : Value) : Except Error ByteArray :=
 def read (limits : Limits) (s : Schema) (bytes : ByteArray) : Except Error Value :=
   if limits.maxBytes < bytes.size then fail 0 (.limit "maxBytes" limits.maxBytes)
   else
-    match readAt limits bytes limits.maxDepth s 0 with
+    match readAt limits s.types bytes limits.maxDepth s.root 0 with
     | .ok (v, stop) => if stop = bytes.size then .ok v else fail stop (.trailing (bytes.size - stop))
     | .error e => .error e
 
 /-- A value with no schema: every value inside it is written with a tag, so the bytes carry its
 shape. It is the second part of a `dependent` pair whose first is `()`. -/
 def writeAny (limits : Limits) (v : Value) : Except Error ByteArray :=
-  write limits (.dependent .unit) (.ctor 0 [.ctor 0 [], v])
+  write limits ⟨[], .dependent .unit⟩ (.ctor 0 [.ctor 0 [], v])
 
 def readAny (limits : Limits) (bytes : ByteArray) : Except Error Value :=
-  match read limits (.dependent .unit) bytes with
+  match read limits ⟨[], .dependent .unit⟩ bytes with
   | .ok (.ctor 0 [_, v]) => .ok v
   | .ok _ => fail 0 .misfit
   | .error e => .error e
@@ -574,9 +592,9 @@ def decode (limits : Limits) (s : Schema.Of α) (bytes : ByteArray) : Except Err
     match s.ofValue v with
     | some a => .ok a
     | none =>
-      match s.schema with
-      | .record type _ _ | .sum type _ _ => within (.type type) (fail 0 .refused)
-      | _ => fail 0 .refused
+      match s.schema.type? with
+      | some type => within (.type type) (fail 0 .refused)
+      | none => fail 0 .refused
 
 end Body
 

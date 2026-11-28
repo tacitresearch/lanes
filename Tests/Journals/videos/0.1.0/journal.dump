@@ -5,7 +5,7 @@ manifest (frame at byte 36)
   system "videos 4, admitted"
   toolchain 4.37.0-rc1 0b77e12952ad39077d80d8bd6b66d601f225c321
   runtime kernel, policy 1
-  schema frame SHA-256 c408fa6695e365dc577ed5d315190b9fd27a7465ec74a5a20307ec3d7084d60a
+  schema frame SHA-256 c42f4a99bd8694e6cca005bc43ac58172ddd397d2c9f8dd7811ff4bb8a621fcb
 schema (frame at byte 176)
   Lanes.Journal.Entry (Sum (Prod Nat Lanes.Http.Request) (Sum (Lanes.Schedule.Input Videos.Key Unit Videos.Answer) Videos.Input))
 
@@ -51,6 +51,12 @@ schema (frame at byte 176)
     | cancel (key : Videos.Key)
     | reply (key : Videos.Key) (attempt : Nat) (reply : Lanes.Rpc.Reply Videos.Answer)
 
+  structure Lanes.Schedule.Spec Videos.Key Unit where
+    key : Videos.Key
+    payload : Unit
+    work : Lanes.Schedule.Work
+    at_ms : Nat
+
   inductive Videos.Key where
     | check (video : Videos.VideoId) (req : Nat)
     | expire (video : Videos.VideoId)
@@ -68,19 +74,6 @@ schema (frame at byte 176)
   structure Videos.Round where
     video : Videos.VideoId
     n : Nat
-
-  inductive Videos.Answer where
-    | found (size : Nat)
-    | missing
-    | deleted
-    | accepted
-    | failed
-
-  structure Lanes.Schedule.Spec Videos.Key Unit where
-    key : Videos.Key
-    payload : Unit
-    work : Lanes.Schedule.Work
-    at_ms : Nat
 
   inductive Lanes.Schedule.Work where
     | call (retry : Lanes.Schedule.Retry)
@@ -102,6 +95,13 @@ schema (frame at byte 176)
   inductive Lanes.Rpc.Reply Videos.Answer where
     | answer (a : Videos.Answer)
     | unknown
+
+  inductive Videos.Answer where
+    | found (size : Nat)
+    | missing
+    | deleted
+    | accepted
+    | failed
 
   inductive Videos.Input where
     | request (c : Videos.Command) (at_s : Nat)
@@ -168,38 +168,38 @@ schema (frame at byte 176)
     fst : Videos.Who
     snd : Nat
 records: 34
-  0 at byte 92757, 2 bytes: .snapshot 124
-  1 at byte 92779, 3 bytes: .advance 648
-  2 at byte 92802, 333 bytes: .input (.inl { fst := 108, snd := { method := .post, path := ["v", "https://github.com", "1", "0", "comments", "0", "delete"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:36713" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795849493" }, { fst := "videos-verified-session", snd := "https%3A%2F%2Fgithub.com*3*2" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 100, 55, 55, 51, 100, 99, 98, 97, 53, 53, 101, 57, 51, 53, 100, 101, 48, 98, 54, 54, 49, 48, 50, 102, 102, 54, 50, 55, 53, 102, 50, 97, 52, 101, 102, 48, 53, 50, 55, 53, 100, 50, 55, 52, 53, 50, 51, 55, 98, 52, 102, 48, 56, 53, 48, 102, 102, 48, 51, 102, 100, 55, 99, 57] } })
-  3 at byte 93155, 2 bytes: .batch 64
-  4 at byte 93177, 1 bytes: .handed
-  5 at byte 93198, 3 bytes: .advance 661
-  6 at byte 93221, 333 bytes: .input (.inl { fst := 110, snd := { method := .post, path := ["v", "https://github.com", "1", "0", "comments", "0", "delete"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:36713" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795849493" }, { fst := "videos-verified-session", snd := "https%3A%2F%2Fgithub.com*2*1" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 50, 102, 53, 48, 56, 51, 50, 48, 101, 51, 51, 48, 100, 99, 56, 55, 51, 98, 54, 52, 102, 54, 48, 48, 57, 102, 101, 101, 97, 48, 102, 57, 50, 56, 49, 101, 56, 54, 56, 98, 100, 51, 53, 102, 99, 54, 57, 100, 51, 50, 97, 99, 56, 100, 56, 57, 55, 97, 102, 97, 98, 48, 56, 49] } })
-  7 at byte 93574, 2 bytes: .batch 64
-  8 at byte 93596, 1 bytes: .handed
-  9 at byte 93617, 3 bytes: .advance 663
-  10 at byte 93640, 333 bytes: .input (.inl { fst := 112, snd := { method := .post, path := ["v", "https://github.com", "1", "0", "comments", "1", "delete"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:36713" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795849493" }, { fst := "videos-verified-session", snd := "https%3A%2F%2Fgithub.com*1*0" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 55, 54, 57, 102, 100, 55, 52, 101, 54, 98, 102, 97, 98, 97, 54, 50, 57, 100, 48, 48, 99, 48, 97, 55, 51, 56, 55, 102, 54, 56, 51, 99, 52, 97, 101, 98, 50, 101, 101, 97, 52, 50, 98, 101, 55, 54, 97, 52, 97, 50, 50, 52, 57, 99, 57, 49, 99, 53, 100, 99, 51, 98, 50, 97] } })
-  11 at byte 93993, 2 bytes: .batch 64
-  12 at byte 94015, 1 bytes: .handed
-  13 at byte 94036, 3 bytes: .advance 681
-  14 at byte 94059, 322 bytes: .input (.inl { fst := 115, snd := { method := .post, path := ["v", "https://github.com", "1", "0", "delete"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:36713" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795849493" }, { fst := "videos-verified-session", snd := "https%3A%2F%2Fgithub.com*1*0" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 55, 54, 57, 102, 100, 55, 52, 101, 54, 98, 102, 97, 98, 97, 54, 50, 57, 100, 48, 48, 99, 48, 97, 55, 51, 56, 55, 102, 54, 56, 51, 99, 52, 97, 101, 98, 50, 101, 101, 97, 52, 50, 98, 101, 55, 54, 97, 52, 97, 50, 50, 52, 57, 99, 57, 49, 99, 53, 100, 99, 51, 98, 50, 97] } })
-  15 at byte 94401, 2 bytes: .batch 64
-  16 at byte 94423, 1 bytes: .handed
-  17 at byte 94444, 3 bytes: .advance 684
-  18 at byte 94467, 30 bytes: .input (.inr (.inl (.reply (.delete { owner := { issuer := "https://github.com", subject := "1" }, n := 0 }) 1 (.answer .failed))))
-  19 at byte 94517, 2 bytes: .batch 64
-  20 at byte 94539, 3 bytes: .advance 734
-  21 at byte 94562, 2 bytes: .batch 64
-  22 at byte 94584, 1 bytes: .handed
-  23 at byte 94605, 3 bytes: .advance 737
-  24 at byte 94628, 30 bytes: .input (.inr (.inl (.reply (.delete { owner := { issuer := "https://github.com", subject := "1" }, n := 0 }) 2 (.answer .deleted))))
-  25 at byte 94678, 2 bytes: .batch 64
-  26 at byte 94700, 3 bytes: .advance 765
-  27 at byte 94723, 299 bytes: .input (.inl { fst := 119, snd := { method := .post, path := ["sign-out"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:36713" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795849493" }, { fst := "videos-verified-session", snd := "https%3A%2F%2Fgithub.com*2*1" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 50, 102, 53, 48, 56, 51, 50, 48, 101, 51, 51, 48, 100, 99, 56, 55, 51, 98, 54, 52, 102, 54, 48, 48, 57, 102, 101, 101, 97, 48, 102, 57, 50, 56, 49, 101, 56, 54, 56, 98, 100, 51, 53, 102, 99, 54, 57, 100, 51, 50, 97, 99, 56, 100, 56, 57, 55, 97, 102, 97, 98, 48, 56, 49] } })
-  28 at byte 95042, 2 bytes: .batch 64
-  29 at byte 95064, 1 bytes: .handed
-  30 at byte 95085, 3 bytes: .advance 771
-  31 at byte 95108, 320 bytes: .input (.inl { fst := 120, snd := { method := .post, path := ["v", "https://github.com", "1", "2", "like"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:36713" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795849493" }, { fst := "videos-verified-session", snd := "https%3A%2F%2Fgithub.com*2*1" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 50, 102, 53, 48, 56, 51, 50, 48, 101, 51, 51, 48, 100, 99, 56, 55, 51, 98, 54, 52, 102, 54, 48, 48, 57, 102, 101, 101, 97, 48, 102, 57, 50, 56, 49, 101, 56, 54, 56, 98, 100, 51, 53, 102, 99, 54, 57, 100, 51, 50, 97, 99, 56, 100, 56, 57, 55, 97, 102, 97, 98, 48, 56, 49] } })
-  32 at byte 95448, 2 bytes: .batch 64
-  33 at byte 95470, 1 bytes: .handed
+  0 at byte 6480, 2 bytes: .snapshot 124
+  1 at byte 6502, 3 bytes: .advance 374
+  2 at byte 6525, 333 bytes: .input (.inl { fst := 108, snd := { method := .post, path := ["v", "https://github.com", "1", "0", "comments", "0", "delete"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:35111" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795850123" }, { fst := "videos-verified-session", snd := "https%3A%2F%2Fgithub.com*3*2" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 100, 55, 55, 51, 100, 99, 98, 97, 53, 53, 101, 57, 51, 53, 100, 101, 48, 98, 54, 54, 49, 48, 50, 102, 102, 54, 50, 55, 53, 102, 50, 97, 52, 101, 102, 48, 53, 50, 55, 53, 100, 50, 55, 52, 53, 50, 51, 55, 98, 52, 102, 48, 56, 53, 48, 102, 102, 48, 51, 102, 100, 55, 99, 57] } })
+  3 at byte 6878, 2 bytes: .batch 64
+  4 at byte 6900, 1 bytes: .handed
+  5 at byte 6921, 3 bytes: .advance 378
+  6 at byte 6944, 333 bytes: .input (.inl { fst := 110, snd := { method := .post, path := ["v", "https://github.com", "1", "0", "comments", "0", "delete"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:35111" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795850123" }, { fst := "videos-verified-session", snd := "https%3A%2F%2Fgithub.com*2*1" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 50, 102, 53, 48, 56, 51, 50, 48, 101, 51, 51, 48, 100, 99, 56, 55, 51, 98, 54, 52, 102, 54, 48, 48, 57, 102, 101, 101, 97, 48, 102, 57, 50, 56, 49, 101, 56, 54, 56, 98, 100, 51, 53, 102, 99, 54, 57, 100, 51, 50, 97, 99, 56, 100, 56, 57, 55, 97, 102, 97, 98, 48, 56, 49] } })
+  7 at byte 7297, 2 bytes: .batch 64
+  8 at byte 7319, 1 bytes: .handed
+  9 at byte 7340, 3 bytes: .advance 382
+  10 at byte 7363, 333 bytes: .input (.inl { fst := 112, snd := { method := .post, path := ["v", "https://github.com", "1", "0", "comments", "1", "delete"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:35111" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795850123" }, { fst := "videos-verified-session", snd := "https%3A%2F%2Fgithub.com*1*0" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 55, 54, 57, 102, 100, 55, 52, 101, 54, 98, 102, 97, 98, 97, 54, 50, 57, 100, 48, 48, 99, 48, 97, 55, 51, 56, 55, 102, 54, 56, 51, 99, 52, 97, 101, 98, 50, 101, 101, 97, 52, 50, 98, 101, 55, 54, 97, 52, 97, 50, 50, 52, 57, 99, 57, 49, 99, 53, 100, 99, 51, 98, 50, 97] } })
+  11 at byte 7716, 2 bytes: .batch 64
+  12 at byte 7738, 1 bytes: .handed
+  13 at byte 7759, 3 bytes: .advance 390
+  14 at byte 7782, 322 bytes: .input (.inl { fst := 115, snd := { method := .post, path := ["v", "https://github.com", "1", "0", "delete"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:35111" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795850123" }, { fst := "videos-verified-session", snd := "https%3A%2F%2Fgithub.com*1*0" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 55, 54, 57, 102, 100, 55, 52, 101, 54, 98, 102, 97, 98, 97, 54, 50, 57, 100, 48, 48, 99, 48, 97, 55, 51, 56, 55, 102, 54, 56, 51, 99, 52, 97, 101, 98, 50, 101, 101, 97, 52, 50, 98, 101, 55, 54, 97, 52, 97, 50, 50, 52, 57, 99, 57, 49, 99, 53, 100, 99, 51, 98, 50, 97] } })
+  15 at byte 8124, 2 bytes: .batch 64
+  16 at byte 8146, 1 bytes: .handed
+  17 at byte 8167, 3 bytes: .advance 399
+  18 at byte 8190, 30 bytes: .input (.inr (.inl (.reply (.delete { owner := { issuer := "https://github.com", subject := "1" }, n := 0 }) 1 (.answer .failed))))
+  19 at byte 8240, 2 bytes: .batch 64
+  20 at byte 8262, 3 bytes: .advance 449
+  21 at byte 8285, 2 bytes: .batch 64
+  22 at byte 8307, 1 bytes: .handed
+  23 at byte 8328, 3 bytes: .advance 456
+  24 at byte 8351, 30 bytes: .input (.inr (.inl (.reply (.delete { owner := { issuer := "https://github.com", subject := "1" }, n := 0 }) 2 (.answer .deleted))))
+  25 at byte 8401, 2 bytes: .batch 64
+  26 at byte 8423, 3 bytes: .advance 503
+  27 at byte 8446, 299 bytes: .input (.inl { fst := 119, snd := { method := .post, path := ["sign-out"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:35111" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795850123" }, { fst := "videos-verified-session", snd := "https%3A%2F%2Fgithub.com*2*1" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 50, 102, 53, 48, 56, 51, 50, 48, 101, 51, 51, 48, 100, 99, 56, 55, 51, 98, 54, 52, 102, 54, 48, 48, 57, 102, 101, 101, 97, 48, 102, 57, 50, 56, 49, 101, 56, 54, 56, 98, 100, 51, 53, 102, 99, 54, 57, 100, 51, 50, 97, 99, 56, 100, 56, 57, 55, 97, 102, 97, 98, 48, 56, 49] } })
+  28 at byte 8765, 2 bytes: .batch 64
+  29 at byte 8787, 1 bytes: .handed
+  30 at byte 8808, 3 bytes: .advance 505
+  31 at byte 8831, 320 bytes: .input (.inl { fst := 120, snd := { method := .post, path := ["v", "https://github.com", "1", "2", "like"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:35111" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795850123" }, { fst := "videos-verified-session", snd := "https%3A%2F%2Fgithub.com*2*1" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 50, 102, 53, 48, 56, 51, 50, 48, 101, 51, 51, 48, 100, 99, 56, 55, 51, 98, 54, 52, 102, 54, 48, 48, 57, 102, 101, 101, 97, 48, 102, 57, 50, 56, 49, 101, 56, 54, 56, 98, 100, 51, 53, 102, 99, 54, 57, 100, 51, 50, 97, 99, 56, 100, 56, 57, 55, 97, 102, 97, 98, 48, 56, 49] } })
+  32 at byte 9171, 2 bytes: .batch 64
+  33 at byte 9193, 1 bytes: .handed
 tail: the file ends after its last frame

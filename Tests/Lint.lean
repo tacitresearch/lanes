@@ -228,8 +228,8 @@ def schemaTests (root : System.FilePath) : IO (List (String × Bool)) := do
     write root path "kind: journal\n"
   write root "sub/lakefile.toml" "name = \"sub\"\n"
   let found ← Schemas.files root
-  let s := Lanes.Schema.nat
-  let t := Lanes.Schema.list .string
+  let s : Lanes.Schema := ⟨[], .nat⟩
+  let t : Lanes.Schema := ⟨[], .list .string⟩
   let text := Lanes.Journal.schemaText
   let out := "\n".intercalate ["noise", s!"lanes-pin 0 {text s}", s!"lanes-pin 1 {text t}",
     s!"lanes-migration 1 {text s} {text t}"]

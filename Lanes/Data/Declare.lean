@@ -106,11 +106,11 @@ meta def leanDeriving (T : Ident) (classes : Array Ident) : MacroM (Array (TSynt
     return #[← `(deriving instance $[$classes],* for $T:ident)]
 
 /-- `T.codec`, taking a codec for each type parameter, and the `Codable` instance from it.
-`body` is given the schemas of the type parameters, which the codec's schema names. -/
+`body` is given the types of the type parameters, which the codec's schema names. -/
 meta def codable (T : Ident) (p : Params)
     (body : Array (TSyntax `term) → MacroM (TSyntax `term)) :
     MacroM (Array (TSyntax `command)) := do
-  let body ← body (← p.types.mapM fun x => `((Lanes.Codec.of $x).schema))
+  let body ← body (← p.types.mapM fun x => `((Lanes.Codec.of $x).schema.root))
   let codecs ← p.types.mapM fun x =>
     return mkIdent (← Macro.addMacroScope (x.getId.appendBefore "codec"))
   let codecBinders ← (p.types.zip codecs).mapM fun (x, c) =>

@@ -14,142 +14,14 @@ no plan, so a value reads as itself (`Body.decodeWith_encode_self`). A field add
 default, anywhere, takes it, and every old field keeps its value (`Schema.Plan.of_insertIdx`). A
 renamed constructor reads through its former name, and every value keeps its constructor and its
 fields (`Schema.Plan.of_rename`). A type with a declared migration reads through it
-(`Body.decodeWith_migrate`). The equality of values and of schemas is lawful
-(`Value.instLawfulBEq`, `Schema.instLawfulBEq`).
+(`Body.decodeWith_migrate`). The two named-type theorems hold of a record or a sum at the root
+whose fields' types are one type in both schemas (`Schema.Plan.Alike`): those need no plan, and
+matching does not look into them again.
 -/
 
 @[expose] public section
 
 namespace Lanes
-
-/-! Equality of values and of schemas. -/
-
-mutual
-
-theorem Value.beq_refl : (v : Value) → Value.beq v v = true
-  | .nat _ | .int _ | .string _ | .bytes _ => by simp [Value.beq]
-  | .list vs => by simp only [Value.beq]; exact Value.beqAll_refl vs
-  | .ctor _ vs => by simp only [Value.beq, beq_self_eq_true, Bool.true_and]; exact Value.beqAll_refl vs
-
-theorem Value.beqAll_refl : (vs : List Value) → Value.beqAll vs vs = true
-  | [] => rfl
-  | v :: vs => by simp only [Value.beqAll, Value.beq_refl v, Value.beqAll_refl vs, Bool.and_self]
-
-end
-
-mutual
-
-theorem Value.eq_of_beq : (a b : Value) → Value.beq a b = true → a = b
-  | .nat _, b, h | .int _, b, h | .string _, b, h | .bytes _, b, h => by
-    cases b <;> simp_all [Value.beq]
-  | .list as, b, h => by
-    cases b <;> simp [Value.beq] at h
-    rw [Value.eq_of_beqAll as _ h]
-  | .ctor _ as, b, h => by
-    cases b <;> simp [Value.beq] at h
-    rw [h.1, Value.eq_of_beqAll as _ h.2]
-
-theorem Value.eq_of_beqAll : (as bs : List Value) → Value.beqAll as bs = true → as = bs
-  | [], [], _ => rfl
-  | [], _ :: _, h | _ :: _, [], h => by simp [Value.beqAll] at h
-  | a :: as, b :: bs, h => by
-    simp only [Value.beqAll, Bool.and_eq_true] at h
-    rw [Value.eq_of_beq a b h.1, Value.eq_of_beqAll as bs h.2]
-
-end
-
-instance Value.instLawfulBEq : LawfulBEq Value where
-  rfl := Value.beq_refl _
-  eq_of_beq := Value.eq_of_beq _ _
-
-mutual
-
-theorem Schema.beq_refl : (s : Schema) → Schema.beq s s = true
-  | .nat | .int | .string | .bytes | .unit => by simp [Schema.beq]
-  | .list s | .dependent s => by simp only [Schema.beq]; exact Schema.beq_refl s
-  | .map k v => by simp only [Schema.beq, Schema.beq_refl k, Schema.beq_refl v, Bool.and_self]
-  | .record _ as fs => by
-    simp only [Schema.beq, beq_self_eq_true, Schema.beqAll_refl as, Schema.beqFields_refl fs,
-      Bool.and_self]
-  | .sum _ as cs => by
-    simp only [Schema.beq, beq_self_eq_true, Schema.beqAll_refl as, Schema.beqCtors_refl cs,
-      Bool.and_self]
-
-theorem Schema.beqAll_refl : (ss : List Schema) → Schema.beqAll ss ss = true
-  | [] => by simp [Schema.beqAll]
-  | s :: ss => by simp only [Schema.beqAll, Schema.beq_refl s, Schema.beqAll_refl ss, Bool.and_self]
-
-theorem Schema.beqFields_refl : (fs : List (Schema.Field Schema)) → Schema.beqFields fs fs = true
-  | [] => by simp [Schema.beqFields]
-  | ⟨_, _, s, _⟩ :: fs => by
-    simp only [Schema.beqFields, beq_self_eq_true, Schema.beq_refl s, Schema.beqFields_refl fs,
-      Bool.and_self]
-
-theorem Schema.beqCtors_refl : (cs : List (Schema.Ctor Schema)) → Schema.beqCtors cs cs = true
-  | [] => by simp [Schema.beqCtors]
-  | ⟨_, _, fs⟩ :: cs => by
-    simp only [Schema.beqCtors, beq_self_eq_true, Schema.beqFields_refl fs,
-      Schema.beqCtors_refl cs, Bool.and_self]
-
-end
-
-mutual
-
-theorem Schema.eq_of_beq : (a b : Schema) → Schema.beq a b = true → a = b
-  | .nat, b, h | .int, b, h | .string, b, h | .bytes, b, h | .unit, b, h => by
-    cases b <;> simp_all [Schema.beq]
-  | .list a, b, h => by
-    cases b <;> simp [Schema.beq] at h
-    rw [Schema.eq_of_beq a _ h]
-  | .dependent a, b, h => by
-    cases b <;> simp [Schema.beq] at h
-    rw [Schema.eq_of_beq a _ h]
-  | .map k v, b, h => by
-    cases b <;> simp [Schema.beq] at h
-    rw [Schema.eq_of_beq k _ h.1, Schema.eq_of_beq v _ h.2]
-  | .record _ as fs, b, h => by
-    cases b <;> simp [Schema.beq] at h
-    obtain ⟨⟨ht, ha⟩, hf⟩ := h
-    rw [ht, Schema.eq_of_beqAll as _ ha, Schema.eq_of_beqFields fs _ hf]
-  | .sum _ as cs, b, h => by
-    cases b <;> simp [Schema.beq] at h
-    obtain ⟨⟨ht, ha⟩, hc⟩ := h
-    rw [ht, Schema.eq_of_beqAll as _ ha, Schema.eq_of_beqCtors cs _ hc]
-
-theorem Schema.eq_of_beqAll : (as bs : List Schema) → Schema.beqAll as bs = true → as = bs
-  | [], [], _ => rfl
-  | [], _ :: _, h | _ :: _, [], h => by simp [Schema.beqAll] at h
-  | a :: as, b :: bs, h => by
-    simp only [Schema.beqAll, Bool.and_eq_true] at h
-    rw [Schema.eq_of_beq a b h.1, Schema.eq_of_beqAll as bs h.2]
-
-theorem Schema.eq_of_beqFields :
-    (as bs : List (Schema.Field Schema)) → Schema.beqFields as bs = true → as = bs
-  | [], [], _ => rfl
-  | [], _ :: _, h | _ :: _, [], h => by simp [Schema.beqFields] at h
-  | ⟨_, _, s, _⟩ :: as, ⟨_, _, s', _⟩ :: bs, h => by
-    simp only [Schema.beqFields, Bool.and_eq_true, beq_iff_eq] at h
-    obtain ⟨⟨⟨⟨hn, ha⟩, hs⟩, hd⟩, hr⟩ := h
-    rw [hn, ha, Schema.eq_of_beq s s' hs, hd, Schema.eq_of_beqFields as bs hr]
-
-theorem Schema.eq_of_beqCtors :
-    (as bs : List (Schema.Ctor Schema)) → Schema.beqCtors as bs = true → as = bs
-  | [], [], _ => rfl
-  | [], _ :: _, h | _ :: _, [], h => by simp [Schema.beqCtors] at h
-  | ⟨_, _, fs⟩ :: as, ⟨_, _, fs'⟩ :: bs, h => by
-    simp only [Schema.beqCtors, Bool.and_eq_true, beq_iff_eq] at h
-    obtain ⟨⟨⟨hn, ha⟩, hf⟩, hr⟩ := h
-    rw [hn, ha, Schema.eq_of_beqFields fs fs' hf, Schema.eq_of_beqCtors as bs hr]
-
-end
-
-instance Schema.instLawfulBEq : LawfulBEq Schema where
-  rfl := Schema.beq_refl _
-  eq_of_beq := Schema.eq_of_beq _ _
-
-theorem Schema.beqFields_iff {as bs : List (Schema.Field Schema)} :
-    Schema.beqFields as bs = true ↔ as = bs :=
-  ⟨Schema.eq_of_beqFields as bs, fun h => h ▸ Schema.beqFields_refl as⟩
 
 namespace Schema.Plan
 
@@ -163,7 +35,7 @@ theorem of_self (s : Schema) : of ms s s = .ok .same := by
   unfold of; simp
 
 theorem apply_same (v : Value) : Plan.same.apply v = .ok v := by
-  rw [apply]
+  simp [apply, same, applyTy]
 
 /-! Which of the writer's names a reader's name takes. -/
 
@@ -219,33 +91,114 @@ theorem filterMap_claims {β : Type} {name : β → String} {aliases : β → Li
     have := claim_getElem hn (by simpa using hj) (aliases ws[j])
     rwa [List.getElem_map] at this
 
+/-! Named types that are one type in two tables. -/
+
+/-- `names` are one type in the tables `w` and `r`: each declared in both, the same, using only
+names among them. -/
+def Alike (w r : List (String × Schema.Decl)) (names : List String) : Prop :=
+  ∀ x ∈ names, ∃ d, w.lookup x = some d ∧ r.lookup x = some d ∧ ∀ y ∈ d.refs, y ∈ names
+
+theorem mem_of_lookup {w : List (String × Schema.Decl)} {x : String} {d : Schema.Decl}
+    (h : w.lookup x = some d) : ∃ d', (x, d') ∈ w := by
+  induction w with
+  | nil => simp at h
+  | cons e w ih =>
+    obtain ⟨n, d'⟩ := e
+    rw [List.lookup_cons] at h
+    by_cases hx : x = n
+    · subst hx; exact ⟨d', List.mem_cons_self⟩
+    · simp only [beq_eq_false_iff_ne.mpr hx] at h
+      obtain ⟨d'', hm⟩ := ih h
+      exact ⟨d'', List.mem_cons_of_mem _ hm⟩
+
+theorem subset_keep {w : List (String × Schema.Decl)} {P names : List String} (hP : ∀ x ∈ P, x ∈ names)
+    (hw : ∀ x ∈ P, ∃ d, w.lookup x = some d ∧ ∀ y ∈ d.refs, y ∈ P) :
+    ∀ x ∈ P, x ∈ keep w names := by
+  intro x hx
+  obtain ⟨d, hd, hrefs⟩ := hw x hx
+  simp only [keep, List.mem_filter, hd, List.all_eq_true, List.contains_iff_mem]
+  exact ⟨hP x hx, fun y hy => hP y (hrefs y hy)⟩
+
+theorem subset_prune {w : List (String × Schema.Decl)} {P : List String}
+    (hw : ∀ x ∈ P, ∃ d, w.lookup x = some d ∧ ∀ y ∈ d.refs, y ∈ P) :
+    ∀ (k : Nat) (names : List String), (∀ x ∈ P, x ∈ names) → ∀ x ∈ P, x ∈ prune w k names
+  | 0, _, hP => hP
+  | k + 1, names, hP => by
+    rw [prune]
+    split
+    · exact hP
+    · exact subset_prune hw k _ (subset_keep hP hw)
+
+theorem prune_subset {w : List (String × Schema.Decl)} :
+    ∀ (k : Nat) (names : List String), ∀ x ∈ prune w k names, x ∈ names
+  | 0, _, _, hx => hx
+  | k + 1, names, x, hx => by
+    rw [prune] at hx
+    split at hx
+    · exact hx
+    · exact (List.mem_filter.mp (prune_subset k _ x hx)).1
+
+theorem mem_alike {w r : List (String × Schema.Decl)} {names : List String} (h : Alike w r names) :
+    ∀ x ∈ names, x ∈ alike w r := by
+  refine subset_prune (fun x hx => ?_) _ _ (fun x hx => ?_)
+  · obtain ⟨d, hw, -, hrefs⟩ := h x hx
+    exact ⟨d, hw, hrefs⟩
+  · obtain ⟨d, hw, hr, -⟩ := h x hx
+    obtain ⟨d', hm⟩ := mem_of_lookup hw
+    exact List.mem_filterMap.mpr ⟨(x, d'), hm, by simp [hw, hr]⟩
+
+theorem lookup_of_mem_alike {w r : List (String × Schema.Decl)} {x : String} (h : x ∈ alike w r) :
+    ∃ d, w.lookup x = some d ∧ r.lookup x = some d := by
+  obtain ⟨⟨n, d⟩, -, he⟩ := List.mem_filterMap.mp (prune_subset _ _ x h)
+  simp only at he
+  split at he
+  · rename_i d' hd'
+    split at he
+    · cases he
+      rename_i hr
+      exact ⟨d', hd', beq_iff_eq.mp hr⟩
+    · cases he
+  · cases he
+
+theorem sameTy_of_alike {w r : List (String × Schema.Decl)} {names : List String} (h : Alike w r names)
+    {t : Schema.Ty} (ht : ∀ x ∈ t.refs, x ∈ names) : sameTy (alike w r) t t = true := by
+  simp only [sameTy, beq_self_eq_true, Bool.true_and, List.all_eq_true, List.contains_iff_mem]
+  exact fun x hx => mem_alike h x (ht x hx)
+
+theorem ofTy_same {w r : Schema} {names : List String} {fuel : Nat} {wt rt : Schema.Ty} {memo : Memo}
+    (h : sameTy names wt rt = true) : ofTy ms w r names fuel wt rt memo = .ok (.same, memo) := by
+  rw [ofTy.eq_def]; simp [h]
+
 /-! Fields. -/
 
-/-- A reader's field that is one of the writer's, or that is new and has a default. -/
-def Known (ws : List (Schema.Field Schema)) (g : Schema.Field Schema) : Prop :=
-  g ∈ ws ∨ (g.name ∉ ws.map (·.name) ∧ (∀ x ∈ g.aliases, x ∉ ws.map (·.name)) ∧ g.default.isSome)
+/-- A reader's field that is one of the writer's, of one type in both, or that is new and has a
+default. -/
+def Known (names : List String) (ws : List (Schema.Field Schema.Ty)) (g : Schema.Field Schema.Ty) : Prop :=
+  (g ∈ ws ∧ sameTy names g.schema g.schema = true)
+    ∨ (g.name ∉ ws.map (·.name) ∧ (∀ x ∈ g.aliases, x ∉ ws.map (·.name)) ∧ g.default.isSome)
 
 /-- The plan of a known field. -/
-def knownPlan (ws : List (Schema.Field Schema)) (g : Schema.Field Schema) : Plan.Field Plan :=
+def knownPlan (ws : List (Schema.Field Schema.Ty)) (g : Schema.Field Schema.Ty) : Plan.Field Plan.Ty :=
   match (ws.map (·.name)).idxOf? g.name with
   | some k => .take g.name k .same
   | none => .fill (g.default.getD (.nat 0))
 
 /-- The value of a known field, read from the writer's `vs`. -/
-def knownValue (ws : List (Schema.Field Schema)) (vs : List Value) (g : Schema.Field Schema) :
-    Value :=
+def knownValue (ws : List (Schema.Field Schema.Ty)) (vs : List Value) (g : Schema.Field Schema.Ty) : Value :=
   match (ws.map (·.name)).idxOf? g.name with
   | some k => vs.getD k (.nat 0)
   | none => g.default.getD (.nat 0)
 
-theorem ofFields_known {ws : List (Schema.Field Schema)} (hn : (ws.map (·.name)).Nodup) :
-    ∀ (R : List (Schema.Field Schema)), (∀ g ∈ R, Known ws g) →
-      ofFields ms ws R = .ok (R.map (knownPlan ws))
+theorem ofFields_known {w r : Schema} {names : List String} {fuel : Nat} {memo : Memo}
+    {ws : List (Schema.Field Schema.Ty)} (hn : (ws.map (·.name)).Nodup) :
+    ∀ (R : List (Schema.Field Schema.Ty)), (∀ g ∈ R, Known names ws g) →
+      ofFields ms w r names fuel ws R memo = .ok (R.map (knownPlan ws), memo)
   | [], _ => by rw [ofFields]; rfl
   | ⟨name, aliases, s, default⟩ :: R, hR => by
-    have ih := ofFields_known hn R fun g hg => hR g (List.mem_cons_of_mem _ hg)
+    have ih := ofFields_known (w := w) (r := r) (fuel := fuel) (memo := memo) hn R
+      fun g hg => hR g (List.mem_cons_of_mem _ hg)
     rw [ofFields.eq_def]; simp only
-    rcases hR _ List.mem_cons_self with hmem | ⟨hname, halias, hdef⟩
+    rcases hR _ List.mem_cons_self with ⟨hmem, hsame⟩ | ⟨hname, halias, hdef⟩
     · obtain ⟨k, hk, hg⟩ := List.getElem_of_mem hmem
       have hk' : k < (ws.map (·.name)).length := by simpa using hk
       have hname : (ws.map (·.name))[k] = name := by simp [hg]
@@ -254,18 +207,19 @@ theorem ofFields_known {ws : List (Schema.Field Schema)} (hn : (ws.map (·.name)
       rw [hname] at hc hi
       have hget : ws[k]? = some ⟨name, aliases, s, default⟩ := by
         rw [List.getElem?_eq_getElem hk, hg]
-      simp [hc, hi, hget, knownPlan, of_self, ih]
+      simp only at hsame
+      simp [hc, hi, hget, knownPlan, ofTy_same hsame, ih]
     · obtain ⟨v, hv⟩ := Option.isSome_iff_exists.mp hdef
       have hi := List.idxOf?_eq_none_iff.mpr hname
       simp only at hv
       simp [claim_new hname halias, hi, hv, knownPlan, ih]
 
-theorem applyFields_known {ws : List (Schema.Field Schema)} {vs : List Value}
-    (hl : vs.length = ws.length) : ∀ (R : List (Schema.Field Schema)),
-      applyFields (R.map (knownPlan ws)) vs = .ok (R.map (knownValue ws vs))
+theorem applyFields_known {pairs : List ((String × String) × Plan.Decl)} {ws : List (Schema.Field Schema.Ty)}
+    {vs : List Value} (hl : vs.length = ws.length) : ∀ (R : List (Schema.Field Schema.Ty)),
+      applyFields pairs (R.map (knownPlan ws)) vs = .ok (R.map (knownValue ws vs))
   | [] => by rw [List.map_nil, applyFields]; rfl
   | g :: R => by
-    have ih := applyFields_known hl R
+    have ih := applyFields_known (pairs := pairs) hl R
     cases h : (ws.map (·.name)).idxOf? g.name with
     | none =>
       simp only [List.map_cons, knownPlan, knownValue, h]
@@ -276,10 +230,15 @@ theorem applyFields_known {ws : List (Schema.Field Schema)} {vs : List Value}
         simp only [List.length_map] at this
         omega
       simp only [List.map_cons, knownPlan, knownValue, h]
-      rw [applyFields, List.getElem?_eq_getElem hk]
-      simp [apply_same, ih, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hk]
+      rw [applyFields]
+      split
+      · simp_all
+      · rename_i v hv
+        simp only [List.getElem?_eq_getElem hk, Option.some.injEq] at hv
+        subst hv
+        simp [applyTy, ih, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hk]
 
-theorem map_knownValue {ws : List (Schema.Field Schema)} {vs : List Value}
+theorem map_knownValue {ws : List (Schema.Field Schema.Ty)} {vs : List Value}
     (hn : (ws.map (·.name)).Nodup) (hl : vs.length = ws.length) :
     ws.map (knownValue ws vs) = vs := by
   apply List.ext_getElem (by simp [hl])
@@ -289,77 +248,158 @@ theorem map_knownValue {ws : List (Schema.Field Schema)} {vs : List Value}
   simp only [List.getElem_map] at hi
   simp [knownValue, hi, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h2]
 
-/-- Two records, matched field by field. -/
-theorem of_record {t t' : String} {a a' : List Schema} {wfs rfs : List (Schema.Field Schema)}
-    (hne : Schema.record t a wfs ≠ .record t' a' rfs)
-    (hm : ∀ m ∈ ms, m.old ≠ .record t a wfs ∨ m.new ≠ .record t' a' rfs)
-    (hc : (rfs.filterMap fun f => claim (wfs.map (·.name)) f.name f.aliases).Nodup)
-    {ps : List (Plan.Field Plan)} (hf : ofFields ms wfs rfs = .ok ps) :
-    of ms (.record t a wfs) (.record t' a' rfs) = .ok (.record t' ps) := by
-  have hfind : ms.find? (fun m => m.old == .record t a wfs && m.new == .record t' a' rfs)
-      = none := by
-    simp only [List.find?_eq_none, Bool.and_eq_true, beq_iff_eq, not_and]
-    intro m hm' ho
-    exact (hm m hm').resolve_left (fun h => h ho)
+/-! The root: a named type of each schema, matched as a pair. -/
+
+theorem migrationFor_none {w r : Schema} {n n' : String}
+    (hm : ∀ m ∈ ms, m.old.root ≠ .ref n ∨ m.new.root ≠ .ref n') :
+    migrationFor ms w r (.ref n) (.ref n') = none := by
+  rw [migrationFor, List.find?_eq_none]
+  intro m hm'
+  rcases hm m hm' with h | h <;> simp [h]
+
+/-- Matching two schemas whose roots are named types: the pair's plan, made once. -/
+theorem of_ref {w r : Schema} {n n' : String} (hw : w.root = .ref n) (hr : r.root = .ref n')
+    (hne : w ≠ r) (hm : ∀ m ∈ ms, m.old.root ≠ .ref n ∨ m.new.root ≠ .ref n')
+    (hsame : sameTy (alike w.types r.types) (.ref n) (.ref n') = false) :
+    of ms w r = (match ofPair ms w r (alike w.types r.types) (w.types.length * r.types.length + 1)
+      n n' [] with
+      | .ok (p, memo) => .ok ⟨made memo, p⟩
+      | .error e => .error e) := by
   unfold of
-  simp only [beq_eq_false_iff_ne.mpr hne, hfind, Bool.false_eq_true, ↓reduceIte]
+  rw [hw, hr] at *
+  simp only [beq_eq_false_iff_ne.mpr hne, Bool.false_eq_true, ↓reduceIte, migrationFor_none hm]
+  rw [ofTy.eq_def]
+  simp only [hsame, Bool.false_eq_true, ↓reduceIte, migrationFor_none hm]
+  rfl
+
+/-- Two records, the roots, matched field by field. -/
+theorem of_record {w r : Schema} {n n' t t' : String} {wfs rfs : List (Schema.Field Schema.Ty)}
+    (hw : w.root = .ref n) (hr : r.root = .ref n')
+    (hwl : w.types.lookup n = some (.record t wfs)) (hrl : r.types.lookup n' = some (.record t' rfs))
+    (hne : w ≠ r) (hm : ∀ m ∈ ms, m.old.root ≠ .ref n ∨ m.new.root ≠ .ref n')
+    (hsame : sameTy (alike w.types r.types) (.ref n) (.ref n') = false)
+    (hc : (rfs.filterMap fun f => claim (wfs.map (·.name)) f.name f.aliases).Nodup)
+    {ps : List (Plan.Field Plan.Ty)} {memo : Memo}
+    (hf : ofFields ms w r (alike w.types r.types) (w.types.length * r.types.length) wfs rfs
+      [((n, n'), none)] = .ok (ps, memo)) :
+    of ms w r = .ok ⟨made (((n, n'), some (.record t' ps)) :: memo), .ref n n'⟩ := by
+  rw [of_ref hw hr hne hm hsame, ofPair]
+  simp only [List.lookup, Option.isSome_none, Bool.false_eq_true, ↓reduceIte, hwl, hrl]
   rw [unambiguous_eq (by simpa [List.filterMap_map, Function.comp_def] using hc)]
   simp [hf]
 
+/-- Two sums, the roots, matched constructor by constructor. -/
+theorem of_sum {w r : Schema} {n n' t t' : String} {wcs rcs : List (Schema.Ctor Schema.Ty)}
+    (hw : w.root = .ref n) (hr : r.root = .ref n')
+    (hwl : w.types.lookup n = some (.sum t wcs)) (hrl : r.types.lookup n' = some (.sum t' rcs))
+    (hne : w ≠ r) (hm : ∀ m ∈ ms, m.old.root ≠ .ref n ∨ m.new.root ≠ .ref n')
+    (hsame : sameTy (alike w.types r.types) (.ref n) (.ref n') = false)
+    (hc : (rcs.filterMap fun c => claim (wcs.map (·.name)) c.name c.aliases).Nodup)
+    {found : List (Option (Nat × Ctor Plan.Ty))} {memo : Memo}
+    (hf : ofCtors ms w r (alike w.types r.types) (w.types.length * r.types.length) wcs rcs 0
+      [((n, n'), none)] = .ok (found, memo)) :
+    of ms w r = .ok ⟨made (((n, n'), some (.sum t' (wcs.mapIdx fun k c => pick found k c.name)))
+      :: memo), .ref n n'⟩ := by
+  rw [of_ref hw hr hne hm hsame, ofPair]
+  simp only [List.lookup, Option.isSome_none, Bool.false_eq_true, ↓reduceIte, hwl, hrl]
+  rw [unambiguous_eq (by simpa [List.filterMap_map, Function.comp_def] using hc)]
+  simp [hf]
+
+/-- The root of two different named types, or of one declared differently, is no one type. -/
+theorem sameTy_ref {w r : List (String × Schema.Decl)} {n n' : String}
+    (h : n = n' → w.lookup n ≠ r.lookup n) : sameTy (alike w r) (.ref n) (.ref n') = false := by
+  rw [Bool.eq_false_iff]
+  intro hs
+  simp only [sameTy, Schema.Ty.ref.injEq, Bool.and_eq_true, beq_iff_eq, Schema.Ty.refs, List.all_cons,
+    List.all_nil, Bool.and_true, List.contains_iff_mem] at hs
+  obtain ⟨rfl, hmem⟩ := hs
+  obtain ⟨d, hw, hr⟩ := lookup_of_mem_alike hmem
+  exact h rfl (hw.trans hr.symm)
+
+theorem apply_ref {n n' : String} {d : Plan.Decl} {memo : Memo} (v : Value) :
+    (⟨made (((n, n'), some d) :: memo), .ref n n'⟩ : Plan).apply v = applyDecl
+      (made (((n, n'), some d) :: memo)) d v := by
+  simp [apply, applyTy, made]
+
 /-- A field added with a default, anywhere: every old field keeps its value, and the new one
-takes its default. -/
-theorem of_insertIdx {t t' : String} {a a' : List Schema} {ws : List (Schema.Field Schema)}
-    {f : Schema.Field Schema} {i : Nat} {d : Value} (hi : i ≤ ws.length)
+takes its default. The record is the root, `n` in the writer's table and `n'` in the reader's,
+whose other named types are `types` in both, and each field's type is one type in both. -/
+theorem of_insertIdx {n n' t t' : String} {types : List (String × Schema.Decl)}
+    {ws : List (Schema.Field Schema.Ty)} {f : Schema.Field Schema.Ty} {i : Nat} {d : Value} (hi : i ≤ ws.length)
     (hn : (ws.map (·.name)).Nodup) (hname : f.name ∉ ws.map (·.name))
     (halias : ∀ x ∈ f.aliases, x ∉ ws.map (·.name)) (hd : f.default = some d)
-    (hm : ∀ m ∈ ms, m.old ≠ .record t a ws ∨ m.new ≠ .record t' a' (ws.insertIdx i f)) :
-    ∃ p, of ms (.record t a ws) (.record t' a' (ws.insertIdx i f)) = .ok p ∧
+    {names : List String}
+    (halike : Alike ((n, .record t ws) :: types) ((n', .record t' (ws.insertIdx i f)) :: types)
+      names)
+    (hfields : ∀ g ∈ ws, ∀ x ∈ g.schema.refs, x ∈ names)
+    (hm : ∀ m ∈ ms, m.old.root ≠ .ref n ∨ m.new.root ≠ .ref n') :
+    ∃ p, of ms ⟨(n, .record t ws) :: types, .ref n⟩
+        ⟨(n', .record t' (ws.insertIdx i f)) :: types, .ref n'⟩ = .ok p ∧
       ∀ vs : List Value, vs.length = ws.length →
         p.apply (.ctor 0 vs) = .ok (.ctor 0 (vs.insertIdx i d)) := by
-  have hR : ∀ g ∈ ws.insertIdx i f, Known ws g := by
+  have hR : ∀ g ∈ ws.insertIdx i f, Known (alike ((n, .record t ws) :: types)
+      ((n', .record t' (ws.insertIdx i f)) :: types)) ws g := by
     intro g hg
     rcases (List.mem_insertIdx hi).mp hg with rfl | h
     · exact .inr ⟨hname, halias, by simp [hd]⟩
-    · exact .inl h
-  have hne : Schema.record t a ws ≠ .record t' a' (ws.insertIdx i f) := by
+    · exact .inl ⟨h, sameTy_of_alike halike (hfields g h)⟩
+  have hlen : ws ≠ ws.insertIdx i f := by
     intro h
-    injection h with _ _ h
     have := congrArg List.length h
     rw [List.length_insertIdx_of_le_length hi] at this
     omega
+  have hne : (⟨(n, .record t ws) :: types, .ref n⟩ : Schema)
+      ≠ ⟨(n', .record t' (ws.insertIdx i f)) :: types, .ref n'⟩ := by
+    intro h
+    simp only [Schema.mk.injEq, List.cons.injEq, Prod.mk.injEq, Schema.Decl.record.injEq] at h
+    exact hlen h.1.1.2.2
+  have hsame := sameTy_ref (w := (n, .record t ws) :: types)
+    (r := (n', .record t' (ws.insertIdx i f)) :: types) (n := n) (n' := n') fun h => by
+      subst h
+      simp only [List.lookup_cons, beq_self_eq_true, ne_eq, Option.some.injEq, Schema.Decl.record.injEq,
+        not_and]
+      exact fun _ => hlen
   have hc : ((ws.insertIdx i f).filterMap fun g =>
       claim (ws.map (·.name)) g.name g.aliases).Nodup := by
-    rw [filterMap_insertIdx (f := fun (g : Schema.Field Schema) => claim (ws.map (·.name)) g.name g.aliases)
+    rw [filterMap_insertIdx (f := fun (g : Schema.Field Schema.Ty) => claim (ws.map (·.name)) g.name g.aliases)
       (claim_new hname halias), filterMap_claims hn]
     exact List.nodup_range
-  refine ⟨_, of_record hne hm hc (ofFields_known hn _ hR), fun vs hl => ?_⟩
-  rw [apply]
+  refine ⟨_, of_record (t := t) (t' := t') (wfs := ws) (rfs := ws.insertIdx i f) rfl rfl
+    (by simp) (by simp) hne hm
+    hsame hc (ofFields_known hn _ hR), fun vs hl => ?_⟩
+  rw [apply_ref, applyDecl]
   rw [applyFields_known hl, Body.within_ok]
   simp only [map_insertIdx, map_knownValue hn hl]
   simp [knownValue, List.idxOf?_eq_none_iff.mpr hname, hd]
 
 /-! Constructors. -/
 
-/-- Each reader's constructor that takes one of the writer's with the same fields keeps them. -/
-theorem ofCtors_same {cs : List (Schema.Ctor Schema)} :
-    ∀ (R : List (Schema.Ctor Schema)) (index : Nat),
+/-- Each reader's constructor that takes one of the writer's with the same fields, of one type in
+both, keeps them. -/
+theorem ofCtors_same {w r : Schema} {names : List String} {fuel : Nat} {memo : Memo}
+    {cs : List (Schema.Ctor Schema.Ty)} :
+    ∀ (R : List (Schema.Ctor Schema.Ty)) (index : Nat),
       (∀ r ∈ R, ∃ k c, claim (cs.map (·.name)) r.name r.aliases = some k ∧ cs[k]? = some c ∧
-        c.fields = r.fields) →
-      ofCtors ms cs R index = .ok (R.mapIdx fun j r =>
-        (claim (cs.map (·.name)) r.name r.aliases).map fun k => (k, .to r.name (index + j) none))
+        c.fields = r.fields ∧ ∀ g ∈ r.fields, sameTy names g.schema g.schema = true) →
+      ofCtors ms w r names fuel cs R index memo = .ok (R.mapIdx fun j r =>
+        (claim (cs.map (·.name)) r.name r.aliases).map fun k => (k, .to r.name (index + j) none),
+        memo)
   | [], _, _ => by rw [ofCtors]; rfl
   | ⟨name, aliases, fields⟩ :: R, index, hR => by
-    have ih := ofCtors_same R (index + 1) fun r hr => hR r (List.mem_cons_of_mem _ hr)
-    obtain ⟨k, c, hc, hk, hf⟩ := hR _ List.mem_cons_self
-    simp only at hc hf
+    have ih := ofCtors_same (w := w) (r := r) (fuel := fuel) (memo := memo) R (index + 1)
+      fun r hr => hR r (List.mem_cons_of_mem _ hr)
+    obtain ⟨k, c, hc, hk, hf, hs⟩ := hR _ List.mem_cons_self
+    simp only at hc hf hs
+    have hall : (fields.all fun f => sameTy names f.schema f.schema) = true :=
+      List.all_eq_true.mpr hs
     rw [ofCtors.eq_def]
-    simp only [hc, hk, hf, Schema.beqFields_refl, ↓reduceIte, ih, List.mapIdx_cons,
-      Nat.add_zero, Option.map_some]
-    congr 3
+    simp only [hc, hk, hf, beq_self_eq_true, hall, Bool.and_self, ↓reduceIte, ih,
+      List.mapIdx_cons, Nat.add_zero, Option.map_some]
+    congr 4
     funext j r
     rw [show index + 1 + j = index + (j + 1) by omega]
 
-theorem pick_eq : ∀ (found : List (Option (Nat × Ctor Plan))) (off k : Nat) (c : Ctor Plan)
+theorem pick_eq : ∀ (found : List (Option (Nat × Ctor Plan.Ty))) (off k : Nat) (c : Ctor Plan.Ty)
     (name : String), (∀ j (hj : j < found.length), ∃ c, found[j] = some (off + j, c)) →
     found[k]? = some (some (off + k, c)) → pick found (off + k) name = c
   | [], _, _, _, _, _, h => by simp at h
@@ -379,8 +419,9 @@ theorem pick_eq : ∀ (found : List (Option (Nat × Ctor Plan))) (off k : Nat) (
         exact ⟨c', by rw [show off + 1 + j = off + (j + 1) by omega]; simpa using h'⟩
       · rw [show off + 1 + k = off + (k + 1) by omega]; simpa using h
 
-theorem applyCtor_to : ∀ (ctors : List (Ctor Plan)) (k : Nat) (vs : List Value) {name : String}
-    {j : Nat}, ctors[k]? = some (.to name j none) → applyCtor ctors k vs = .ok (.ctor j vs)
+theorem applyCtor_to {pairs : List ((String × String) × Plan.Decl)} :
+    ∀ (ctors : List (Ctor Plan.Ty)) (k : Nat) (vs : List Value) {name : String}
+    {j : Nat}, ctors[k]? = some (.to name j none) → applyCtor pairs ctors k vs = .ok (.ctor j vs)
   | [], _, _, _, _, h => by simp at h
   | _ :: _, 0, _, _, _, h => by
     simp only [List.getElem?_cons_zero, Option.some.injEq] at h
@@ -390,34 +431,21 @@ theorem applyCtor_to : ∀ (ctors : List (Ctor Plan)) (k : Nat) (vs : List Value
     rw [applyCtor]
     exact applyCtor_to ctors k vs (by simpa using h)
 
-/-- Two sums, matched constructor by constructor. -/
-theorem of_sum {t t' : String} {a a' : List Schema} {wcs rcs : List (Schema.Ctor Schema)}
-    (hne : Schema.sum t a wcs ≠ .sum t' a' rcs)
-    (hm : ∀ m ∈ ms, m.old ≠ .sum t a wcs ∨ m.new ≠ .sum t' a' rcs)
-    (hc : (rcs.filterMap fun c => claim (wcs.map (·.name)) c.name c.aliases).Nodup)
-    {found : List (Option (Nat × Ctor Plan))} (hf : ofCtors ms wcs rcs 0 = .ok found) :
-    of ms (.sum t a wcs) (.sum t' a' rcs)
-      = .ok (.sum t' (wcs.mapIdx fun k c => pick found k c.name)) := by
-  have hfind : ms.find? (fun m => m.old == .sum t a wcs && m.new == .sum t' a' rcs)
-      = none := by
-    simp only [List.find?_eq_none, Bool.and_eq_true, beq_iff_eq, not_and]
-    intro m hm' ho
-    exact (hm m hm').resolve_left (fun h => h ho)
-  unfold of
-  simp only [beq_eq_false_iff_ne.mpr hne, hfind, Bool.false_eq_true, ↓reduceIte]
-  rw [unambiguous_eq (by simpa [List.filterMap_map, Function.comp_def] using hc)]
-  simp [hf]
-
 /-- A renamed constructor reads through its former name: the data's `k`th constructor is the
-reader's, under its new name, and every value keeps its constructor and its fields. -/
-theorem of_rename {t t' : String} {a a' : List Schema} {cs : List (Schema.Ctor Schema)}
-    {k : Nat} (hk : k < cs.length) {c : Schema.Ctor Schema}
+reader's, under its new name, and every value keeps its constructor and its fields. The sum is
+the root, `n` in the writer's table and `n'` in the reader's, whose other named types are `types`
+in both, and each field's type is one type in both. -/
+theorem of_rename {n n' t t' : String} {types : List (String × Schema.Decl)} {cs : List (Schema.Ctor Schema.Ty)}
+    {k : Nat} (hk : k < cs.length) {c : Schema.Ctor Schema.Ty}
     (hn : (cs.map (·.name)).Nodup) (hname : c.name ∉ cs.map (·.name))
     (hwas : cs[k].name ∈ c.aliases)
     (halias : ∀ x ∈ c.aliases, x ∈ cs.map (·.name) → x = cs[k].name)
-    (hfields : c.fields = cs[k].fields)
-    (hm : ∀ m ∈ ms, m.old ≠ .sum t a cs ∨ m.new ≠ .sum t' a' (cs.set k c)) :
-    ∃ p, of ms (.sum t a cs) (.sum t' a' (cs.set k c)) = .ok p ∧
+    (hfields : c.fields = cs[k].fields) {names : List String}
+    (halike : Alike ((n, .sum t cs) :: types) ((n', .sum t' (cs.set k c)) :: types) names)
+    (hctors : ∀ c ∈ cs, ∀ g ∈ c.fields, ∀ x ∈ g.schema.refs, x ∈ names)
+    (hm : ∀ m ∈ ms, m.old.root ≠ .ref n ∨ m.new.root ≠ .ref n') :
+    ∃ p, of ms ⟨(n, .sum t cs) :: types, .ref n⟩ ⟨(n', .sum t' (cs.set k c)) :: types, .ref n'⟩
+        = .ok p ∧
       ∀ j vs, j < cs.length → p.apply (.ctor j vs) = .ok (.ctor j vs) := by
   have hk' : k < (cs.map (·.name)).length := by simpa using hk
   have hclaim : ∀ j (hj : j < (cs.set k c).length),
@@ -431,26 +459,43 @@ theorem of_rename {t t' : String} {a a' : List Schema} {cs : List (Schema.Ctor S
       exact claim_alias hn hk' hname (by simpa using hwas) (by simpa using halias)
     · simpa using claim_getElem hn hj' cs[j].aliases
   have hR : ∀ r ∈ cs.set k c, ∃ k' c', claim (cs.map (·.name)) r.name r.aliases = some k' ∧
-      cs[k']? = some c' ∧ c'.fields = r.fields := by
+      cs[k']? = some c' ∧ c'.fields = r.fields ∧ ∀ g ∈ r.fields,
+        sameTy (alike ((n, .sum t cs) :: types) ((n', .sum t' (cs.set k c)) :: types))
+          g.schema g.schema = true := by
     intro r hr
     obtain ⟨j, hj, rfl⟩ := List.getElem_of_mem hr
     have hj'' : j < cs.length := by simpa using hj
-    refine ⟨j, cs[j], hclaim j hj, List.getElem?_eq_getElem hj'', ?_⟩
-    rw [List.getElem_set]
-    split
-    · subst k; exact hfields.symm
-    · rfl
-  have hne : Schema.sum t a cs ≠ .sum t' a' (cs.set k c) := by
+    have hfj : cs[j].fields = (cs.set k c)[j].fields := by
+      rw [List.getElem_set]
+      split
+      · subst k; exact hfields.symm
+      · rfl
+    refine ⟨j, cs[j], hclaim j hj, List.getElem?_eq_getElem hj'', hfj, fun g hg => ?_⟩
+    rw [← hfj] at hg
+    exact sameTy_of_alike halike (hctors _ (List.getElem_mem hj'') g hg)
+  have hne' : cs ≠ cs.set k c := by
     intro h
-    injection h with _ _ h
     have := congrArg (·[k]?) h
     simp only [List.getElem?_set_self hk, List.getElem?_eq_getElem hk, Option.some.injEq] at this
     exact hname (this ▸ List.mem_map_of_mem (f := (·.name)) (List.getElem_mem hk))
+  have hne : (⟨(n, .sum t cs) :: types, .ref n⟩ : Schema)
+      ≠ ⟨(n', .sum t' (cs.set k c)) :: types, .ref n'⟩ := by
+    intro h
+    simp only [Schema.mk.injEq, List.cons.injEq, Prod.mk.injEq, Schema.Decl.sum.injEq] at h
+    exact hne' h.1.1.2.2
+  have hsame := sameTy_ref (w := (n, .sum t cs) :: types)
+    (r := (n', .sum t' (cs.set k c)) :: types) (n := n) (n' := n') fun h => by
+      subst h
+      simp only [List.lookup_cons, beq_self_eq_true, ne_eq, Option.some.injEq, Schema.Decl.sum.injEq,
+        not_and]
+      exact fun _ => hne'
   have hc : ((cs.set k c).filterMap fun r =>
       claim (cs.map (·.name)) r.name r.aliases).Nodup := by
     rw [filterMap_eq_range hclaim]
     exact List.nodup_range
-  refine ⟨_, of_sum hne hm hc (ofCtors_same _ 0 hR), fun j vs hj => ?_⟩
+  refine ⟨_, of_sum (t := t) (t' := t') (wcs := cs) (rcs := cs.set k c) rfl rfl
+    (by simp) (by simp) hne hm
+    hsame hc (ofCtors_same _ 0 hR), fun j vs hj => ?_⟩
   have hj2 : j < (cs.set k c).length := by simpa using hj
   have hpick := pick_eq (List.mapIdx (fun j r => (claim (cs.map (·.name)) r.name r.aliases).map
       fun k => (k, Ctor.to r.name (0 + j) none)) (cs.set k c)) 0 j
@@ -461,7 +506,8 @@ theorem of_rename {t t' : String} {a a' : List Schema} {cs : List (Schema.Ctor S
         rw [List.getElem_mapIdx, hclaim j' hj'']; simp⟩)
     (by rw [List.getElem?_mapIdx, List.getElem?_eq_getElem hj2, Option.map_some, hclaim j hj2]; simp)
   simp only [Nat.zero_add] at hpick
-  rw [apply, applyCtor_to _ j vs (name := (cs.set k c)[j].name) (j := j)]
+  rw [apply_ref, applyDecl]
+  rw [applyCtor_to _ j vs (name := (cs.set k c)[j].name) (j := j)]
   · rfl
   · rw [List.getElem?_mapIdx, List.getElem?_eq_getElem hj, Option.map_some]
     simp only [Nat.zero_add] at hpick ⊢
@@ -497,11 +543,12 @@ theorem decodeWith_migrate {β : Type} {old : Schema.Of α} {new : Schema.Of β}
     (h : encode limits old a = .ok bytes) :
     ∃ plan, Schema.Plan.of [.of old new f] old.schema new.schema = .ok plan ∧
       decodeWith limits old.schema plan new bytes = .ok (f a) := by
-  refine ⟨.convert new.schema.name (Schema.Migration.of old new f).run, ?_, ?_⟩
+  refine ⟨⟨[], .convert new.schema.name (Schema.Migration.of old new f).run⟩, ?_, ?_⟩
   · unfold Schema.Plan.of
-    simp [beq_eq_false_iff_ne.mpr hne, Schema.Migration.of]
-  · simp only [decodeWith, readWith, read_write h, Schema.Plan.apply, Schema.Migration.of,
-      old.ofValue_toValue, Option.map_some, new.ofValue_toValue]
+    simp [beq_eq_false_iff_ne.mpr hne, Schema.Plan.migrationFor, Schema.Migration.of,
+      List.all_eq_true]
+  · simp only [decodeWith, readWith, read_write h, Schema.Plan.apply, Schema.Plan.applyTy,
+      Schema.Migration.of, old.ofValue_toValue, Option.map_some, new.ofValue_toValue]
 
 end Body
 

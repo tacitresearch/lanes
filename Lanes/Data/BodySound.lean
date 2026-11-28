@@ -94,7 +94,7 @@ theorem readNatFrom_writeNat (acc rest : ByteArray) (n start bound budget : Nat)
     congr 2
     omega
 
-variable {L : Limits}
+variable {L : Limits} {T : List (String × Schema.Decl)}
 
 @[simp] theorem within_eq_ok {α : Type} {step : Error.Step} {x : Except Error α} {a : α} :
     within step x = .ok a ↔ x = .ok a := by
@@ -196,12 +196,16 @@ theorem tag_at {acc out rest : ByteArray} {t : UInt8} (h : ∃ e, out = acc.push
   rw [ByteArray.append_assoc]
   exact getElem?_push_append acc _ t
 
+theorem consumesFields_cons (d : Nat) (f : Schema.Field Schema.Ty) (fs : List (Schema.Field Schema.Ty)) :
+    consumesFields T d (f :: fs) = (consumes T d f.schema || consumesFields T d fs) := by
+  simp [consumesFields]
+
 mutual
 
-theorem readAt_writeAt (d : Nat) (s : Schema) (v : Value) (acc out rest : ByteArray)
-    (h : writeAt L d s v acc = .ok out) :
-    (∃ e, out = acc ++ e) ∧ (consumes s = true → acc.size < out.size) ∧
-      readAt L (out ++ rest) d s acc.size = .ok (v, out.size) := by
+theorem readAt_writeAt (d : Nat) (s : Schema.Ty) (v : Value) (acc out rest : ByteArray)
+    (h : writeAt L T d s v acc = .ok out) :
+    (∃ e, out = acc ++ e) ∧ (consumes T d s = true → acc.size < out.size) ∧
+      readAt L T (out ++ rest) d s acc.size = .ok (v, out.size) := by
   rw [writeAt.eq_def] at h
   split at h
   · obtain ⟨e, rfl, he⟩ := writeNum_extends h
@@ -223,7 +227,7 @@ theorem readAt_writeAt (d : Nat) (s : Schema) (v : Value) (acc out rest : ByteAr
     · rename_i acc1 hc
       obtain ⟨⟨e2, rfl⟩, hn, hr⟩ := readItems_writeItems _ _ _ _ _ _ rest h
       obtain ⟨e1, he1, hpos⟩ := writeNum_extends (writeCount_ok hc).1
-      have hcount := readCount_writeCount (consumes := consumes _) (e2 ++ rest) hc fun hne => by
+      have hcount := readCount_writeCount (consumes := consumes T _ _) (e2 ++ rest) hc fun hne => by
         have := hn hne
         simp only [ByteArray.size_append] at this ⊢
         omega
@@ -236,7 +240,7 @@ theorem readAt_writeAt (d : Nat) (s : Schema) (v : Value) (acc out rest : ByteAr
     · rename_i acc1 hc
       obtain ⟨⟨e2, rfl⟩, hn, hr⟩ := readEntries_writeEntries _ _ _ _ _ _ _ rest h
       obtain ⟨e1, he1, hpos⟩ := writeNum_extends (writeCount_ok hc).1
-      have hcount := readCount_writeCount (consumes := consumes _ || consumes _) (e2 ++ rest) hc
+      have hcount := readCount_writeCount (consumes := consumes T _ _ || consumes T _ _) (e2 ++ rest) hc
         fun hne => by
           have := hn hne
           simp only [ByteArray.size_append] at this ⊢
@@ -246,24 +250,33 @@ theorem readAt_writeAt (d : Nat) (s : Schema) (v : Value) (acc out rest : ByteAr
       simp only [he1, ByteArray.size_append]
       omega
     · cases h
-  · rw [within_eq_ok] at h
-    obtain ⟨hext, hn, hr⟩ := readFields_writeFields _ _ _ _ _ rest h
-    exact ⟨hext, by simpa [consumes] using hn, by simp only [readAt, hr, within_ok]⟩
   · split at h
     · simp [fail] at h
-    · rename_i c hc
+    · rename_i type fields hl
       split at h
-      · rename_i acc1 hw
-        rw [within_eq_ok, within_eq_ok] at h
-        obtain ⟨⟨e2, rfl⟩, -, hr⟩ := readFields_writeFields _ _ _ _ _ rest h
-        obtain ⟨e1, he1, hpos⟩ := writeNum_extends hw
-        have hk := readNat_writeNum (e2 ++ rest) hw
-        rw [← ByteArray.append_assoc] at hk
-        refine ⟨extends_trans ⟨e1, he1⟩ ⟨e2, rfl⟩, fun _ => ?_,
-          by simp only [readAt, hk, hc, hr, within_ok]⟩
-        rw [he1, ByteArray.size_append, ByteArray.size_append]
-        omega
-      · cases h
+      · rename_i hk
+        subst hk
+        rw [within_eq_ok] at h
+        obtain ⟨hext, hn, hr⟩ := readFields_writeFields _ _ _ _ _ rest h
+        exact ⟨hext, by simpa [consumes, consumesFields, hl] using hn,
+          by simp only [readAt, hl, hr, within_ok]⟩
+      · simp [fail] at h
+    · rename_i type ctors hl
+      split at h
+      · simp [fail] at h
+      · rename_i c hc
+        split at h
+        · rename_i acc1 hw
+          rw [within_eq_ok, within_eq_ok] at h
+          obtain ⟨⟨e2, rfl⟩, -, hr⟩ := readFields_writeFields _ _ _ _ _ rest h
+          obtain ⟨e1, he1, hpos⟩ := writeNum_extends hw
+          have hk := readNat_writeNum (e2 ++ rest) hw
+          rw [← ByteArray.append_assoc] at hk
+          refine ⟨extends_trans ⟨e1, he1⟩ ⟨e2, rfl⟩, fun _ => ?_,
+            by simp only [readAt, hl, hk, hc, hr, within_ok]⟩
+          rw [he1, ByteArray.size_append, ByteArray.size_append]
+          omega
+        · cases h
   · split at h
     · rename_i acc1 h1
       rw [within_eq_ok] at h h1
@@ -276,10 +289,10 @@ theorem readAt_writeAt (d : Nat) (s : Schema) (v : Value) (acc out rest : ByteAr
     · cases h
 termination_by (d, 0, 0)
 
-theorem readFields_writeFields (d : Nat) (fields : List (Schema.Field Schema)) (vs : List Value)
-    (acc out rest : ByteArray) (h : writeFields L d fields vs acc = .ok out) :
-    (∃ e, out = acc ++ e) ∧ (consumesFields fields = true → acc.size < out.size) ∧
-      readFields L (out ++ rest) d fields acc.size = .ok (vs, out.size) := by
+theorem readFields_writeFields (d : Nat) (fields : List (Schema.Field Schema.Ty)) (vs : List Value)
+    (acc out rest : ByteArray) (h : writeFields L T d fields vs acc = .ok out) :
+    (∃ e, out = acc ++ e) ∧ (consumesFields T d fields = true → acc.size < out.size) ∧
+      readFields L T (out ++ rest) d fields acc.size = .ok (vs, out.size) := by
   rw [writeFields.eq_def] at h
   split at h
   · cases h
@@ -296,7 +309,7 @@ theorem readFields_writeFields (d : Nat) (fields : List (Schema.Field Schema)) (
         by simp only [readFields, hr1, hr2, within_ok]⟩
       have h1 := size_le_of_extends hext
       have h2 := size_le_of_extends ⟨e2, rfl⟩ (a := acc1)
-      simp only [consumesFields, Bool.or_eq_true] at hne
+      simp only [consumesFields_cons, Bool.or_eq_true] at hne
       rcases hne with hne | hne
       · have := hn1 hne; omega
       · have := hn2 hne; omega
@@ -304,10 +317,10 @@ theorem readFields_writeFields (d : Nat) (fields : List (Schema.Field Schema)) (
   · simp [fail] at h
 termination_by (d, 1, vs.length)
 
-theorem readItems_writeItems (d : Nat) (item : Schema) (vs : List Value) (index : Nat)
-    (acc out rest : ByteArray) (h : writeItems L d item vs index acc = .ok out) :
-    (∃ e, out = acc ++ e) ∧ (consumes item = true → acc.size + vs.length ≤ out.size) ∧
-      readItems L (out ++ rest) d item vs.length index acc.size = .ok (vs, out.size) := by
+theorem readItems_writeItems (d : Nat) (item : Schema.Ty) (vs : List Value) (index : Nat)
+    (acc out rest : ByteArray) (h : writeItems L T d item vs index acc = .ok out) :
+    (∃ e, out = acc ++ e) ∧ (consumes T d item = true → acc.size + vs.length ≤ out.size) ∧
+      readItems L T (out ++ rest) d item vs.length index acc.size = .ok (vs, out.size) := by
   rw [writeItems.eq_def] at h
   split at h
   · cases h
@@ -328,11 +341,11 @@ theorem readItems_writeItems (d : Nat) (item : Schema) (vs : List Value) (index 
     · cases h
 termination_by (d, 1, vs.length)
 
-theorem readEntries_writeEntries (d : Nat) (key value : Schema) (es : List Value) (index : Nat)
-    (acc out rest : ByteArray) (h : writeEntries L d key value es index acc = .ok out) :
+theorem readEntries_writeEntries (d : Nat) (key value : Schema.Ty) (es : List Value) (index : Nat)
+    (acc out rest : ByteArray) (h : writeEntries L T d key value es index acc = .ok out) :
     (∃ e, out = acc ++ e) ∧
-      ((consumes key || consumes value) = true → acc.size + es.length ≤ out.size) ∧
-      readEntries L (out ++ rest) d key value es.length index acc.size = .ok (es, out.size) := by
+      ((consumes T d key || consumes T d value) = true → acc.size + es.length ≤ out.size) ∧
+      readEntries L T (out ++ rest) d key value es.length index acc.size = .ok (es, out.size) := by
   rw [writeEntries.eq_def] at h
   split at h
   · cases h
@@ -364,9 +377,9 @@ theorem readEntries_writeEntries (d : Nat) (key value : Schema) (es : List Value
 termination_by (d, 1, es.length)
 
 theorem readTagged_writeTagged (d : Nat) (v : Value) (acc out rest : ByteArray)
-    (h : writeTagged L d v acc = .ok out) :
+    (h : writeTagged L T d v acc = .ok out) :
     (∃ e, out = acc ++ e) ∧ acc.size < out.size ∧
-      readTagged L (out ++ rest) d acc.size = .ok (v, out.size) := by
+      readTagged L T (out ++ rest) d acc.size = .ok (v, out.size) := by
   rw [writeTagged.eq_def] at h
   split at h
   · obtain ⟨e, rfl, -⟩ := writeNum_extends h
@@ -436,9 +449,9 @@ theorem readTagged_writeTagged (d : Nat) (v : Value) (acc out rest : ByteArray)
 termination_by (d, 0, 0)
 
 theorem readTaggedItems_writeTaggedItems (d : Nat) (vs : List Value) (index : Nat)
-    (acc out rest : ByteArray) (h : writeTaggedItems L d vs index acc = .ok out) :
+    (acc out rest : ByteArray) (h : writeTaggedItems L T d vs index acc = .ok out) :
     (∃ e, out = acc ++ e) ∧ acc.size + vs.length ≤ out.size ∧
-      readTaggedItems L (out ++ rest) d vs.length index acc.size = .ok (vs, out.size) := by
+      readTaggedItems L T (out ++ rest) d vs.length index acc.size = .ok (vs, out.size) := by
   rw [writeTaggedItems.eq_def] at h
   split at h
   · cases h
@@ -597,9 +610,9 @@ theorem push_extract {acc bytes : ByteArray} {pos stop : Nat} {t : UInt8}
 
 mutual
 
-theorem writeAt_readAt (bytes : ByteArray) (d : Nat) (s : Schema) (pos : Nat) (v : Value)
-    (stop : Nat) (acc : ByteArray) (h : readAt L bytes d s pos = .ok (v, stop)) :
-    pos ≤ stop ∧ writeAt L d s v acc = .ok (acc ++ bytes.extract pos stop) := by
+theorem writeAt_readAt (bytes : ByteArray) (d : Nat) (s : Schema.Ty) (pos : Nat) (v : Value)
+    (stop : Nat) (acc : ByteArray) (h : readAt L T bytes d s pos = .ok (v, stop)) :
+    pos ≤ stop ∧ writeAt L T d s v acc = .ok (acc ++ bytes.extract pos stop) := by
   rw [readAt.eq_def] at h
   split at h
   · split at h
@@ -655,27 +668,32 @@ theorem writeAt_readAt (bytes : ByteArray) (d : Nat) (s : Schema) (pos : Nat) (v
       · cases h
     · cases h
   · split at h
-    · cases h
-      rename_i vs stop hf
-      rw [within_eq_ok] at hf
-      obtain ⟨hp, hw⟩ := writeFields_readFields _ _ _ _ _ _ acc hf
-      exact ⟨hp, by simp only [writeAt, hw, within_ok]⟩
-    · cases h
-  · split at h
-    · cases h
-    · rename_i k p1 hk
+    · simp [fail] at h
+    · rename_i type fields hl
       split at h
-      · simp [within, fail] at h
-      · rename_i c hc
+      · cases h
+        rename_i vs stop hf
+        rw [within_eq_ok] at hf
+        obtain ⟨hp, hw⟩ := writeFields_readFields _ _ _ _ _ _ acc hf
+        exact ⟨hp, by simp only [writeAt, hl, hw, within_ok, ↓reduceIte]⟩
+      · cases h
+    · rename_i type ctors hl
+      split at h
+      · cases h
+      · rename_i k p1 hk
         split at h
-        · cases h
-          rename_i vs stop hf
-          rw [within_eq_ok, within_eq_ok] at hf
-          obtain ⟨hp1, hw1⟩ := writeNum_readNat acc hk
-          obtain ⟨hp2, hw2⟩ := writeFields_readFields _ _ _ _ _ _ (acc ++ bytes.extract pos p1) hf
-          refine ⟨by omega, ?_⟩
-          simp only [writeAt, hc, hw1, hw2, within_ok, append_extract (Nat.le_of_lt hp1) hp2]
-        · cases h
+        · simp [within, fail] at h
+        · rename_i c hc
+          split at h
+          · cases h
+            rename_i vs stop hf
+            rw [within_eq_ok, within_eq_ok] at hf
+            obtain ⟨hp1, hw1⟩ := writeNum_readNat acc hk
+            obtain ⟨hp2, hw2⟩ :=
+              writeFields_readFields _ _ _ _ _ _ (acc ++ bytes.extract pos p1) hf
+            refine ⟨by omega, ?_⟩
+            simp only [writeAt, hl, hc, hw1, hw2, within_ok, append_extract (Nat.le_of_lt hp1) hp2]
+          · cases h
   · split at h
     · cases h
     · rename_i i p1 hi
@@ -690,10 +708,10 @@ theorem writeAt_readAt (bytes : ByteArray) (d : Nat) (s : Schema) (pos : Nat) (v
       · cases h
 termination_by (d, 0, 0)
 
-theorem writeFields_readFields (bytes : ByteArray) (d : Nat) (fields : List (Schema.Field Schema))
+theorem writeFields_readFields (bytes : ByteArray) (d : Nat) (fields : List (Schema.Field Schema.Ty))
     (pos : Nat) (vs : List Value) (stop : Nat) (acc : ByteArray)
-    (h : readFields L bytes d fields pos = .ok (vs, stop)) :
-    pos ≤ stop ∧ writeFields L d fields vs acc = .ok (acc ++ bytes.extract pos stop) := by
+    (h : readFields L T bytes d fields pos = .ok (vs, stop)) :
+    pos ≤ stop ∧ writeFields L T d fields vs acc = .ok (acc ++ bytes.extract pos stop) := by
   rw [readFields.eq_def] at h
   split at h
   · cases h
@@ -713,11 +731,11 @@ theorem writeFields_readFields (bytes : ByteArray) (d : Nat) (fields : List (Sch
       · cases h
 termination_by (d, 1, fields.length)
 
-theorem writeItems_readItems (bytes : ByteArray) (d : Nat) (item : Schema) (n index pos : Nat)
+theorem writeItems_readItems (bytes : ByteArray) (d : Nat) (item : Schema.Ty) (n index pos : Nat)
     (vs : List Value) (stop : Nat) (acc : ByteArray)
-    (h : readItems L bytes d item n index pos = .ok (vs, stop)) :
+    (h : readItems L T bytes d item n index pos = .ok (vs, stop)) :
     pos ≤ stop ∧ vs.length = n ∧
-      writeItems L d item vs index acc = .ok (acc ++ bytes.extract pos stop) := by
+      writeItems L T d item vs index acc = .ok (acc ++ bytes.extract pos stop) := by
   rw [readItems.eq_def] at h
   split at h
   · cases h
@@ -739,11 +757,11 @@ theorem writeItems_readItems (bytes : ByteArray) (d : Nat) (item : Schema) (n in
       · cases h
 termination_by (d, 1, n)
 
-theorem writeEntries_readEntries (bytes : ByteArray) (d : Nat) (key value : Schema)
+theorem writeEntries_readEntries (bytes : ByteArray) (d : Nat) (key value : Schema.Ty)
     (n index pos : Nat) (es : List Value) (stop : Nat) (acc : ByteArray)
-    (h : readEntries L bytes d key value n index pos = .ok (es, stop)) :
+    (h : readEntries L T bytes d key value n index pos = .ok (es, stop)) :
     pos ≤ stop ∧ es.length = n ∧
-      writeEntries L d key value es index acc = .ok (acc ++ bytes.extract pos stop) := by
+      writeEntries L T d key value es index acc = .ok (acc ++ bytes.extract pos stop) := by
   rw [readEntries.eq_def] at h
   split at h
   · cases h
@@ -771,8 +789,8 @@ theorem writeEntries_readEntries (bytes : ByteArray) (d : Nat) (key value : Sche
 termination_by (d, 1, n)
 
 theorem writeTagged_readTagged (bytes : ByteArray) (d pos : Nat) (v : Value) (stop : Nat)
-    (acc : ByteArray) (h : readTagged L bytes d pos = .ok (v, stop)) :
-    pos ≤ stop ∧ writeTagged L d v acc = .ok (acc ++ bytes.extract pos stop) := by
+    (acc : ByteArray) (h : readTagged L T bytes d pos = .ok (v, stop)) :
+    pos ≤ stop ∧ writeTagged L T d v acc = .ok (acc ++ bytes.extract pos stop) := by
   rw [readTagged.eq_def] at h
   split at h
   · simp [fail] at h
@@ -866,9 +884,9 @@ termination_by (d, 0, 0)
 
 theorem writeTaggedItems_readTaggedItems (bytes : ByteArray) (d n index pos : Nat)
     (vs : List Value) (stop : Nat) (acc : ByteArray)
-    (h : readTaggedItems L bytes d n index pos = .ok (vs, stop)) :
+    (h : readTaggedItems L T bytes d n index pos = .ok (vs, stop)) :
     pos ≤ stop ∧ vs.length = n ∧
-      writeTaggedItems L d vs index acc = .ok (acc ++ bytes.extract pos stop) := by
+      writeTaggedItems L T d vs index acc = .ok (acc ++ bytes.extract pos stop) := by
   rw [readTaggedItems.eq_def] at h
   split at h
   · cases h

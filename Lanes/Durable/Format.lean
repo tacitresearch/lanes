@@ -80,8 +80,9 @@ def limits : Kind → Codec.Limits
 
 end Kind
 
-/-- The bounds of the schema frame and of the manifest. A schema nests a few values for each of
-its types', so it may be deep. -/
+/-- The bounds of the schema frame and of the manifest. A named type is a reference in a schema,
+so a schema nests only as deep as a type written out where it is used (a list of lists); the
+bound is generous. -/
 def schemaLimits : Codec.Limits := { maxDepth := 4096 }
 
 /-- Why a journal's files are not opened. A refused file is left as it is. -/
