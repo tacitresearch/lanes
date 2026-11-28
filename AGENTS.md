@@ -38,19 +38,23 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
   `LAKE_CACHE_DIR` moves it), with a record of which outputs each module's inputs gave. A build
   whose inputs are recorded there makes hard links in `.lake/build` instead of building. So the
   worktrees and apps of a machine share one copy: a new worktree builds only what no checkout
-  built before, and its `.lake/build` takes almost no disk of its own. Start a worktree with
-  only `.lake/packages` (a link to the shared one); copying a warm `.lake/build` gains nothing.
-  The dependencies, Mathlib among them, are linked into the cache too, and their files become
+  built before, and its `.lake/build` takes almost no disk of its own. Start a worktree with only
+  `.lake/packages` (a link to the shared one); copying a warm `.lake/build` gains nothing. The
+  dependencies, Mathlib among them, are linked into the cache too, and their files become
   read-only. Never write into a file of `.lake/build` or `.lake/packages` in place: it is also
   the cache's file, and the read-only bit does not stop root. Lake deletes an output before
-  building it again, and several worktrees can build at once: an output is stored once under
-  its hash and never rewritten, and two builds of a module give the same bytes. An entry is found only by the hash of everything a
-  module's build reads, so it is as good as a build, provided each file read by `include_str` is
-  declared (below). A checkout whose lakefile does not turn the cache on still reads it (Lake's
-  default) and adds nothing to it. The cache only grows; delete the directory to reclaim it. To
-  build from source, delete `.lake/build` and run `LAKE_CACHE_DIR= lake build`: set and empty,
-  it gives the checkout an empty cache of its own, in `.lake/cache` (`LAKE_NO_CACHE` stops
-  downloads only). Nothing is fetched from a remote cache yet (#98).
+  building it again, and several worktrees can build at once: an output is stored once under its
+  hash and never rewritten, and two builds of a module give the same bytes. An entry is found
+  only by the hash of everything a module's build reads, so it is as good as a build, provided
+  each file read by `include_str` is declared (below), and except for warnings: Lake does not
+  replay the warnings of a module it links from the cache, so `lake build --wfail` shows a
+  module's warnings only when the module is built, or was last built, in this checkout. CI gives
+  each job an empty cache of its own, so it sees them all. A checkout whose lakefile does not
+  turn the cache on still reads it (Lake's default) and adds nothing to it. The cache only grows;
+  delete the directory to reclaim it. To build from source, delete `.lake/build` and run
+  `LAKE_CACHE_DIR= lake build`: set and empty, it gives the checkout an empty cache of its own,
+  in `.lake/cache` (`LAKE_NO_CACHE` stops downloads only). Nothing is fetched from a remote cache
+  yet (#98).
 - **Small bounds on every pull request, large bounds on a schedule.** A pull request's checks
   are fast and exhaustive at small bounds: each example's `lake test` takes under a minute, and
   a pull request's CI under ten minutes. A model-checking scenario has a small version, in `lake

@@ -9,9 +9,9 @@ description: >
   `lake exe cache get` when missing), the build on the commit, falling back to the newest
   earlier one. With `system`, `examples/<system>` gets the same packages and its own build back.
   Saving is left to the jobs that build, when `warm` is not true: see the keys in the outputs.
-  Lake's artifact cache (AGENTS.md, "Build and checks") is in the toolchain's directory under
-  ELAN_HOME: empty at the start of a job on GitHub's runners, and shared by the runners of a
-  machine of our own.
+  Each job gets an empty Lake artifact cache of its own, in `.lake/cache` (AGENTS.md, "Build and
+  checks"): Lake does not replay the warnings of a module it takes from that cache, so a cache
+  shared with other jobs would let `--wfail` pass over a warning that another job saw.
 inputs:
   system:
     description: A directory under `examples/` whose build to restore as well.
@@ -51,6 +51,11 @@ runs:
           exit 0
         fi
         sudo apt-get update -q && sudo apt-get install -yq openssl libssl-dev pkg-config
+    - name: An empty Lake artifact cache, the job's own
+      shell: bash
+      run: |
+        rm -rf "$GITHUB_WORKSPACE/.lake/cache"
+        echo "LAKE_CACHE_DIR=$GITHUB_WORKSPACE/.lake/cache" >> "$GITHUB_ENV"
     - name: Install elan and the toolchain
       shell: bash
       run: |
