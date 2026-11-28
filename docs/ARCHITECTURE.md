@@ -750,7 +750,7 @@ Where: `Lanes/Db/`, `Lanes/Lib/Postgres/Sql.lean`, `Lanes/Lib/Postgres/IO/Db.lea
 
 ## Jobs, the outbox and acting once
 
-Work that must outlive the process is a row (`docs/decisions/new-outbox-jobs.md`). A jobs table
+Work that must outlive the process is a row (`docs/decisions/D114-outbox-jobs.md`). A jobs table
 (`Lanes/Db/Jobs.lean`) holds jobs, each with its work, the time it is due, a key its requester
 chose (unique: a second `enqueue` under it is a no-op), its attempts and its lease. The outbox is
 a jobs table whose jobs are effects (an HTTP call, an email, a payment, an object to put),
@@ -804,7 +804,7 @@ Where: `Lanes/Db/{Jobs,JobsSound,Worker,WorkerSound,Once,OnceSound}.lean`,
 `Server.system spec` runs a service's spec as one actor. `Once.actor` acts once on a request its
 client names by identity and sequence number, and answers a repeat with what it did, one entry
 per client. Its memo lives as long as the process: across a restart, acting once is an
-idempotency key stored in the transaction (`docs/decisions/new-outbox-jobs.md`).
+idempotency key stored in the transaction (`docs/decisions/D114-outbox-jobs.md`).
 
 Where: `Lanes/Behaviours/Server.lean`, `Lanes/Behaviours/Once/`,
 `Lanes/Semantics/{Service,Once}.lean`.
