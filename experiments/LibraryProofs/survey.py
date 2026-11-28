@@ -90,53 +90,44 @@ def generate(imp, files, dest, tactic="exact?", only=None):
 
 
 def parse(lean, log):
-    cases = {}
+    """Each case gives one message: `exact?`'s error, with its position, or its `Try this`,
+    which `lean` prints without one. So a `Try this` is the next case after the last one placed."""
     starts = []
     for no, line in enumerate(open(lean, encoding="utf-8").read().split("\n"), 1):
         m = re.match(r"^-- CASE (\d+) (\S+) (\S+)$", line)
         if m:
             starts.append((no, m.group(2), m.group(3)))
-    def which(lineno):
-        best = None
-        for s in starts:
-            if s[0] <= lineno:
-                best = s
-        return best
-    # Lean prints `file:line:col: severity: message`, messages may span lines.
-    msgs = []
-    cur = None
-    for line in open(log, encoding="utf-8").read().split("\n"):
-        m = re.match(r"^.*?\.lean:(\d+):(\d+): (error|warning|info): ?(.*)$", line)
+    import bisect
+    nos = [s[0] for s in starts]
+    status = {k: ("no-message", "") for k in range(len(starts))}
+    last = -1
+    lines = open(log, encoding="utf-8").read().split("\n")
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        m = re.match(r"^.*?\.lean:(\d+):(\d+): (error|warning)(?:\([^)]*\))?: ?(.*)$", line)
         if m:
-            cur = [int(m.group(1)), m.group(3), m.group(4)]
-            msgs.append(cur)
-        elif cur is not None:
-            cur[2] += "\n" + line
-    status = {}
-    for s in starts:
-        status[s] = ("closed?", "")
-    for lineno, sev, text in msgs:
-        s = which(lineno)
-        if s is None:
-            continue
-        prev = status[s][0]
-        if "Try this" in text:
-            lemma = re.findall(r"Try this:\s*(?:\[apply\]\s*)?(.*)", text)
-            if prev not in ("elab-error",):
-                status[s] = ("found", lemma[0].strip() if lemma else text.strip())
-        elif "could not close the goal" in text or "exact? could not" in text:
-            if prev != "elab-error":
-                status[s] = ("not-found", "")
-        elif sev == "error":
-            status[s] = ("elab-error", text.split("\n")[0][:120])
+            k = bisect.bisect_right(nos, int(m.group(1))) - 1
+            if "could not close the goal" in m.group(4):
+                status[k] = ("not-found", "")
+            elif m.group(3) == "error":
+                status[k] = ("elab-error", m.group(4)[:120])
+            last = max(last, k)
+        elif line.startswith("Try this:"):
+            lemma = lines[i + 1].strip() if i + 1 < len(lines) else ""
+            lemma = re.sub(r"^\[apply\]\s*", "", lemma)
+            last += 1
+            if last < len(starts):
+                status[last] = ("found", lemma)
+        i += 1
     counts = {}
-    for s, (st, info) in status.items():
+    for k, (st, info) in status.items():
         counts[st] = counts.get(st, 0) + 1
         if st == "found":
-            print(f"FOUND\t{s[1]}\t{s[2]}\t{info}")
-    for s, (st, info) in status.items():
-        if st == "not-found":
-            print(f"NOTFOUND\t{s[1]}\t{s[2]}")
+            print(f"FOUND\t{starts[k][1]}\t{starts[k][2]}\t{info}")
+    for k, (st, info) in status.items():
+        if st != "found":
+            print(f"{st.upper()}\t{starts[k][1]}\t{starts[k][2]}\t{info}")
     print("COUNTS", counts)
 
 
