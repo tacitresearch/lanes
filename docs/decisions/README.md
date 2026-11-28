@@ -118,6 +118,7 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D109. The video site split into an actor per member, and a scheduler per entity](D109-videos-per-member.md): partly superseded by D110-volatile-actors.md (the video site, which leaves the main branch, and the waves it was split for)
 - [D110. Actors are volatile, and durable state lives in outside services with models](D110-volatile-actors.md)
 - [D107. The waves' premise, measured on the video site: the work spreads once reads leave the journal](D107-waves-premise.md): partly superseded by D110-volatile-actors.md (waves as the default: it stands as a measurement)
+- [D124. WebSockets behind the gate](D124-websocket-server.md)
 
 ### Superseded
 

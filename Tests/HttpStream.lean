@@ -124,6 +124,7 @@ def perform (w : World) (unsent : Bool) : Action → World
   | .part seq bytes =>
     { w with out := w.out ++ [.part seq bytes], heartbeat := w.heartbeat || bytes == heartbeatChunk }
   | .close => { w with out := w.out ++ [.close] }
+  | .switch .. => { w with stray := true }
 
 def tell (w : World) (e : Event) : World :=
   let (conn, actions) := w.conn.step cfg w.now e

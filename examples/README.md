@@ -52,7 +52,9 @@ beside a PostgreSQL made for the run).
     (`Lanes.Db.Jobs`), posted by the worker to a notification service at its time, under the
     job's id as the idempotency key, and again with a backoff until it is taken, refused, out of
     attempts or cancelled.
-11. `rookery`: the serious system below.
+11. `chat`: a chat room over WebSockets: each member a socket, each line through the gate as a
+    request, each line for a member an output to its socket (`Lanes.Web.Http.WebSocketSession`).
+12. `rookery`: the serious system below.
 
 | Feature | Where to see it |
 | --- | --- |
@@ -74,6 +76,7 @@ beside a PostgreSQL made for the run).
 | Sign-in with Google or GitHub (OAuth 2.0, OpenID Connect) | `sign-in` |
 | A JSON API and rate limits | `rookery` |
 | Request bodies in pieces, responses in parts, Server-Sent Events | `upload`, `rookery` |
+| WebSockets: a request that switches protocols, messages in, pushes out | `chat` |
 
 ## The serious systems
 
