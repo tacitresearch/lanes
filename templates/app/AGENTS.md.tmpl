@@ -3,7 +3,6 @@
 A [Lanes](https://github.com/tacitresearch/lanes) application. It needs elan and a C compiler, nothing else.
 
 ```bash
-lake exe cache get      # once: prebuilt Mathlib
 lake build
 lake test               # model checks, then the proofs
 lake test -- --json     # the same, as JSON: each result with its kind (check, proof)
@@ -41,7 +40,6 @@ and Proofs. The ones every change here meets:
   proofs. It does not import them, so a broken proof does not stop the checks.
 - `Main.lean`: the edge. HTTP, HTML views, `main`.
 
-Executable code imports `Lanes`. Proof files that need refinement or Mathlib import
-`Lanes.Semantics`; keep that import, and every theorem, out of anything `Main.lean` and
-`Check.lean` depend on: the binary would grow by over 100 MB, and a broken proof would stop the
-checks.
+Executable code imports `Lanes`. Proof files that need refinement import `Lanes.Semantics`;
+keep that import, and every theorem, out of anything `Main.lean` and `Check.lean` depend on: the
+binary would link the proofs, and a broken proof would stop the checks.

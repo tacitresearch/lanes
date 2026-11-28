@@ -6,7 +6,7 @@ module
 
 public import Lanes.Core.Run
 public import Lanes.Semantics.Liveness
-public import Cslib.Foundations.Data.Nat.Segment
+public import Lanes.Semantics.Seq
 
 /-!
 # Fair runs seen through a projection
@@ -47,8 +47,6 @@ so that it is infinite even where `sys` stutters forever (`System.Run.ofBlocks`)
 
 namespace Lanes
 
-open Cslib
-
 variable {σ σ' : Signature}
 
 namespace System.Run
@@ -57,29 +55,29 @@ variable {α : Type}
 
 /-- Where the `k`-th of the lists `B` starts when they are put one after the other, each followed
 by one more position. -/
-def blockStart (B : ℕ → List α) : ℕ → ℕ
+def blockStart (B : Nat → List α) : Nat → Nat
   | 0 => 0
   | k + 1 => blockStart B k + (B k).length + 1
 
 /-- The blocks start further on, one after another. -/
-theorem blockStart_strictMono (B : ℕ → List α) : StrictMono (blockStart B) :=
-  strictMono_nat_of_lt_succ fun k => by simp only [blockStart]; omega
+theorem blockStart_strictMono (B : Nat → List α) : StrictMono (blockStart B) :=
+  StrictMono.of_lt_succ fun k => by simp only [blockStart]; omega
 
 /-- The block that position `p` falls in. -/
-noncomputable def blockOf (B : ℕ → List α) (p : ℕ) : ℕ :=
-  Nat.segment (blockStart B) p
+def blockOf (B : Nat → List α) (p : Nat) : Nat :=
+  segment (blockStart B) p
 
 /-- A position within a block, the position after its last element included, is in that block. -/
-theorem blockOf_add (B : ℕ → List α) {k j : ℕ} (hj : j ≤ (B k).length) :
+theorem blockOf_add (B : Nat → List α) {k j : Nat} (hj : j ≤ (B k).length) :
     blockOf B (blockStart B k + j) = k :=
-  Nat.segment_range_val (blockStart_strictMono B) (Nat.le_add_right _ _)
+  segment_range_val (blockStart_strictMono B) (Nat.le_add_right _ _)
     (by simp only [blockStart]; omega)
 
 /-- Every position is in a block. -/
-theorem exists_blockStart (B : ℕ → List α) (p : ℕ) :
+theorem exists_blockStart (B : Nat → List α) (p : Nat) :
     ∃ k j, j ≤ (B k).length ∧ blockStart B k + j = p := by
-  have hlo := Nat.segment_lower_bound (blockStart_strictMono B) rfl p
-  have hhi := Nat.segment_upper_bound (blockStart_strictMono B) rfl p
+  have hlo := segment_lower_bound (blockStart_strictMono B) rfl p
+  have hhi := segment_upper_bound (blockStart_strictMono B) rfl p
   simp only [blockStart] at hhi
   exact ⟨blockOf B p, p - blockStart B (blockOf B p), by unfold blockOf; omega,
     by unfold blockOf; omega⟩
@@ -88,12 +86,12 @@ variable {sys : System σ} {env : EnvModel σ}
 
 /-- The run that takes the finite runs `B` one after the other, from the states `D`, and
 stutters after each. -/
-noncomputable def ofBlocks (D : ℕ → SysState sys) (B : ℕ → List (Event σ))
+def ofBlocks (D : Nat → SysState sys) (B : Nat → List (Event σ))
     (h0 : D 0 = SysState.init sys env) (hrun : ∀ k, (D k).run env (B k) = some (D (k + 1))) :
     sys.Run env where
-  state := ⟨fun p => ((D (blockOf B p)).run env ((B (blockOf B p)).take
-    (p - blockStart B (blockOf B p)))).getD (D (blockOf B p))⟩
-  event := ⟨fun p => (B (blockOf B p))[p - blockStart B (blockOf B p)]?⟩
+  state p := ((D (blockOf B p)).run env ((B (blockOf B p)).take
+    (p - blockStart B (blockOf B p)))).getD (D (blockOf B p))
+  event p := (B (blockOf B p))[p - blockStart B (blockOf B p)]?
   init := by
     have h := blockOf_add B (k := 0) (j := 0) (Nat.zero_le _)
     simp only [blockStart, Nat.zero_add] at h
@@ -101,7 +99,7 @@ noncomputable def ofBlocks (D : ℕ → SysState sys) (B : ℕ → List (Event �
   exec p := by
     obtain ⟨k, j, hj, rfl⟩ := exists_blockStart B p
     obtain ⟨x, hx, hrest⟩ := SysState.run_take (hrun k) j
-    simp only [ωSequence.get_fun, blockOf_add B hj, Nat.add_sub_cancel_left, hx, Option.getD_some]
+    simp only [blockOf_add B hj, Nat.add_sub_cancel_left, hx, Option.getD_some]
     rcases Nat.lt_or_ge j (B k).length with hlt | hge
     · have hj' : j + 1 ≤ (B k).length := hlt
       rw [show blockStart B k + j + 1 = blockStart B k + (j + 1) by omega, blockOf_add B hj',
@@ -120,31 +118,31 @@ noncomputable def ofBlocks (D : ℕ → SysState sys) (B : ℕ → List (Event �
       rw [List.drop_length, SysState.run, Option.some.injEq] at hrest
       simp [Spec.stutter, SysState.run, hrest]
 
-variable {D : ℕ → SysState sys} {B : ℕ → List (Event σ)} {h0 : D 0 = SysState.init sys env}
+variable {D : Nat → SysState sys} {B : Nat → List (Event σ)} {h0 : D 0 = SysState.init sys env}
   {hrun : ∀ k, (D k).run env (B k) = some (D (k + 1))}
 
 /-- Within a block, the run is in the states of that block's finite run. -/
-theorem ofBlocks_state {k j : ℕ} (hj : j ≤ (B k).length) :
+theorem ofBlocks_state {k j : Nat} (hj : j ≤ (B k).length) :
     (D k).run env ((B k).take j) = some ((ofBlocks D B h0 hrun).state (blockStart B k + j)) := by
   obtain ⟨x, hx, -⟩ := SysState.run_take (hrun k) j
   simp [ofBlocks, blockOf_add B hj, hx]
 
 /-- Within a block, the run takes that block's events, and stutters after the last. -/
-theorem ofBlocks_event {k j : ℕ} (hj : j ≤ (B k).length) :
+theorem ofBlocks_event {k j : Nat} (hj : j ≤ (B k).length) :
     (ofBlocks D B h0 hrun).event (blockStart B k + j) = (B k)[j]? := by
   simp [ofBlocks, blockOf_add B hj]
 
 /-- The run starts each block in the state the block starts from. -/
-theorem ofBlocks_start (k : ℕ) : (ofBlocks D B h0 hrun).state (blockStart B k) = D k := by
+theorem ofBlocks_start (k : Nat) : (ofBlocks D B h0 hrun).state (blockStart B k) = D k := by
   have h := ofBlocks_state (h0 := h0) (hrun := hrun) (k := k) (Nat.zero_le _)
   simpa [SysState.run] using h.symm
 
 /-- The events up to the start of a block are the events of the blocks before it, each followed
 by a stutter. -/
-theorem ofBlocks_take (k : ℕ) :
+theorem ofBlocks_take (k : Nat) :
     (ofBlocks D B h0 hrun).event.take (blockStart B (k + 1))
       = (ofBlocks D B h0 hrun).event.take (blockStart B k) ++ ((B k).map some ++ [none]) := by
-  have hpart (j : ℕ) (hj : j ≤ (B k).length) :
+  have hpart (j : Nat) (hj : j ≤ (B k).length) :
       (ofBlocks D B h0 hrun).event.take (blockStart B k + j)
         = (ofBlocks D B h0 hrun).event.take (blockStart B k) ++ ((B k).take j).map some := by
     induction j with
@@ -220,7 +218,7 @@ structure Projects (env : EnvModel σ) (env' : EnvModel σ') : Prop where
     ∃ ob, v.lift ob' = some ob ∧ ob.Due env c
 
 /-- `r'` is `r` seen through `v`: position `n` of `r` is position `f n` of `r'`. -/
-structure Sees (r : sys.Run env) (r' : sys'.Run env') (f : ℕ → ℕ) : Prop where
+structure Sees (r : sys.Run env) (r' : sys'.Run env') (f : Nat → Nat) : Prop where
   /-- Positions keep their order. -/
   mono : StrictMono f
   /-- Each state of `r` is seen as the corresponding state of `r'`. -/
@@ -251,7 +249,7 @@ theorem Projects.stutter (h : v.Projects env env') {c : SysState sys} {d : SysSt
     exact .inl (hj ▸ h.near c d hcd)
 
 /-- The run of `sys'` for position `n` of a run of `sys`. -/
-theorem Projects.block (h : v.Projects env env') (r : sys.Run env) (n : ℕ) (d : SysState sys')
+theorem Projects.block (h : v.Projects env env') (r : sys.Run env) (n : Nat) (d : SysState sys')
     (hd : v.rel (r.state n) d) :
     ∃ p : List (Event σ') × SysState sys',
       v.Block env' (r.state n) (r.event n) (r.state (n + 1)) d p.1 p.2 := by
@@ -272,7 +270,7 @@ theorem Projects.start (h : v.Projects env env') :
 
 /-- The state of `sys'` at the end of the run for position `n` of `r`, and the run. -/
 private noncomputable def Projects.stage (h : v.Projects env env') (r : sys.Run env) :
-    (n : ℕ) → {d : SysState sys' // v.rel (r.state n) d}
+    (n : Nat) → {d : SysState sys' // v.rel (r.state n) d}
   | 0 => ⟨(Classical.choose h.start).2, by rw [r.init]; exact (Classical.choose_spec h.start).rel⟩
   | n + 1 =>
     ⟨(Classical.choose (h.block r n _ (Projects.stage h r n).2)).2,
@@ -280,18 +278,18 @@ private noncomputable def Projects.stage (h : v.Projects env env') (r : sys.Run 
 
 /-- The run of `sys'` that stands for position `n - 1` of `r`, after the start at `0`. -/
 private noncomputable def Projects.blocks (h : v.Projects env env') (r : sys.Run env) :
-    ℕ → List (Event σ')
+    Nat → List (Event σ')
   | 0 => (Classical.choose h.start).1
   | n + 1 => (Classical.choose (h.block r n _ (Projects.stage h r n).2)).1
 
 /-- Where the runs of `Projects.blocks` start. -/
 private noncomputable def Projects.starts (h : v.Projects env env') (r : sys.Run env) :
-    ℕ → SysState sys'
+    Nat → SysState sys'
   | 0 => SysState.init sys' env'
   | n + 1 => (Projects.stage h r n).1
 
 /-- The run for position `n` stands for the step at `n`. -/
-private theorem Projects.blocks_spec (h : v.Projects env env') (r : sys.Run env) (n : ℕ) :
+private theorem Projects.blocks_spec (h : v.Projects env env') (r : sys.Run env) (n : Nat) :
     v.Block env' (r.state n) (r.event n) (r.state (n + 1)) (h.starts r (n + 1))
       (h.blocks r (n + 1)) (h.starts r (n + 2)) :=
   Classical.choose_spec (h.block r n _ (Projects.stage h r n).2)
@@ -303,7 +301,7 @@ private theorem Projects.blocks_zero (h : v.Projects env env') (r : sys.Run env)
   Classical.choose_spec h.start
 
 /-- Each run goes from where it starts to where the next one starts. -/
-private theorem Projects.blocks_run (h : v.Projects env env') (r : sys.Run env) (k : ℕ) :
+private theorem Projects.blocks_run (h : v.Projects env env') (r : sys.Run env) (k : Nat) :
     (h.starts r k).run env' (h.blocks r k) = some (h.starts r (k + 1)) := by
   cases k with
   | zero => exact (h.blocks_zero r).run
@@ -315,20 +313,20 @@ private noncomputable def Projects.seen (h : v.Projects env env') (r : sys.Run e
   System.Run.ofBlocks (h.starts r) (h.blocks r) rfl (h.blocks_run r)
 
 /-- Within a run, the seen run is in that run's states. -/
-private theorem Projects.seen_state (h : v.Projects env env') (r : sys.Run env) {k j : ℕ}
+private theorem Projects.seen_state (h : v.Projects env env') (r : sys.Run env) {k j : Nat}
     (hj : j ≤ (h.blocks r k).length) :
     (h.starts r k).run env' ((h.blocks r k).take j)
       = some ((h.seen r).state (System.Run.blockStart (h.blocks r) k + j)) :=
   System.Run.ofBlocks_state hj
 
 /-- Within a run, the seen run takes that run's events. -/
-private theorem Projects.seen_event (h : v.Projects env env') (r : sys.Run env) {k j : ℕ}
+private theorem Projects.seen_event (h : v.Projects env env') (r : sys.Run env) {k j : Nat}
     (hj : j ≤ (h.blocks r k).length) :
     (h.seen r).event (System.Run.blockStart (h.blocks r) k + j) = (h.blocks r k)[j]? :=
   System.Run.ofBlocks_event hj
 
 /-- What the seen run shows up to the end of a run. -/
-private theorem Projects.seen_shows (h : v.Projects env env') (r : sys.Run env) (k : ℕ) :
+private theorem Projects.seen_shows (h : v.Projects env env') (r : sys.Run env) (k : Nat) :
     ((h.seen r).event.take (System.Run.blockStart (h.blocks r) (k + 1))).filterMap
         (·.bind v.shows')
       = ((h.seen r).event.take (System.Run.blockStart (h.blocks r) k)).filterMap (·.bind v.shows')
@@ -337,17 +335,17 @@ private theorem Projects.seen_shows (h : v.Projects env env') (r : sys.Run env) 
       = (h.seen r).event.take (System.Run.blockStart (h.blocks r) k)
         ++ ((h.blocks r k).map some ++ [none]) := System.Run.ofBlocks_take k
   rw [htake]
-  simp [List.filterMap_append, List.filterMap_map]
+  simp [List.filterMap_append, List.filterMap_map, Function.comp_def]
 
 /-- At the end of the run for position `n`, the seen run is in a state that `r.state n` is
 seen as. -/
-private theorem Projects.seen_rel (h : v.Projects env env') (r : sys.Run env) (n : ℕ) :
+private theorem Projects.seen_rel (h : v.Projects env env') (r : sys.Run env) (n : Nat) :
     v.rel (r.state n) ((h.seen r).state (System.Run.blockStart (h.blocks r) (n + 1))) := by
   have := System.Run.ofBlocks_start (h0 := rfl) (hrun := h.blocks_run r) (n + 1)
   exact this ▸ (Projects.stage h r n).2
 
 /-- A position within a run comes before the next run. -/
-private theorem Projects.lt_next (h : v.Projects env env') (r : sys.Run env) {k j : ℕ}
+private theorem Projects.lt_next (h : v.Projects env env') (r : sys.Run env) {k j : Nat}
     (hj : j ≤ (h.blocks r k).length) :
     System.Run.blockStart (h.blocks r) k + j < System.Run.blockStart (h.blocks r) (k + 1) := by
   show _ < System.Run.blockStart _ k + _ + 1
@@ -355,38 +353,38 @@ private theorem Projects.lt_next (h : v.Projects env env') (r : sys.Run env) {k 
 
 /-- Every fair run of `sys` is seen through `v` as a fair run of `sys'`. -/
 theorem Projects.fair_run (h : v.Projects env env') {r : sys.Run env} (hfair : r.Fair) :
-    ∃ (r' : sys'.Run env') (f : ℕ → ℕ), r'.Fair ∧ v.Sees r r' f := by
+    ∃ (r' : sys'.Run env') (f : Nat → Nat), r'.Fair ∧ v.Sees r r' f := by
   have hmono : StrictMono fun n => System.Run.blockStart (h.blocks r) (n + 1) :=
-    (System.Run.blockStart_strictMono _).comp (strictMono_id.add_const 1)
+    (System.Run.blockStart_strictMono _).comp (StrictMono.add_const 1)
   refine ⟨h.seen r, fun n => System.Run.blockStart (h.blocks r) (n + 1), ?_, hmono,
     h.seen_rel r, fun p => ?_, fun p ev' x hev hx => ?_, fun n => ?_⟩
   · refine System.Run.fair_iff.mpr fun ob' k hdue => ?_
-    have hk : k ≤ System.Run.blockStart (h.blocks r) (k + 1) := hmono.id_le k
-    have hle (n : ℕ) (hn : k ≤ n) : k ≤ System.Run.blockStart (h.blocks r) (n + 1) :=
-      hk.trans (hmono.monotone hn)
+    have hk : k ≤ System.Run.blockStart (h.blocks r) (k + 1) := hmono.le_apply k
+    have hle (n : Nat) (hn : k ≤ n) : k ≤ System.Run.blockStart (h.blocks r) (n + 1) :=
+      Nat.le_trans hk (hmono.monotone hn)
     obtain ⟨ob, hlift, -⟩ := h.due _ _ ob' (r.reachable k) (h.seen_rel r k) (hdue _ hk).1
-    have hdue' (n : ℕ) (hn : k ≤ n) : ob.Due env (r.state n) := by
+    have hdue' (n : Nat) (hn : k ≤ n) : ob.Due env (r.state n) := by
       obtain ⟨ob₂, hlift₂, hdue₂⟩ := h.due _ _ ob' (r.reachable n) (h.seen_rel r n)
         (hdue _ (hle n hn)).1
       exact (Option.some.inj (hlift.symm.trans hlift₂)) ▸ hdue₂
-    have hquiet (n : ℕ) (hn : k ≤ n) : ¬r.Restarts n ob := by
+    have hquiet (n : Nat) (hn : k ≤ n) : ¬r.Restarts n ob := by
       rintro ⟨ev, hev, hrestart⟩
       obtain ⟨j, hj, dj, hdj, hrestarted⟩ :=
         (h.blocks_spec r n).restarts ob' ob ev hlift hev hrestart
-      refine (hdue _ ((hle n hn).trans (Nat.le_add_right _ j))).2
+      refine (hdue _ (Nat.le_trans (hle n hn) (Nat.le_add_right _ j))).2
         ⟨(h.blocks r (n + 1))[j], ?_, ?_⟩
-      · rw [h.seen_event r hj.le, List.getElem?_eq_getElem hj]
-      · rw [← Option.some.inj ((h.seen_state r hj.le).symm.trans hdj)] at hrestarted
+      · rw [h.seen_event r (Nat.le_of_lt hj), List.getElem?_eq_getElem hj]
+      · rw [← Option.some.inj ((h.seen_state r (Nat.le_of_lt hj)).symm.trans hdj)] at hrestarted
         exact hrestarted
     obtain ⟨n, hn, hev⟩ := hfair.taken hdue' hquiet
     obtain ⟨j, hj, hjeq⟩ := List.getElem_of_mem ((h.blocks_spec r n).taken ob' ob hlift hev)
-    refine ⟨_, (hle n hn).trans (Nat.le_add_right _ j), ?_⟩
-    rw [h.seen_event r hj.le, List.getElem?_eq_getElem hj, hjeq]
+    refine ⟨_, Nat.le_trans (hle n hn) (Nat.le_add_right _ j), ?_⟩
+    rw [h.seen_event r (Nat.le_of_lt hj), List.getElem?_eq_getElem hj, hjeq]
   · obtain ⟨k, j, hj, rfl⟩ := System.Run.exists_blockStart (h.blocks r) p
     have hp := h.lt_next r hj
     cases k with
     | zero =>
-      refine ⟨0, hp.trans (System.Run.blockStart_strictMono _ (Nat.lt_succ_self 1)), ?_⟩
+      refine ⟨0, Nat.lt_trans hp (System.Run.blockStart_strictMono _ (Nat.lt_succ_self 1)), ?_⟩
       have := (h.blocks_zero r).near j _ (h.seen_state r hj)
       rw [r.init]
       exact this.elim .inl .inl
@@ -434,18 +432,18 @@ theorem Projects.leadsTo (h : v.Projects env env') {P Q : SysState sys → Prop}
   obtain ⟨r', f, hfair', hsees⟩ := h.fair_run hfair
   obtain ⟨m, hm, hQm⟩ := h' r' hfair' (f n) (hP _ _ (hsees.rel n) hPn)
   obtain ⟨N, hN, hnear⟩ := hsees.near m
-  have hn : n ≤ N := Nat.lt_succ_iff.mp (hsees.mono.lt_iff_lt.mp (hm.trans_lt hN))
+  have hn : n ≤ N := Nat.lt_succ_iff.mp (hsees.mono.lt_iff_lt.mp (Nat.lt_of_le_of_lt hm hN))
   rcases hnear with hnear | hnear
   · exact ⟨N, hn, hQ _ _ hnear hQm⟩
   · exact ⟨N + 1, by omega, hQ _ _ hnear hQm⟩
 
 /-- What `r'` shows at a position from `f n` on, `r` shows at a position from `n` on. -/
-theorem Sees.shown_after {r : sys.Run env} {r' : sys'.Run env'} {f : ℕ → ℕ} (hsees : v.Sees r r' f)
-    {n p : ℕ} (hp : f n ≤ p) {ev' : Event σ'} {x : α} (hev : r'.event p = some ev')
+theorem Sees.shown_after {r : sys.Run env} {r' : sys'.Run env'} {f : Nat → Nat} (hsees : v.Sees r r' f)
+    {n p : Nat} (hp : f n ≤ p) {ev' : Event σ'} {x : α} (hev : r'.event p = some ev')
     (hx : v.shows' ev' = some x) :
     ∃ m, n ≤ m ∧ ∃ ev, r.event m = some ev ∧ v.shows ev = some x := by
   obtain ⟨m, hm, ev, hev, hshows⟩ := hsees.shown p ev' x hev hx
-  exact ⟨m, Nat.lt_succ_iff.mp (hsees.mono.lt_iff_lt.mp (hp.trans_lt hm)), ev, hev, hshows⟩
+  exact ⟨m, Nat.lt_succ_iff.mp (hsees.mono.lt_iff_lt.mp (Nat.lt_of_le_of_lt hp hm)), ev, hev, hshows⟩
 
 end System.View
 

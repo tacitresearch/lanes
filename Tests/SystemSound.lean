@@ -116,8 +116,8 @@ section KV
 
 open Tests.KV Tests.Fixtures.KV
 
-/- Mathlib decides equality of functions on a finite type its own way. The check compared the
-store's state with `Enum.funBEq`, so that is the instance these statements must be about. -/
+/- The check compared the store's state with `Enum.funBEq`, so that is the instance these
+statements must be about, whatever other equality of functions an importer brings. -/
 attribute [local instance high] Enum.funBEq
 
 instance (caching : Bool) : ∀ i, @LawfulBEq ((system K V F caching).State i)
@@ -140,7 +140,6 @@ example (hfailure : (check false).failure = none) (hcomplete : (check false).com
   Check.refines_sound (σ := sig K V F) (spec K V F) (.of_lawful _) {} 0 (props false) {}
     (fun _ hp _ _ => kv_props hp) (fun _ _ _ => rfl) hfailure hcomplete (.head _) hw
 
-open Cslib in
 theorem kv_traces (hfailure : (check false).failure = none) (hcomplete : (check false).complete = true)
     {events : List (Event (sig K V F))} {w : W false}
     (hrun : Scenario.Run (system K V F false)

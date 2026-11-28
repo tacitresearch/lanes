@@ -55,7 +55,6 @@ jobs:
         run: |
           lake build lanesServiceOracle
           mkdir -p integrations/aws/.lake
-          ln -sfn "$GITHUB_WORKSPACE/.lake/packages" integrations/aws/.lake/packages
           (cd integrations/aws && lake build serviceOracle)
       - name: The store model against PostgreSQL 16
         run: oracles/postgres/run.sh --record
