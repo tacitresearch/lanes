@@ -210,7 +210,8 @@ private def answer (readers : List (IO.Promise (sys.State i))) (state : sys.Stat
 /-- Whether the workers are to end: the runtime is stopping, and every input it took has
 been taken by its actor. -/
 private def ending (rt : Runtime sys) : BaseIO Bool := do
-  return (← rt.stopping.get) && (← rt.ledger.get).inputs == 0
+  if ← rt.stopping.get then return (← rt.ledger.get).inputs == 0
+  return false
 
 /-- One step of `i`, which worker `w` holds, with `held` the state it kept from the step before:
 `none` when the mailbox was empty, else the state to keep. A state kept in the worker's hands
@@ -244,9 +245,10 @@ private def step (rt : Runtime sys) (w : Nat) (onOutput : σ.Out → Async Unit)
     if rt.config.record then
       rt.record (j.work.event :: c.outputs.map .output)
       rt.recording.unlock
-    let room ← rt.ledgerDo (Sched.Ledger.free ((if j.work.input then 1 else 0) + c.droppedInputs))
+    let freed := (if j.work.input then 1 else 0) + c.droppedInputs
+    let room ← if freed == 0 && c.sends.isEmpty then pure [] else
+      rt.ledgerDo fun l => (l.pushed c.sends.length).free freed
     for p in room do p.resolve ()
-    rt.ledgerDo fun l => ((), l.pushed c.sends.length)
     for e in c.sends do rt.pushTo w e.dst (.msg (some i) e.msg)
     if stops then rt.sending.unlockWrite
     else if sends then rt.sending.unlockRead
