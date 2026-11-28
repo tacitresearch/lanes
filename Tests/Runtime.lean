@@ -429,6 +429,34 @@ def dutiesTest : Async (List (String × Bool)) := do
     ("outputs: a handler that throws does not end the shard, and is not called again for that "
       ++ "output", alive == some true && (← seen.get) == #[1, 3]) ]
 
+/-! An actor at rest leaves the table (D51), but not while a timer of its is pending: started
+again from `init`, it would drop the timer as one it never armed. -/
+
+def resting : clockSig.Actor () Nat where
+  init := 0
+  step s
+    | .arm delay_ms => (s, [.after delay_ms .tick])
+    | .tick => (s + 1, [.emit tickOutput])
+    | _ => (s, [])
+  recover s := (s, [])
+  fresh s := s == 0
+  fresh_recover _ h := by simp_all
+
+abbrev restingSystem : System clockSig where
+  State _ := Nat
+  actor _ := resting
+  accept x := ⟨(), x⟩
+
+def restingTest : Async (List (String × Bool)) := do
+  let outputs ← IO.mkRef #[]
+  let rt ← Runtime.start restingSystem {} fun out => outputs.modify (·.push out)
+  rt.input (.arm 30)
+  let fired ← soon 2000 (rt.idle (timers := true))
+  let ticks ← soon 2000 (rt.state ())
+  rt.stop
+  return [("release: an actor at rest with a timer pending is kept, and the timer fires",
+    fired.isSome && ticks == some 1 && (← outputs.get) == #[tickOutput])]
+
 /-! A hub fans each input out to some of 16 actors, whose steps cost a number of rounds of
 hashing. On four workers the actors step at once; each actor's outputs are those of one worker,
 in the same order, and the trace is a run of the semantics. -/
@@ -518,6 +546,6 @@ def tests : IO (List (String × Bool)) := do
   let w ← shaped "on 4 workers" { workers := 4 }
   let u ← shaped "on 2 workers, a budget of 1" { workers := 2, budget := 1 }
   return a ++ b ++ c ++ d ++ e ++ f ++ g ++ h ++ i ++ j ++ k ++ w ++ u ++ (← dutiesTest.block)
-    ++ (← fanTest.block) ++ (← parkerTest)
+    ++ (← restingTest.block) ++ (← fanTest.block) ++ (← parkerTest)
 
 end Tests.Runtime
