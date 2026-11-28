@@ -169,7 +169,7 @@ Where: `Lanes/Check/`, `Lanes/Semantics/Monitor.lean`, `Lanes/Semantics/MonitorS
 Known limits:
 
 - A refinement check (`Check.refines`) takes 15 to 30 times as long as a plain check of the same system: the monitor keeps a candidate for each order in which the inputs in flight may have taken effect (92 for the five requests of the tutorial's shelf), and closing them is quadratic in their number. `lake exe lanesCheck` prints the shelf's times (`Tests/MonitorSpeed.lean`).
-- Exact checks of the videos example spend half their time confirming duplicates: four transitions in five reach a stored state, and Lean's derived equality walks both values. A compact encoding compared as bytes, or a smaller stored node, is the next factor; neither is done (`docs/decisions/new-checker-scale.md`). Symmetry over interchangeable actor ids has the theorem it needs at the level of models, but not the one that `SysState.step` commutes with renaming actors; there is no partial-order reduction.
+- Exact checks of the videos example spend half their time confirming duplicates: four transitions in five reach a stored state, and Lean's derived equality walks both values. A compact encoding compared as bytes, or a smaller stored node, is the next factor; neither is done (`docs/decisions/D92-checker-scale.md`). Symmetry over interchangeable actor ids has the theorem it needs at the level of models, but not the one that `SysState.step` commutes with renaming actors; there is no partial-order reduction.
 - The checker runs about 50,000 states per second on one core (the election model: 164,847 states in 3.0 to 3.7 s, against 10.8 to 11.2 s before the work of D33), and its tasks do not help: Lean counts references to shared objects atomically and never updates them in place, so four workers cost two to three times the processor time for no gain in wall time. At this rate ten million states take over three minutes and, stored exactly, about 7 GB (0.75 kB a state on the election model). The next factor needs states that are flat data (D33).
 
 ### Proof layer
@@ -301,7 +301,7 @@ Where: `Lanes/Web/`.
 
 The gate:
 
-- A journal of the gate `serve` ran before `docs/decisions/D43-one-gate.md` is refused; one `serve` wrote behind a gate of other settings is replayed behind that gate and carried across (`Http.regateUpgrade`, `docs/decisions/new-journal-version.md`).
+- A journal of the gate `serve` ran before `docs/decisions/D43-one-gate.md` is refused; one `serve` wrote behind a gate of other settings is replayed behind that gate and carried across (`Http.regateUpgrade`, `docs/decisions/D94-journal-version.md`).
 - Every request that arrives is answered, in a fair run in which the gate does not crash and the link from outside to the gate loses nothing (`Http.served_arrival_answered`, `Http.fronted_arrival_answered`, from `System.Run.Fair.delivered`: a message on a link that loses nothing to an actor that stays up is handed to it), so a request whose id is used once is answered exactly once; model-checked on two requests, with each premise shown to be needed.
 - HTTP/1.1 adapter whose logic is the gate, one system (`Http.gateSystem`, decisions `Gate.step`).
 - In `fronted sys`, outputs of `sys` that are no response and inputs that are no request pass the gate by, so a shard with peers can sit behind it (`Http.serveFronted`, `Http.serveShard`).

@@ -1,4 +1,4 @@
-# D?. The checker at scale: a hash that sees order, a fingerprinted mode, reductions
+# D92. The checker at scale: a hash that sees order, a fingerprinted mode, reductions
 
 `Lanes/Check/{System,SystemSound,Fingerprint,FingerprintSound,Reduce,ReduceSound}.lean`. The
 videos example reached the 3,000,000 states its checks allow, and its scenarios were cut down: a
