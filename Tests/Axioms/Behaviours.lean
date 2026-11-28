@@ -41,6 +41,10 @@ import Lanes.Semantics
 /-- info: 'Lanes.Jobs.answer_of_leaves' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Jobs.answer_of_leaves
 
+-- Lanes.Behaviours.Once.Check
+/-- info: 'Lanes.Check.OnceMonitor.withinFrom_eq' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.OnceMonitor.withinFrom_eq
+
 -- Lanes.Behaviours.Schedule.Sound
 /-- info: 'Lanes.Schedule.actor_within' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Schedule.actor_within
