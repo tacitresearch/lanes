@@ -254,7 +254,7 @@ with cores to spare, is where `lanes-heavy-auto` should come out near `lanes-hea
 
 ## A loop of C
 
-`docs/decisions/new-a-loop-of-c.md`: `lanes-cloop` runs the connections on `IO_THREADS` threads
+`docs/decisions/D85-a-loop-of-c.md`: `lanes-cloop` runs the connections on `IO_THREADS` threads
 of C, each with its own epoll and listening socket (`ServerConfig.loop := .c`). Measured in the
 shared 4-core container, the server on CPUs 0–1 and the load on 2–3, `LEAN_NUM_THREADS=2`; four
 rounds of one run of 5 s per server and connection count, the servers taking turns within a
