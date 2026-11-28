@@ -2,11 +2,11 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Lanes.Lib.Postgres.Pool
+import Lanes.Services.Postgres.Pool
 import Lanes.Check.Search
 
 /-!
-The pool's policy (`Lanes/Lib/Postgres/Pool.lean`) against an IO that does what it may: clients
+The pool's policy (`Lanes/Services/Postgres/Pool.lean`) against an IO that does what it may: clients
 ask for connections whenever they like, a connection asked for opens or fails, a client hands
 its connection back reusable or broken, and a client's deadline passes, in every order. The
 search checks the bounds and that a connection handed back broken is never handed out again

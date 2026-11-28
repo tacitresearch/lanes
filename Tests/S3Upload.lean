@@ -15,7 +15,7 @@ Bounded and large uploads: the browser's `POST` under a policy, and multipart up
   conditions read from botocore's policy are those `Post.conditions` gives, the fields are the
   same, and the signature of botocore's policy is botocore's.
 - What `Post.check` refuses, the multipart calls and the answers read.
-- The test kit's fake S3 (`Lanes/Testing/S3.lean`): it takes a `POST` form only with the
+- The test kit's fake S3 (`Lanes/Services/S3/Testing.lean`): it takes a `POST` form only with the
   policy's signature, before its expiry, with every condition met and every field named, and
   refuses as S3 does (`EntityTooLarge`, `EntityTooSmall`, `AccessDenied`); and multipart
   uploads, with S3's part sizes, part order, ETags and a Complete made twice. A server's multipart upload

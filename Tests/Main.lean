@@ -65,6 +65,9 @@ import Tests.S3
 import Tests.Multipart
 import Tests.S3Upload
 import Tests.Testing
+import Tests.Aws
+import Tests.Oidc.Google
+import Tests.Oidc.GitHub
 
 /-!
 The test driver behind `lake test`: the pure tests and the live runtime tests, well under a
@@ -108,6 +111,7 @@ def live : IO (List (String × Bool)) := do
     ++ (← safely "reads" Tests.Reads.live)
     ++ (← safely "test kit" Tests.Testing.live)
     ++ (← safely "tutorial web" Tests.TutorialWeb.live)
+    ++ (← Checks.live)
 
 def main (args : List String) : IO UInt32 := do
   let pure := Tests.Engine.tests ++ Tests.Bank.tests ++ Tests.Json.tests ++ Tests.Html.tests
@@ -128,6 +132,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Testing.tests
     ++ Tests.Queue.tests ++ Tests.Reduce.tests ++ Tests.Cache.tests ++ Tests.WallClock.tests ++ Tests.Throttle.tests
     ++ Tests.SharedCache.tests
+    ++ Checks.tests ++ Checks.Google.tests ++ Checks.GitHub.tests
     ++ Tests.Restart.tests
   let json := Lanes.Testing.wantsJson args
   match args.filter (· != "--json") with
