@@ -26,6 +26,49 @@ over them, and the code that runs, the checker that explores and the proofs that
 about that function. IO happens only in a few small shells, each of which performs what a pure,
 proved function tells it to.
 
+## The model, and how a request goes through it
+
+An application is a process that keeps nothing it cannot lose
+(`docs/decisions/D110-volatile-actors.md`). Its actors are volatile: a restart puts every one
+back at its initial state, as in Go, Tokio or Erlang. What must outlive the process lives in
+services outside, each with a model in Lanes: PostgreSQL first, through the typed store
+(`docs/decisions/D111-typed-store.md`); S3 for objects; email and payments.
+
+A request to a web application goes like this, in what `lanes new` writes (`examples/counter`)
+and in `examples/rookery`:
+
+1. The server reads it (`Http.Conn`), does what it needs in IO on the request's own task
+   (`arrive`: the time it arrived, a password checked against its stored hash), and the bridge
+   takes out what must not enter the system and parses the rest into an input (`Bridge.prepare`,
+   `Bridge.decode`). The gate admits it, or answers `503` (`Http.served`).
+2. The front, an actor that keeps nothing, sends it to the store as a call: the request as data,
+   under the request's id.
+3. The store runs the application's handler for it, a pure function from the request to one
+   transaction (`Handler`, `Txn`), on PostgreSQL at `SERIALIZABLE`, trying it again on a conflict
+   (`Postgres.Typed.Store.call`). The transaction is all the request does, so trying it again
+   repeats nothing.
+4. The answer comes back to the front as an input, out as an output, and the bridge renders it.
+
+Effects and work for later are rows written by that transaction: an email, a charge, a reminder
+is a job of an outbox, performed by a worker under the row's id as the idempotency key
+(`docs/decisions/D114-outbox-jobs.md`); a key a client sends to act once is a row
+(`Keys.once`). So an effect is performed only for a transaction that committed.
+
+What is claimed of the application's data is proved per transaction: an invariant every
+transaction keeps holds in every database the store's model allows (`Db.invariant`), and rows a
+transaction does not write stay as they were (`Txn.All.others`). That PostgreSQL behaves like the
+model is a premise, checked against runs recorded from PostgreSQL (`oracles/postgres/`).
+
+**Several instances.** An actor's state is a cache of its process; whatever several instances
+must agree on lives in the database. So an instance can be replaced, scaled or restarted at any
+moment, and the normal deploy is several behind a load balancer, each running the migrations not
+yet run at its start and refusing to start on tables other than the declared ones
+(`Postgres.Typed.prepare`). `docs/DEPLOY.md` says how.
+
+Actors with state of their own are still the tool for what lives in one process: a cache, a
+protocol in progress, a coordination; `examples/bank` and `examples/kv-cache` show them, and the
+semantics, the checker and the proofs below are about every system of actors.
+
 | Piece | Where | Proved by |
 | --- | --- | --- |
 | Actors and systems | `Lanes/Core/{Actor,System,World,Step,Run}.lean` | the definition everything else is about |
@@ -387,8 +430,10 @@ and end after a lifetime, judged at the time a request arrived, so that one over
 again (`Auth.Sessions.accepts_iff`, `Auth.Sessions.Ended.run`). Those two are an actor's state,
 lost at a restart; what must survive one is in rows (`Lanes/Web/Auth/Rows.lean`): failed log-ins,
 a row per user that each transaction updates with `Auth.Attempts.fail` and `succeed`, so a
-restart unlocks no account; and open sessions, a row each, which a log-out deletes, so that a
-session closed before its signed token expires stays closed.
+restart unlocks no account; and open sessions, a row each with an index by user, which a log-out
+deletes, so that a session closed before its signed token expires stays closed. A session is
+judged at a time no earlier than its last use, so a clock that steps back, another instance's
+that lags, or a request with no time neither ends one nor lets in one that is over.
 
 Sign-in with another service (`docs/decisions/D72-sign-in-with-oauth.md`) is OAuth 2.0's authorization
 code flow with PKCE and OpenID Connect on it, decided in `Lanes/Web/Auth/OAuth.lean` and done
@@ -817,6 +862,8 @@ Where: `Lanes/Db/`, `Lanes/Services/Postgres/Sql.lean`, `Lanes/Services/Postgres
 | A value reads back from the text the driver sends it as | `Postgres.Sql.decode_param`, `Postgres.Sql.decodeRow_param`; gate `Tests/Axioms/Lib.lean` | Values of their columns' types | proved |
 | PostgreSQL answers every operation of the subset as its meaning says, and behaves like the model at `SERIALIZABLE` | `Tests/Oracle/Service/Db.lean` against PostgreSQL 16: generated transactions one at a time, every answer compared with `Txn.run`, and three at once, checked with `Db.State.run`; nightly, recorded in `oracles/postgres/db.jsonl` and checked again by `lake test` | Every theorem proved against the model rests on it | trusted, tested against PostgreSQL 16 |
 | The meaning, the SQL, the replies, the retry decision and the model's litmus runs | `Tests/Db.lean`, in `lake test` | | tested |
+| A transaction each of whose operations writes a table only under keys of a set leaves every row of that table whose key is outside it as it was: what one user's requests cannot touch of another's | `Txn.All.others`, `Lanes/Db/Sound.lean`; gate `Tests/Axioms/Db.lean`; used by `Rookery.others_kept` | None | proved |
+| At its start an application runs the migrations not yet run, each once even with instances started at once, and refuses to start when the tables it declares differ from the database's | `Postgres.Typed.prepare`, `Postgres.Typed.migrateOnce` (`lanes_migrations`, an advisory lock), `Postgres.Sql.tablesDiff`; `examples/counter/Check.lean` and `examples/rookery/Rookery/Live.lean` on PostgreSQL | The IO is trusted (`TRUSTED.md`) | tested against PostgreSQL 16, when `LANES_POSTGRES` is set |
 | SQL migrations leave exactly the tables, columns, types, nullability and primary keys the schema declares | `Tests/Oracle/Service/Db.lean`: `Tests/Fixtures/migrations/` against PostgreSQL 16 in a schema of their own, compared by `Postgres.Sql.catalogDiff`, and a column left out of the schema found; `examples/todo-db` `todoLive` | Indexes are not compared | tested against PostgreSQL 16, nightly |
 
 ### Limits
