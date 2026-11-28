@@ -1501,4 +1501,67 @@ theorem put_push (now_ms : Nat) (r : sys.State i × List (Effect σ i)) {s : Slo
 
 end Slot
 
+/-! The ledger's bounds. They are not in the model: an input refused is no event, and the only
+thing the runtime does past the mail's capacity, by default, is the model's restart. These say
+that the ledger decides as the shell's documentation says. -/
+
+namespace Ledger
+
+variable {W I : Type}
+
+/-- An input is taken only while fewer than `capacity` inputs wait, the mail between actors is
+below `highWater` and the ledger is open; taking it leaves the mail as it was. -/
+theorem offer_taken {capacity highWater : Nat} {l : Ledger W I}
+    (h : (l.offer capacity highWater).1 = .taken) :
+    l.closed = false ∧ l.inputs < capacity ∧ l.mail < highWater
+      ∧ (l.offer capacity highWater).2.inputs = l.inputs + 1
+      ∧ (l.offer capacity highWater).2.mail = l.mail := by
+  unfold offer at h ⊢
+  by_cases hc : l.closed = true
+  · simp [hc] at h
+  · by_cases hroom : l.inputs < capacity ∧ l.mail < highWater
+    · refine ⟨by simpa using hc, hroom.1, hroom.2, ?_, ?_⟩
+      · simp [hc, hroom]
+      · have hm := hroom.2
+        simp only [mail] at hm
+        simp only [hc, hroom.1, hm, mail, decide_true, Bool.and_self, ite_true, Bool.false_eq_true,
+          ite_false]
+        omega
+    · have hno : (decide (l.inputs < capacity) && decide (l.mail < highWater)) = false := by
+        simpa using hroom
+      simp [hc, hno] at h
+
+/-- An input refused leaves no trace: the ledger is as it was. -/
+theorem offer_refused {capacity highWater : Nat} {l : Ledger W I}
+    (h : (l.offer capacity highWater).1 ≠ .taken) : (l.offer capacity highWater).2 = l := by
+  unfold offer at h ⊢
+  by_cases hc : l.closed = true
+  · simp [hc]
+  · by_cases hroom : (decide (l.inputs < capacity) && decide (l.mail < highWater)) = true
+    · simp [hc, hroom] at h
+    · simp [hc, hroom]
+
+/-- At or past the high-water mark, no input is taken. -/
+theorem offer_of_mail {capacity highWater : Nat} {l : Ledger W I} (h : highWater ≤ l.mail) :
+    (l.offer capacity highWater).1 ≠ .taken := fun ht => by
+  have := (offer_taken ht).2.2.1
+  omega
+
+/-- A step's sends are reported exactly when they leave the mail past the capacity. -/
+theorem sent_over (n freed capacity : Nat) (l : Ledger W I) :
+    (l.sent n freed capacity).1.2 = if capacity < (l.sent n freed capacity).2.mail then
+      some (l.sent n freed capacity).2.mail else none := rfl
+
+/-- The senders that waited are woken when steps bring the mail from at or past the high-water
+mark to below it. -/
+theorem done_wakes {highWater gone before after : Nat} {l : Ledger W I}
+    (hwas : highWater ≤ l.mail) (hnow : (l.items - gone) - l.inputs < highWater) :
+    (l.done highWater gone before after).1.1 = l.waiting := by
+  unfold done
+  simp only [mail] at hwas ⊢
+  have : (l.items - gone) - l.inputs < highWater ∧ highWater ≤ l.items - l.inputs := ⟨hnow, hwas⟩
+  simp [this]
+
+end Ledger
+
 end Lanes.Sched

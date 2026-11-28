@@ -229,8 +229,9 @@ still sees one message at a time, and each step is one event of the semantics
 (`Sched.Step.sound`).
 
 3.8 **Back-pressure, not unbounded inboxes.** The inbox is bounded (`inboxCapacity`); when it is
-full the sender is refused (`tryInput`, the server's `503`). The mailboxes between actors have
-no bound yet (`TRUSTED.md`).
+full the sender is refused (`tryInput`, the server's `503`). So is an input while
+`mailHighWater` messages between actors wait; past `mailCapacity` the process restarts
+(`docs/decisions/new-runtime-limits.md`).
 
 3.9 **An adapter decides nothing in IO.** It is a pure function or a system that decides, a model
 of the outside it talks to (`Outside`), and a handler that only performs (D26, D40). *Why:* every

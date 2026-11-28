@@ -43,6 +43,9 @@ import Lanes.Semantics
 /-- info: 'Lanes.Kernel.exec_visible' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.exec_visible
 
+/-- info: 'Lanes.Kernel.performAll_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Kernel.performAll_eq
+
 -- Lanes.Runtime.KernelTimers
 /-- info: 'Lanes.Kernel.boot_wellFormed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.boot_wellFormed
@@ -121,3 +124,15 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Sched.Slot.put_push' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Sched.Slot.put_push
+
+/-- info: 'Lanes.Sched.Slot.put_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Sched.Slot.put_eq
+
+/-- info: 'Lanes.Sched.Ledger.offer_taken' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Sched.Ledger.offer_taken
+
+/-- info: 'Lanes.Sched.Ledger.offer_refused' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Sched.Ledger.offer_refused
+
+/-- info: 'Lanes.Sched.Ledger.done_wakes' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Sched.Ledger.done_wakes

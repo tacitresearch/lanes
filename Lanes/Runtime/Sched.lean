@@ -19,8 +19,9 @@ back. Only the worker that holds the actor takes and puts; other threads only `p
 mailbox meanwhile, which commutes with both (`Sched.take_push`, `Sched.put_push`).
 
 `Ledger` is what every thread shares besides the actors: the inputs accepted that their actor
-has not taken yet, bounded by the inbox's capacity (rule 3.8), and the counts that say when the
-system is idle.
+has not taken yet, bounded by the inbox's capacity (rule 3.8), the mail between actors, which
+refuses inputs past a high-water mark and is reported past a capacity, and the counts that say
+when the system is idle.
 -/
 
 @[expose] public section
@@ -233,14 +234,23 @@ inductive Offered (W : Type) where
   | full
   | closed
 
-def offer (capacity : Nat) (l : Ledger W I) : Offered W × Ledger W I :=
+/-- The items waiting that are not inputs: messages between actors and timers that went off, in
+mailboxes or in a worker's hands. -/
+def mail (l : Ledger W I) : Nat :=
+  l.items - l.inputs
+
+/-- Take an input if fewer than `capacity` wait and the mail between actors is below
+`highWater`: a system busy with its own messages takes no more work from outside until it has
+caught up, which bounds the mail that inputs cause. -/
+def offer (capacity highWater : Nat) (l : Ledger W I) : Offered W × Ledger W I :=
   if l.closed then (.closed, l)
-  else if l.inputs < capacity then (.taken, { l with inputs := l.inputs + 1, items := l.items + 1 })
+  else if l.inputs < capacity && l.mail < highWater then
+    (.taken, { l with inputs := l.inputs + 1, items := l.items + 1 })
   else (.full, l)
 
 /-- `offer`, and when there is no room remember `room` to be woken when there is. -/
-def offerOrWait (capacity : Nat) (room : W) (l : Ledger W I) : Offered W × Ledger W I :=
-  match offer capacity l with
+def offerOrWait (capacity highWater : Nat) (room : W) (l : Ledger W I) : Offered W × Ledger W I :=
+  match offer capacity highWater l with
   | (.full, l) => (.full, { l with waiting := room :: l.waiting })
   | answered => answered
 
@@ -266,10 +276,22 @@ def free (n : Nat) (l : Ledger W I) : List W × Ledger W I :=
   if n == 0 then ([], l)
   else (l.waiting, { l with inputs := l.inputs - n, waiting := [] })
 
+/-- A step pushed `n` messages and freed `freed` inputs. The senders that waited for room, and
+the mail if it is now beyond `capacity`. -/
+def sent (n freed capacity : Nat) (l : Ledger W I) : (List W × Option Nat) × Ledger W I :=
+  let (room, l) := (l.pushed n).free freed
+  ((room, if capacity < l.mail then some l.mail else none), l)
+
 /-- Steps are done: they took `gone` items off mailboxes or dropped them, and left `before`
-pending timers `after`. The idle waiters now answered. -/
-def done (gone before after : Nat) (l : Ledger W I) : List I × Ledger W I :=
-  { l with items := l.items - gone, timers := l.timers + after - before }.settle
+pending timers `after`. The senders to wake, if the mail fell below `highWater`, and the idle
+waiters now answered. -/
+def done (highWater gone before after : Nat) (l : Ledger W I) : (List W × List I) × Ledger W I :=
+  let l' := { l with items := l.items - gone, timers := l.timers + after - before }
+  let (room, l') :=
+    if l'.mail < highWater && highWater ≤ l.mail then (l'.waiting, { l' with waiting := [] })
+    else ([], l')
+  let (idle, l') := l'.settle
+  ((room, idle), l')
 
 /-- Take no more inputs. Every sender waiting for room and every idle waiter is to be told. -/
 def close (l : Ledger W I) : (List W × List I) × Ledger W I :=
