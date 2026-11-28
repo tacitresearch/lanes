@@ -55,10 +55,21 @@ inductive Change where
 
 def zeros (n : Nat) : Bytes := List.replicate n 0
 
+/-- A write of no bytes changes nothing, past the end of the file too. -/
 def Change.apply : Change → Bytes → Bytes
+  | .write _ [], data => data
   | .write offset bytes, data =>
     data.take offset ++ zeros (offset - data.length) ++ bytes ++ data.drop (offset + bytes.length)
   | .truncate size, data => data.take size ++ zeros (size - data.length)
+
+@[simp] theorem Change.apply_write_end (data bytes : Bytes) :
+    (Change.write data.length bytes).apply data = data ++ bytes := by
+  cases bytes with
+  | nil => simp [Change.apply]
+  | cons b bs => simp [Change.apply, zeros]
+
+@[simp] theorem Change.apply_write_nil (bytes : Bytes) : (Change.write 0 bytes).apply [] = bytes :=
+  Change.apply_write_end [] bytes
 
 /-- The change torn after `part` bytes. A truncation is not torn. -/
 def Change.torn : Change → Nat → Change
@@ -147,10 +158,13 @@ inductive Error where
   | io
   deriving DecidableEq, Repr, Hashable
 
-inductive Op where
+/-- A call. The bytes are a list in the model and a `ByteArray` in the binding
+(`Lanes/Outside/IO/FileSystem.lean`), which performs `Op.map ByteArray.toList` of what it is
+given. -/
+inductive Op (B : Type := Bytes) where
   | read (path : Path)
-  | write (path : Path) (offset : Nat) (bytes : Bytes)
-  | append (path : Path) (bytes : Bytes)
+  | write (path : Path) (offset : Nat) (bytes : B)
+  | append (path : Path) (bytes : B)
   /-- Create an empty file, or empty the file there. -/
   | create (path : Path)
   | truncate (path : Path) (size : Nat)
@@ -164,13 +178,31 @@ inductive Op where
   | fsync (path : Path)
   deriving DecidableEq, Repr, Hashable
 
-inductive Answer where
+inductive Answer (B : Type := Bytes) where
   | done
-  | bytes (b : Bytes)
+  | bytes (b : B)
   /-- A directory's names, sorted. -/
   | names (names : List String)
   | failed (e : Error)
   deriving DecidableEq, Repr, Hashable
+
+def Op.map {B C : Type} (f : B → C) : Op B → Op C
+  | .read p => .read p
+  | .write p offset bytes => .write p offset (f bytes)
+  | .append p bytes => .append p (f bytes)
+  | .create p => .create p
+  | .truncate p size => .truncate p size
+  | .mkdir p => .mkdir p
+  | .rename src dst => .rename src dst
+  | .delete p => .delete p
+  | .list p => .list p
+  | .fsync p => .fsync p
+
+def Answer.map {B C : Type} (f : B → C) : Answer B → Answer C
+  | .done => .done
+  | .bytes b => .bytes (f b)
+  | .names ns => .names ns
+  | .failed e => .failed e
 
 /-- A path's directory and last name. The root has neither. -/
 def parentOf (p : Path) : Except Error (Path × String) :=

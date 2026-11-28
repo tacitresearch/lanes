@@ -77,11 +77,14 @@ public import Lanes.Outside.Effects.Basic
 public import Lanes.Outside.Effects.Email
 public import Lanes.Outside.Effects.Payments
 public import Lanes.Outside.Events
+public import Lanes.Outside.FileSystem
+public import Lanes.Outside.FileSystem.Log
 public import Lanes.Outside.Idempotent
 public import Lanes.Outside.Multipart
 public import Lanes.Outside.ObjectStore
 public import Lanes.Outside.Queue
 public import Lanes.Outside.IO.Clock
+public import Lanes.Outside.IO.FileSystem
 public import Lanes.Outside.Rpc
 public import Lanes.Outside.Store.Basic
 public import Lanes.Outside.Throttle

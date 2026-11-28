@@ -27,9 +27,13 @@ an inode that another name may share.
 namespace Lanes.FileSystem
 
 /-- Replace the file `name` in `dir` by `bytes`, through `tmp` beside it. -/
-def Replace.plan (dir : Path) (name tmp : String) (bytes : Bytes) : List Op :=
+def Replace.plan {B : Type} (dir : Path) (name tmp : String) (bytes : B) : List (Op B) :=
   [.delete (dir ++ [tmp]), .create (dir ++ [tmp]), .write (dir ++ [tmp]) 0 bytes,
     .fsync (dir ++ [tmp]), .rename (dir ++ [tmp]) (dir ++ [name]), .fsync dir]
+
+/-- The plan the binding runs, on a `ByteArray`, is the plan proved here. -/
+theorem Replace.plan_map {B C : Type} (f : B → C) (dir : Path) (name tmp : String) (bytes : B) :
+    (Replace.plan dir name tmp bytes).map (Op.map f) = Replace.plan dir name tmp (f bytes) := rfl
 
 namespace Replace
 
@@ -190,7 +194,7 @@ theorem step_fsync_tmp {n : Nat} (h : Ready s₀ dir d D name tmp)
     simp [Fs.find_in (hs.resolve h) hs.node, hs.named, hs.file]
   have hstep : (s.step (.fsync (dir ++ [tmp]))).1 = s.set n (.file { synced := bytes }) := by
     simp [Fs.step, Fs.apply, Fs.sync, hfind, Node.sync, File.sync, File.data, applyAll,
-      Change.apply, zeros]
+      Change.apply_write_nil]
   rw [hstep]
   exact { toStage := hs.toStage.set hs.fresh hs.ne _, fresh := hs.fresh, ne := hs.ne,
           file := (by simp), named := hs.named }

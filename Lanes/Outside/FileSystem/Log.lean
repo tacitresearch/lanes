@@ -59,10 +59,9 @@ theorem applyAll_writes (S : Bytes) (bs : List Bytes) :
   | nil => simp [writes, applyAll]
   | cons b bs ih =>
     have h := ih (S ++ b)
-    have hd : S.drop (S.length + b.length) = [] := List.drop_eq_nil_of_le (by omega)
-    simp only [List.length_append] at h
-    simp [writes, applyAll, Change.apply, zeros, hd] at h ⊢
-    exact h
+    simp only [List.length_append, applyAll] at h
+    simp only [writes, applyAll, List.foldl_cons, Change.apply_write_end, h, List.flatten_cons,
+      List.append_assoc]
 
 theorem writes_concat (n : Nat) (bs : List Bytes) (b : Bytes) :
     writes n (bs ++ [b]) = writes n bs ++ [.write (n + bs.flatten.length) b] := by
@@ -85,14 +84,13 @@ theorem survive_writes (S : Bytes) (bs : List Bytes) (kept part : Nat) :
     cases kept with
     | zero =>
       refine ⟨b.take part, ?_, (List.take_prefix _ _).trans (List.prefix_append _ _)⟩
-      simp [File.survive, writes, applyAll, Change.torn, Change.apply, zeros]
+      simp [File.survive, writes, applyAll, Change.torn]
     | succ kept =>
       obtain ⟨X, hX, hpre⟩ := ih (S ++ b) kept
       refine ⟨b ++ X, ?_, by simpa using hpre⟩
-      have hd : S.drop (S.length + b.length) = [] := List.drop_eq_nil_of_le (by omega)
-      simp only [writes, survive_cons_succ]
+      simp only [writes, survive_cons_succ, Change.apply_write_end]
       simp only [List.length_append] at hX
-      simpa [Change.apply, zeros, hd] using hX
+      simpa using hX
 
 /-- The file after each step: what is synced is the original and everything appended before
 the last `sync`, and the rest is written at its end, chunk by chunk. -/
