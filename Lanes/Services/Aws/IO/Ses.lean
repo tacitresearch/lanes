@@ -44,42 +44,11 @@ def handler {σ : Signature} {sys : System σ} [Hashable σ.Id] (port : Port σ)
     Async Unit := do
   if let some call := port.called out then sendCall port e creds config rt call
 
-/-- The keys the adapter has sent (`Sent`), in a file of its own, so that a restart remembers
-them. The file is replaced whole, and synced, before each send (`File.replace`). -/
-structure Once where
-  path : System.FilePath
-  sent : IO.Ref Sent
-
-/-- The keys in the file at `path`, or none if there is no file. -/
-def Once.open (path : System.FilePath) : IO Once := do
-  let sent ← match ← (IO.FS.readFile path).toBaseIO with
-    | .ok text => pure (Sent.read text)
-    | .error (.noFileOrDirectory ..) => pure []
-    | .error e => throw e
-  return { path, sent := ← IO.mkRef sent }
-
-/-- Whether to send the output with `key`. A new key is written down, and on the disk, before
-this answers, so that a send the process may have made is never made again. -/
-def Once.admit (once : Once) (key : String) : IO Bool := do
-  let sent ← once.sent.get
-  if !sent.admits key then return false
-  let sent := sent.record key
-  File.replace once.path sent.write
-  once.sent.set sent
-  return true
-
-/-- `handler`, sending each output at most once by the key the application gives it (`key`): an
-output whose key was sent already, or may have been, also before a restart, is not sent, and is
-answered `unknown`; so is one whose key is not `Sent.valid`. An output with no key is sent as
-`handler` sends it. The shard calls its handler one output at a time, so `Once` needs no lock. -/
-def handlerOnce {σ : Signature} {sys : System σ} [Hashable σ.Id] (once : Once) (port : Port σ)
-    (key : σ.Out → Option String) (e : Endpoint) (creds : SigV4.Source)
-    (config : Client.Config := {}) (rt : Runtime sys) (out : σ.Out) : Async Unit := do
-  if let some call := port.called out then
-    match key out with
-    | none => sendCall port e creds config rt call
-    | some k =>
-      if ← once.admit k then sendCall port e creds config rt call
-      else discard <| rt.tryInput (port.reply call.id .unknown)
+/-- An attempt of a job of an outbox (`Postgres.Typed.Worker.start`'s `perform`): the message
+`render` makes of the job's work, sent once with the attempt's deadline. SES takes no
+idempotency key, so the job's id is not sent (`jobPort`). -/
+def perform {W : Type} (render : W → Message) (e : Endpoint) (creds : SigV4.Source)
+    (config : Client.Config := {}) : Int64 → Nat → W → Async (Option Answer) :=
+  fun _ deadline_ms work => exchange e creds (render work) { config with timeout_ms := deadline_ms }
 
 end Aws.Ses
