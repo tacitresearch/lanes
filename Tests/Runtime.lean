@@ -337,6 +337,31 @@ def outputsTest : Async (List (String × Bool)) := do
   return [("outputs: every output is handed over once, in order, boot's included",
     (← outputs.get) == #[99, 10, 11, 12, 20, 21, 22])]
 
+/-! A link is first in, first out: what a step sends to one actor arrives in the order sent. -/
+
+abbrev orderSig : Signature where
+  Id := Bool
+  Msg _ := Nat
+  In := Nat
+
+abbrev order : System orderSig where
+  State _ := List Nat
+  actor
+    | false => { init := [], recover := fun s => (s, []),
+                 step := fun s n => (s, [.send true n, .send true (n + 1), .send true (n + 2)]) }
+    | true => { init := [], step := fun s n => (s ++ [n], []), recover := fun s => (s, []) }
+  accept x := ⟨false, x⟩
+
+def linkOrderTest : Async (List (String × Bool)) := do
+  let rt ← Runtime.start order
+  rt.input 10
+  rt.input 20
+  rt.idle
+  let got ← rt.state true
+  rt.stop
+  return [("link: what a step sends to one actor arrives in the order it was sent",
+    got == [10, 11, 12, 20, 21, 22])]
+
 /-! A shard that always has work must still stop. -/
 
 abbrev pingSig : Signature where
@@ -485,13 +510,14 @@ def tests : IO (List (String × Bool)) := do
   let h ← budgetTest.block
   let i ← outputsTest.block
   let j ← busyStopTest.block
+  let k ← linkOrderTest.block
   let shaped := fun (label : String) (shape : Runtime.Config) => do
     let results := (← (flakyTest shape).block) ++ (← (bankTest shape).block)
       ++ (← (floodTest shape).block)
     return results.map fun (name, ok) => (s!"{name} ({label})", ok)
   let w ← shaped "on 4 workers" { workers := 4 }
   let u ← shaped "on 2 workers, a budget of 1" { workers := 2, budget := 1 }
-  return a ++ b ++ c ++ d ++ e ++ f ++ g ++ h ++ i ++ j ++ w ++ u ++ (← dutiesTest.block)
+  return a ++ b ++ c ++ d ++ e ++ f ++ g ++ h ++ i ++ j ++ k ++ w ++ u ++ (← dutiesTest.block)
     ++ (← fanTest.block) ++ (← parkerTest)
 
 end Tests.Runtime
