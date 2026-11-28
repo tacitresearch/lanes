@@ -79,9 +79,10 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
   number and status line),
   `changelog` (each fragment in `docs/changes/` reads), `inventory` and `inventory-none` (below), `links` (every repository path in backquotes in
   `*.md` and `docs/*.md` exists) and `oracles` (`oracles/README.md` names an oracle, or why there
-  is none, for every protocol module and model, and every path it names exists). It does not check `no-io-in-step`, `bounded`, `field-leak` or
-  `fn-length`: those need the elaborator. The inventory's checks read the built modules: run
-  `lake build lanesInventory` before `lake exe lanes lint --fix`.
+  is none, for every protocol module and model, and every path it names exists) and `schema`
+(rule 2.8: every pinned schema against the build's, and the corpus it names). It does not check `no-io-in-step`, `bounded`, `field-leak` or
+  `fn-length`: those need the elaborator. The inventory's checks and `schema` read the built
+  modules: run `lake build lanesInventory` before `lake exe lanes lint --fix`.
 - `lake exe lanes inventory` prints every public definition with a status, read from the built
   modules (`docs/decisions/D47-the-inventory-is-computed.md`); no committed file holds it. A theorem makes what it states proved when
   it has an axiom gate. A new definition of `Lanes/` with no theorem, test or row of `TRUSTED.md`
@@ -192,6 +193,18 @@ liveness and memory bugs, and bounds keep the checker finite.
 2.7 **Bind only what touches physics** (D46). Write in Lean, and prove, what decides; bind what
 Lean cannot express (timing, the operating system), keep a Lean reference beside each binding,
 and count the C in `TRUSTED.md`.
+
+2.8 **A persisted type grows; it does not change.** The schemas of what an application's journal
+and snapshot hold are pinned (a `.schema` file: `Tests/Schemas/`, an example's `schemas/`), and
+files it wrote are kept in the corpus (`Tests/Journals/`). Add a field with a default, add a
+constructor, rename with the former name (`was`); then `lake exe lanes lint --fix` pins the new
+schema, and the diff of the pinned file is reviewed. Lint `schema` fails on what opening would
+refuse (a field with no default, a type changed, two names that take one old name) and on a
+constructor
+removed while a corpus file holds it, naming it. Such a change is a new version of the system,
+with a migration (`from Old := f`, a `migration:` line in the pinned file, `Journal.Upgrade`).
+Never rewrite a file of the corpus: add one (`docs/RELEASING.md`). *Why:* a file outlives the
+binary that wrote it, and a change to a type is cheap only until a file holds it (D97).
 
 3.1 **Let it crash.** An actor in a state its spec does not cover emits `stop` rather than limping
 on; it starts again, through `recover`, on its next message (D5, D18). No defensive fallbacks.

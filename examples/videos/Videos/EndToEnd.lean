@@ -339,6 +339,10 @@ def settings : Web.Settings :=
     bucket := { name := "b", region := "us-east-1", endpoint := S3.Endpoint.aws "us-east-1" }
     creds, worker := "http://worker.test", callback := s!"{origin}/transcoded" }
 
+/-- The schema of the site's snapshot, for the pinned file `schemas/snapshot.schema`: the codecs
+do not depend on the settings. -/
+def snapshotSchema : Schema := Web.snapshotSchema { workerKey } settings
+
 def decoded (r : Http.Request) : Option Input :=
   match (bridge settings).decode 0 ((bridge settings).prepare r) with
   | .ok (.inr i) => some i
@@ -455,15 +459,18 @@ def journalled (d : Deployment) (path : System.FilePath) : IO (Nat × Nat) := do
   log.close
   return (requests.length, (requests.filter fun r => (read? r).isSome).length)
 
-/-- The flow against the fake S3 and the provider, both run here. -/
-def run : IO (List (String × Bool)) := do
+/-- The flow against the fake S3 and the provider, both run here. With `corpus`, the site saves
+often, and its journal and snapshot are copied there at the end, each unless one is there
+already (`lake exe videosTest corpus <dir>`, `Tests/Corpus.lean` in Lanes). -/
+def run (corpus : Option System.FilePath := none) : IO (List (String × Bool)) := do
   let journal ← scratch
   try
-    (do
+    let results ← (do
       let store ← Testing.S3.Fake.start creds "videos"
       let provider ← Testing.OAuth.Fake.start (oidc := false)
       let worker ← Testing.Transcode.Fake.start workerKey store.bucket creds
       let d := deployment store.bucket creds provider worker journal
+      let d := if corpus.isSome then { d with runtime := { snapshotEvery := 32 } } else d
       let results ← flow d provider worker (fun key => store.holds key) (store.refuse 1)
         (return (← store.refusing) == 0)
       let (entered, reads) ← journalled d journal
@@ -472,6 +479,13 @@ def run : IO (List (String × Bool)) := do
       provider.stop
       return results ++ [("videos: the feed, the watch pages and the channel pages are answered "
         ++ "from the state, and none is journalled", 0 < entered && reads == 0)] : Async _).block
+    if let some dir := corpus then
+      IO.FS.createDirAll dir
+      for (name, from_) in [("journal", journal), ("snapshot", journal.addExtension "snapshot")] do
+        if (← from_.pathExists) && !(← (dir / name).pathExists) then
+          IO.FS.writeBinFile (dir / name) (← IO.FS.readBinFile from_)
+          IO.println s!"wrote {dir / name}"
+    return results
   finally
     remove journal
 

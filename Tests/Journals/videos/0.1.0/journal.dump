@@ -1,0 +1,205 @@
+journal (frame at byte 0)
+manifest (frame at byte 36)
+  format 2
+  lanes 0.1.0
+  system "videos 4, admitted"
+  toolchain 4.37.0-rc1 0b77e12952ad39077d80d8bd6b66d601f225c321
+  runtime kernel, policy 1
+  schema frame SHA-256 c408fa6695e365dc577ed5d315190b9fd27a7465ec74a5a20307ec3d7084d60a
+schema (frame at byte 176)
+  Lanes.Journal.Entry (Sum (Prod Nat Lanes.Http.Request) (Sum (Lanes.Schedule.Input Videos.Key Unit Videos.Answer) Videos.Input))
+
+  inductive Lanes.Journal.Entry (Sum (Prod Nat Lanes.Http.Request) (Sum (Lanes.Schedule.Input Videos.Key Unit Videos.Answer) Videos.Input)) where
+    | input (x : Sum (Prod Nat Lanes.Http.Request) (Sum (Lanes.Schedule.Input Videos.Key Unit Videos.Answer) Videos.Input))
+    | advance (now_ms : Nat)
+    | batch (fuel : Nat)
+    | handed
+    | snapshot (index : Nat)
+
+  inductive Sum (Prod Nat Lanes.Http.Request) (Sum (Lanes.Schedule.Input Videos.Key Unit Videos.Answer) Videos.Input) where
+    | inl (val : Prod Nat Lanes.Http.Request)
+    | inr (val : Sum (Lanes.Schedule.Input Videos.Key Unit Videos.Answer) Videos.Input)
+
+  structure Prod Nat Lanes.Http.Request where
+    fst : Nat
+    snd : Lanes.Http.Request
+
+  structure Lanes.Http.Request where
+    method : Lanes.Http.Method
+    path : List String
+    query : List (Prod String String)
+    headers : List (Prod String String)
+    body : ByteArray
+
+  inductive Lanes.Http.Method where
+    | get
+    | post
+    | put
+    | patch
+    | delete
+
+  structure Prod String String where
+    fst : String
+    snd : String
+
+  inductive Sum (Lanes.Schedule.Input Videos.Key Unit Videos.Answer) Videos.Input where
+    | inl (val : Lanes.Schedule.Input Videos.Key Unit Videos.Answer)
+    | inr (val : Videos.Input)
+
+  inductive Lanes.Schedule.Input Videos.Key Unit Videos.Answer where
+    | schedule (now_ms : Nat) (spec : Lanes.Schedule.Spec Videos.Key Unit)
+    | cancel (key : Videos.Key)
+    | reply (key : Videos.Key) (attempt : Nat) (reply : Lanes.Rpc.Reply Videos.Answer)
+
+  inductive Videos.Key where
+    | check (video : Videos.VideoId) (req : Nat)
+    | expire (video : Videos.VideoId)
+    | transcode (round : Videos.Round)
+    | delete (video : Videos.VideoId)
+
+  structure Videos.VideoId where
+    owner : Videos.Who
+    n : Nat
+
+  structure Videos.Who where
+    issuer : String
+    subject : String
+
+  structure Videos.Round where
+    video : Videos.VideoId
+    n : Nat
+
+  inductive Videos.Answer where
+    | found (size : Nat)
+    | missing
+    | deleted
+    | accepted
+    | failed
+
+  structure Lanes.Schedule.Spec Videos.Key Unit where
+    key : Videos.Key
+    payload : Unit
+    work : Lanes.Schedule.Work
+    at_ms : Nat
+
+  inductive Lanes.Schedule.Work where
+    | call (retry : Lanes.Schedule.Retry)
+    | once
+    | every (period_ms : Nat)
+
+  structure Lanes.Schedule.Retry where
+    maxAttempts : Nat := 5
+    deadline_ms : Nat := 10000
+    base_ms : Nat := 1000
+    cap_ms : Nat := 60000
+    jitter_ms : Nat := 0
+    until_ms : Option Nat := .none
+
+  inductive Option Nat where
+    | none
+    | some (val : Nat)
+
+  inductive Lanes.Rpc.Reply Videos.Answer where
+    | answer (a : Videos.Answer)
+    | unknown
+
+  inductive Videos.Input where
+    | request (c : Videos.Command) (at_s : Nat)
+    | job (key : Videos.Key) (outcome : Lanes.Schedule.Outcome Unit Videos.Answer)
+    | noticed (key : Videos.Key)
+    | visit (v : Videos.Visit)
+
+  inductive Videos.Command where
+    | signIn (req : Nat) (who : Videos.Who) (name : String)
+    | signOut (req : Nat) (member : Videos.Who) (session : Nat)
+    | create (req : Nat) (member : Videos.Who) (session : Nat) (title : String) (about : String) (visibility : Videos.Visibility) (media : Videos.Media)
+    | uploaded (req : Nat) (member : Videos.Who) (session : Nat) (video : Videos.VideoId)
+    | like (req : Nat) (member : Videos.Who) (session : Nat) (video : Videos.VideoId) (on : Bool)
+    | comment (req : Nat) (member : Videos.Who) (session : Nat) (video : Videos.VideoId) (body : String)
+    | uncomment (req : Nat) (member : Videos.Who) (session : Nat) (video : Videos.VideoId) (comment : Nat)
+    | delete (req : Nat) (member : Videos.Who) (session : Nat) (video : Videos.VideoId)
+    | retry (req : Nat) (member : Videos.Who) (session : Nat) (video : Videos.VideoId)
+    | report (req : Nat) (r : Videos.Report) (signature : String)
+
+  inductive Videos.Visibility where
+    | public
+    | unlisted
+    | private
+
+  inductive Videos.Media where
+    | mp4
+    | webm
+    | quicktime
+
+  inductive Bool where
+    | false
+    | true
+
+  inductive Videos.Report where
+    | done (round : Videos.Round)
+    | failed (round : Videos.Round)
+
+  inductive Lanes.Schedule.Outcome Unit Videos.Answer where
+    | scheduled
+    | already
+    | refused (why : Lanes.Schedule.Refusal)
+    | cancelled
+    | succeeded (answer : Videos.Answer)
+    | failed (payload : Unit) (attempts : Nat) (last : Option Videos.Answer)
+
+  inductive Lanes.Schedule.Refusal where
+    | full
+    | tooLarge
+
+  inductive Option Videos.Answer where
+    | none
+    | some (val : Videos.Answer)
+
+  inductive Videos.Visit where
+    | like (req : Nat) (viewer : Option (Prod Videos.Who Nat)) (member : Videos.Who) (video : Videos.VideoId) (on : Bool)
+    | comment (req : Nat) (viewer : Option (Prod Videos.Who Nat)) (member : Videos.Who) (name : String) (video : Videos.VideoId) (body : String)
+    | uncomment (req : Nat) (viewer : Option (Prod Videos.Who Nat)) (member : Videos.Who) (video : Videos.VideoId) (comment : Nat)
+
+  inductive Option (Prod Videos.Who Nat) where
+    | none
+    | some (val : Prod Videos.Who Nat)
+
+  structure Prod Videos.Who Nat where
+    fst : Videos.Who
+    snd : Nat
+records: 34
+  0 at byte 92757, 2 bytes: .snapshot 124
+  1 at byte 92779, 3 bytes: .advance 648
+  2 at byte 92802, 333 bytes: .input (.inl { fst := 108, snd := { method := .post, path := ["v", "https://github.com", "1", "0", "comments", "0", "delete"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:36713" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795849493" }, { fst := "videos-verified-session", snd := "https%3A%2F%2Fgithub.com*3*2" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 100, 55, 55, 51, 100, 99, 98, 97, 53, 53, 101, 57, 51, 53, 100, 101, 48, 98, 54, 54, 49, 48, 50, 102, 102, 54, 50, 55, 53, 102, 50, 97, 52, 101, 102, 48, 53, 50, 55, 53, 100, 50, 55, 52, 53, 50, 51, 55, 98, 52, 102, 48, 56, 53, 48, 102, 102, 48, 51, 102, 100, 55, 99, 57] } })
+  3 at byte 93155, 2 bytes: .batch 64
+  4 at byte 93177, 1 bytes: .handed
+  5 at byte 93198, 3 bytes: .advance 661
+  6 at byte 93221, 333 bytes: .input (.inl { fst := 110, snd := { method := .post, path := ["v", "https://github.com", "1", "0", "comments", "0", "delete"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:36713" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795849493" }, { fst := "videos-verified-session", snd := "https%3A%2F%2Fgithub.com*2*1" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 50, 102, 53, 48, 56, 51, 50, 48, 101, 51, 51, 48, 100, 99, 56, 55, 51, 98, 54, 52, 102, 54, 48, 48, 57, 102, 101, 101, 97, 48, 102, 57, 50, 56, 49, 101, 56, 54, 56, 98, 100, 51, 53, 102, 99, 54, 57, 100, 51, 50, 97, 99, 56, 100, 56, 57, 55, 97, 102, 97, 98, 48, 56, 49] } })
+  7 at byte 93574, 2 bytes: .batch 64
+  8 at byte 93596, 1 bytes: .handed
+  9 at byte 93617, 3 bytes: .advance 663
+  10 at byte 93640, 333 bytes: .input (.inl { fst := 112, snd := { method := .post, path := ["v", "https://github.com", "1", "0", "comments", "1", "delete"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:36713" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795849493" }, { fst := "videos-verified-session", snd := "https%3A%2F%2Fgithub.com*1*0" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 55, 54, 57, 102, 100, 55, 52, 101, 54, 98, 102, 97, 98, 97, 54, 50, 57, 100, 48, 48, 99, 48, 97, 55, 51, 56, 55, 102, 54, 56, 51, 99, 52, 97, 101, 98, 50, 101, 101, 97, 52, 50, 98, 101, 55, 54, 97, 52, 97, 50, 50, 52, 57, 99, 57, 49, 99, 53, 100, 99, 51, 98, 50, 97] } })
+  11 at byte 93993, 2 bytes: .batch 64
+  12 at byte 94015, 1 bytes: .handed
+  13 at byte 94036, 3 bytes: .advance 681
+  14 at byte 94059, 322 bytes: .input (.inl { fst := 115, snd := { method := .post, path := ["v", "https://github.com", "1", "0", "delete"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:36713" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795849493" }, { fst := "videos-verified-session", snd := "https%3A%2F%2Fgithub.com*1*0" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 55, 54, 57, 102, 100, 55, 52, 101, 54, 98, 102, 97, 98, 97, 54, 50, 57, 100, 48, 48, 99, 48, 97, 55, 51, 56, 55, 102, 54, 56, 51, 99, 52, 97, 101, 98, 50, 101, 101, 97, 52, 50, 98, 101, 55, 54, 97, 52, 97, 50, 50, 52, 57, 99, 57, 49, 99, 53, 100, 99, 51, 98, 50, 97] } })
+  15 at byte 94401, 2 bytes: .batch 64
+  16 at byte 94423, 1 bytes: .handed
+  17 at byte 94444, 3 bytes: .advance 684
+  18 at byte 94467, 30 bytes: .input (.inr (.inl (.reply (.delete { owner := { issuer := "https://github.com", subject := "1" }, n := 0 }) 1 (.answer .failed))))
+  19 at byte 94517, 2 bytes: .batch 64
+  20 at byte 94539, 3 bytes: .advance 734
+  21 at byte 94562, 2 bytes: .batch 64
+  22 at byte 94584, 1 bytes: .handed
+  23 at byte 94605, 3 bytes: .advance 737
+  24 at byte 94628, 30 bytes: .input (.inr (.inl (.reply (.delete { owner := { issuer := "https://github.com", subject := "1" }, n := 0 }) 2 (.answer .deleted))))
+  25 at byte 94678, 2 bytes: .batch 64
+  26 at byte 94700, 3 bytes: .advance 765
+  27 at byte 94723, 299 bytes: .input (.inl { fst := 119, snd := { method := .post, path := ["sign-out"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:36713" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795849493" }, { fst := "videos-verified-session", snd := "https%3A%2F%2Fgithub.com*2*1" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 50, 102, 53, 48, 56, 51, 50, 48, 101, 51, 51, 48, 100, 99, 56, 55, 51, 98, 54, 52, 102, 54, 48, 48, 57, 102, 101, 101, 97, 48, 102, 57, 50, 56, 49, 101, 56, 54, 56, 98, 100, 51, 53, 102, 99, 54, 57, 100, 51, 50, 97, 99, 56, 100, 56, 57, 55, 97, 102, 97, 98, 48, 56, 49] } })
+  28 at byte 95042, 2 bytes: .batch 64
+  29 at byte 95064, 1 bytes: .handed
+  30 at byte 95085, 3 bytes: .advance 771
+  31 at byte 95108, 320 bytes: .input (.inl { fst := 120, snd := { method := .post, path := ["v", "https://github.com", "1", "2", "like"], query := [], headers := [{ fst := "host", snd := "127.0.0.1:36713" }, { fst := "connection", snd := "close" }, { fst := "content-length", snd := "74" }, { fst := "content-type", snd := "application/x-www-form-urlencoded" }, { fst := "origin", snd := "http://videos.test" }, { fst := "videos-arrived", snd := "1795849493" }, { fst := "videos-verified-session", snd := "https%3A%2F%2Fgithub.com*2*1" }], body := [99, 115, 114, 102, 61, 118, 49, 46, 48, 46, 50, 102, 53, 48, 56, 51, 50, 48, 101, 51, 51, 48, 100, 99, 56, 55, 51, 98, 54, 52, 102, 54, 48, 48, 57, 102, 101, 101, 97, 48, 102, 57, 50, 56, 49, 101, 56, 54, 56, 98, 100, 51, 53, 102, 99, 54, 57, 100, 51, 50, 97, 99, 56, 100, 56, 57, 55, 97, 102, 97, 98, 48, 56, 49] } })
+  32 at byte 95448, 2 bytes: .batch 64
+  33 at byte 95470, 1 bytes: .handed
+tail: the file ends after its last frame

@@ -221,6 +221,24 @@ def changelogTests (root : System.FilePath) : IO (List (String × Bool)) := do
         == some ("# Changelog\n\nIntro.\n\n## [Unreleased]\n\nNote.\n\n## [0.2.0] - 2026-02-01\n\n"
           ++ "### Added\n\n- New.\n\n## [0.1.0] - 2026-01-01\n\nOld.\n"))]
 
+/-- Lint `schema` finds the project's pinned files, not another package's, and reads what the
+program printed. -/
+def schemaTests (root : System.FilePath) : IO (List (String × Bool)) := do
+  for path in ["a.schema", "sub/b.schema", ".hidden/c.schema", "docs/d.schema"] do
+    write root path "kind: journal\n"
+  write root "sub/lakefile.toml" "name = \"sub\"\n"
+  let found ← Schemas.files root
+  let s := Lanes.Schema.nat
+  let t := Lanes.Schema.list .string
+  let text := Lanes.Journal.schemaText
+  let out := "\n".intercalate ["noise", s!"lanes-pin 0 {text s}", s!"lanes-pin 1 {text t}",
+    s!"lanes-migration 1 {text s} {text t}"]
+  return [
+    ("lint schema: the pinned files are the project's, not another package's nor a hidden one's",
+      found == ["a.schema", "docs/d.schema"]),
+    ("lint schema: each pinned file's schema and migrations are read from what Lean printed",
+      Schemas.readOutput 3 out == [(some s, []), (some t, [some (s, t)]), (none, [])]) ]
+
 def tests : IO (List (String × Bool)) := do
   let root ← scratch
   let other ← scratch
@@ -228,9 +246,11 @@ def tests : IO (List (String × Bool)) := do
   let fourth ← scratch
   let fifth ← scratch
   let sixth ← scratch
+  let seventh ← scratch
   try
     let results := (← fixTests root) ++ (← problemTests other) ++ (← linkTests third)
       ++ (← oracleTests fourth) ++ (← changelogTests fifth) ++ (← layerTests sixth)
+      ++ (← schemaTests seventh)
     return results ++ [
       ("withCommas", Generated.withCommas 1587 == "1,587" && Generated.withCommas 50 == "50"
         && Generated.withCommas 1000000 == "1,000,000"),
@@ -257,7 +277,7 @@ def tests : IO (List (String × Bool)) := do
         (Report.mk [⟨"A.lean", 3, "no-sorry", "no"⟩] [] 2).json
           == "{\"files\":2,\"fixed\":[],\"failed\":1,\"results\":[{\"name\":\"no-sorry\",\"kind\":\"proof\",\"status\":\"failed\",\"path\":\"A.lean\",\"line\":3,\"detail\":\"no\"}]}")]
   finally
-    for dir in [root, other, third, fourth, fifth, sixth] do
+    for dir in [root, other, third, fourth, fifth, sixth, seventh] do
       if ← dir.pathExists then IO.FS.removeDirAll dir
 
 end Tests.Lint

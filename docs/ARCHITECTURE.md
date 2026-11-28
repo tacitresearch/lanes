@@ -233,6 +233,34 @@ journal cut at any byte (`Journal.inspect_cut`). The reader's schema comes from 
 type or a codec only; `verify` does not run a type's own check of a value (a `Fin`'s bound, a
 subtype's property), which opening does.
 
+The schemas of an application's files are pinned, and files it wrote are kept, so that a change
+to its types is checked against what it wrote before (D97, 3.8 and 3.9). A pinned schema is a
+`.schema` file (`Lanes/Durable/Pin.lean`): a header that names the kind of file, the term the
+build gives the schema from, the modules it needs, the declared migrations and the corpus; then
+the schema as text, for review, and its frame in Base64, for the check. Lint `schema`
+(`LanesCli/Schemas.lean`) gets the build's schema from Lean and compares it with the pinned one
+through `Schema.Plan.of`, the matching a file is opened with (`Schema.compare`,
+`Lanes/Data/Diff.lean`): a change passes exactly when the plan is made
+(`Schema.compare_reads_iff`), and is refused with the plan's error, which names the field
+(`Schema.compare_refused_iff`). A change that passes is listed (fields added with a default or
+dropped, renames read through a former name, constructors added or removed, reorders) and
+pinned by `--fix`; one refused fails unless the pinned file declares a migration. Every file of
+the pin's kind in its corpus is then read with the build's schema as opening reads it
+(`Journal.inspect`), so a constructor removed while a file still holds it fails, naming the
+file and the constructor. A file of a header alone is pinned by `--fix`. A pinned file inside
+another Lake package is that package's: `examples/videos` pins its own in
+`examples/videos/schemas/`, checked by `lake exe lanes lint` run there, as CI does.
+
+The corpus is `Tests/Journals/<application>/<release>/`: journals and snapshots that
+applications wrote at a release, each with the dump `lanes journal dump` gave of it when it was
+added (`<file>.dump`). `lake test` checks that each passes `verify` and dumps as it did, and
+opens the bank's with the bank of the build (`Tests/Corpus.lean`, the bank of
+`Tests/Fixtures/Bank.lean`, whose schemas are pinned in `Tests/Schemas/`). The videos site's
+come from its end-to-end run (`lake exe videosTest corpus <dir>`). The corpus is frozen at
+0.1.0: from that release on its files are only added, one directory per release
+(`docs/RELEASING.md`), and never rewritten; a dump that differs is a change in what Lanes reads
+of an old file, fixed in the reader.
+
 Each output carries an id: its journal's, made at random when the journal is begun, and its
 origin, the place in the history of the entry that produced it and its place among that entry's
 outputs (`docs/decisions/D105-output-ids.md`). A batch hands an output over with the origin its
@@ -312,6 +340,8 @@ Where: `Lanes/Durable/`, `Lanes/Runtime/Log.lean`, `Lanes/Durable/IO/Journal.lea
 | A file of format 1 is refused as format 1, never read as something else, and no cut of a format-2 file looks like one | `Journal.Kind.formerly_cut`, `Journal.open?`; gate `Tests/Axioms/Durable.lean`; format-1 journals and a snapshot built byte by byte, refused, `Tests/Format.lean` | None | proved; tested |
 | A journal written with an older schema of its inputs opens through matching by name, and a start writes it again with its own schema before it appends | `Journal.open?`, `Disk.mend`; `Tests/Format.lean` (an argument added with a default, a constructor inserted; a field with no default refused at the prelude, naming it); the rules of matching, `Lanes/Data/MatchSound.lean` | The disk theorems are of files written with the reader's own schema | proved for the same schema; tested for older ones |
 | `lanes journal verify` passes every file the writer writes, a journal cut at any byte included, and `dump` shows the records written | `Journal.inspect_file`, `Journal.inspect_cut`, `Journal.inspect_saved`, `Lanes/Durable/Inspect.lean`; gate `Tests/Axioms/Durable.lean`; `Tests/Inspect.lean` (a torn tail, a flipped byte, format 1, an older schema with and without a reader that reads it) | The reader's schema is given as a schema: a type's own check of a value (a `Fin`'s bound) is not run | proved; tested |
+| A pinned schema's change passes lint exactly when opening would read the files written under it; one refused names the type and the field | `Schema.compare_reads_iff`, `Schema.compare_refused_iff`, `Schema.compare_insertIdx`, `Schema.compare_rename`, `Lanes/Data/Diff.lean`; gate `Tests/Axioms/Data.lean`; `Tests/Pin.lean` (a field added with and without a default, a rename, a type changed with and without a migration, a removed constructor in the corpus and not) | The pinned schema is the one the files were written with; the declared migrations are matched by their schemas, their functions not run | proved; tested |
+| Every file of the corpus passes `verify` and dumps as it did when it was added, and the bank's open with the bank of the build | `Tests/Corpus.lean`, run by `lake test`; lint `schema` reads each with the build's schema of its pinned file | The corpus holds the files of each release | tested |
 | Every journal append is synced before the next, so a loss of power leaves what a death would | `Lanes/Durable/IO/Journal.lean` (`append` flushes and calls `fsync`, `native/lanes.c`) | `fsync` and the disk do what they promise | trusted |
 | Every segment the shipper puts holds the history's entries at the positions its key names; a restore at a point starts with the kernel the local journal had after that many entries, and hands nothing over | `Journal.Ship.Holds.put`, `Journal.Restore.journal_restores`, `Lanes/Durable/{Ship,Restore}.lean`; gate `Tests/Axioms/Durable.lean`; `Tests/Ship.lean`, against the fake S3; through `S3.backup` against moto, `oracles/moto/s3-backup.jsonl` | The object store keeps what it answered put; the thread that puts performs what `Ship` decides (`Lanes/Durable/IO/Ship.lean`, TRUSTED) | proved; the IO trusted, tested |
 
@@ -1071,7 +1101,9 @@ with its schema, which holds every name, so the bytes hold none, and reads it ba
 read by name (`Lanes/Data/Match.lean`): `Schema.Plan.of` matches the writer's schema with the
 reader's once, refusing what cannot be read with a `Codec.Error` that names it, and
 `Body.decodeWith` reads each value through the plan. The journal and the snapshot use both, in
-format 2 of the files (Journal, snapshots and the disk model). The
+format 2 of the files (Journal, snapshots and the disk model). `Schema.compare`
+(`Lanes/Data/Diff.lean`) says what changed between a pinned schema and the build's, by the same
+plan, for `lanes lint`. The
 standard library is in `Lanes/Lib/`: encodings, addresses and URLs, time, media types,
 metrics, rate limits, the PostgreSQL protocol (below) and cryptography, with the C it binds
 (Bound C). All of it is total and `Std`-only. A parser or encoder is proved against its
@@ -1175,9 +1207,10 @@ Where: `Lanes/Testing/`.
 The `lanes` command (`LanesCli/`) creates an application (`lanes new`, which writes
 `templates/app/`, its types declared with `lanes_data`), checks the text of a project
 (`lanes lint`, `LanesCli/Lint.lean`: the rules `AGENTS.md` lists, among them that every
-repository path a doc cites exists), writes what is derived from other files (`--fix`,
+repository path a doc cites exists, and that the build reads the files its pinned schemas
+wrote), writes what is derived from other files (`--fix`,
 `LanesCli/Generated.lean`: the line counts of `TRUSTED.md`, the index of decisions and
-the numbers of new ones), runs the model checks (`lanes check`), prints the inventory
+the numbers of new ones, and the pinned schemas after a change old files read), runs the model checks (`lanes check`), prints the inventory
 (`lanes inventory`, `LanesCli/Inventory.lean`: every public definition with its status and its
 evidence, read from the built modules; lint fails on one of `Lanes/` without evidence that is
 not on `docs/inventory-none.md`), prints the schema of a type's codec as the build derives
@@ -1410,7 +1443,9 @@ Also:
 
 Lanes' V1 acceptance application: a video site whose members sign in with Google or GitHub, upload from the browser to S3 with a form whose signed policy bounds the size (2 GiB by default), and watch, like, comment and delete.
 
-Where: `examples/videos`, a package of its own.
+Where: `examples/videos`, a package of its own. The schemas of its journal and snapshot are
+pinned in `examples/videos/schemas/`, and files it wrote are in the corpus,
+`Tests/Journals/videos/` (Journal, snapshots and the disk model).
 
 #### Claims
 

@@ -49,12 +49,20 @@ module without that line is stable. `lanes lint` does not check this yet.
    gathers them). Something added and taken out again between releases is not in it. Keep it
    short: one line per change a user notices, breaking changes first, and the toolchain line.
    Then update the compare links at the bottom.
-2. Set `version` in `lakefile.lean` to `X.Y.Z`, in the same pull request.
-3. Run the benchmark on the runner machine (`.github/workflows/bench.yml`, `bench/README.md`) and
+2. Set `version` in `lakefile.lean` to `X.Y.Z`, and `Journal.lanesVersion`
+   (`Lanes/Durable/Format.lean`) with it, in the same pull request.
+3. Add the release's files to the corpus (`Tests/Journals/`, `AGENTS.md` rule 2.8): `lake exe
+   lanesTest corpus` writes the bank's in `Tests/Journals/bank/<X.Y.Z>/`, `(cd examples/videos &&
+   lake exe videosTest corpus ../../Tests/Journals/videos/<X.Y.Z>)` the videos site's, and `lake exe
+   lanesTest corpus` again the dump of each new file. Neither rewrites a file that is there.
+   Review the dumps, commit them with the files, and run `lake test` and `lake exe lanes lint`
+   in Lanes and in `examples/videos`. The corpus is frozen from 0.1.0 on: a release adds its
+   directory and changes no other.
+4. Run the benchmark on the runner machine (`.github/workflows/bench.yml`, `bench/README.md`) and
    compare it with the last release; say a regression in the CHANGELOG section.
-4. Merge the pull request through the merge queue. Tag the merge commit on `main`, signed
+5. Merge the pull request through the merge queue. Tag the merge commit on `main`, signed
    (`git tag -s vX.Y.Z -m "Lanes X.Y.Z"`) or annotated (`git tag -a`), and push the tag.
-5. Make a GitHub Release from the tag whose notes are the CHANGELOG section:
+6. Make a GitHub Release from the tag whose notes are the CHANGELOG section:
    `gh release create vX.Y.Z --verify-tag --title "Lanes X.Y.Z" --notes-file <section>`.
-6. Within a day, check that Reservoir lists `X.Y.Z` and that its build of it passed; if not,
+7. Within a day, check that Reservoir lists `X.Y.Z` and that its build of it passed; if not,
    find out why before announcing the release.

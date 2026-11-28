@@ -69,6 +69,10 @@ import Lanes.Semantics
 /-- info: 'Lanes.Journal.inspect_saved' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.inspect_saved
 
+-- Lanes.Durable.Pin
+/-- info: 'Lanes.Journal.Pin.check_render_self' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Pin.check_render_self
+
 -- Lanes.Durable.Frame
 /-- info: 'Lanes.Frame.encode_append' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Frame.encode_append

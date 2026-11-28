@@ -29,6 +29,10 @@ the repository. Read it first; this file does not repeat it. A clone needs elan 
 - What works and what is claimed of it is in `docs/ARCHITECTURE.md`, with the evidence; a limit
   that can be fixed is an issue labelled `known-limit`. A change updates either in the same pull
   request.
+- A change to a type that a journal or a snapshot holds is checked against what was written
+  before (`AGENTS.md`, rule 2.8): after one that old files read, run `lake exe lanes lint --fix`,
+  which pins the new schema, and commit the pinned file. Files of the corpus
+  (`Tests/Journals/`) are added at a release (`docs/RELEASING.md`) and never rewritten.
 - Cite the rules that shaped a choice in the pull request description, by number ("rule 2.6").
 
 ## What is reviewed by a person

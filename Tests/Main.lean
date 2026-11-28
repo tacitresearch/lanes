@@ -18,6 +18,8 @@ import Tests.Frame
 import Tests.Durable
 import Tests.Format
 import Tests.Inspect
+import Tests.Corpus
+import Tests.Pin
 import Tests.Ending
 import Tests.Clock
 import Tests.HttpClient
@@ -77,7 +79,8 @@ import Tests.Testing
 
 /-!
 The test driver behind `lake test`: the pure tests and the live runtime tests, well under a
-second together. `lanesTest live` runs only the live tier, the one worth repeating; `--json`
+second together. `lanesTest live` runs only the live tier, the one worth repeating; `lanesTest
+corpus` adds files to the corpus and rewrites none (`Tests/Corpus.lean`); `--json`
 prints the results as JSON (`lake test -- --json`). The larger
 model checks are a separate binary, `lanesCheck`, because their results are computed when the
 program starts.
@@ -131,7 +134,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.KV.tests ++ Tests.Gate.tests ++ Tests.Fronted.tests ++ Tests.Join.tests
     ++ Tests.Kernel.tests ++ Tests.Frame.tests ++ Tests.Clock.tests ++ Tests.HttpClient.tests ++ Tests.Tls.tests
     ++ Tests.Signature.tests ++ Tests.Sign.tests ++ Tests.OAuth.tests
-    ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Schema.tests ++ Tests.Body.tests ++ Tests.Match.tests ++ Tests.Durable.fileTests ++ Tests.Format.tests ++ Tests.Format.rewriteTests ++ Tests.Inspect.tests ++ Tests.Split.tests
+    ++ Tests.Fair.tests ++ Tests.Codec.tests ++ Tests.Schema.tests ++ Tests.Body.tests ++ Tests.Match.tests ++ Tests.Durable.fileTests ++ Tests.Format.tests ++ Tests.Format.rewriteTests ++ Tests.Inspect.tests ++ Tests.Pin.tests ++ Tests.Split.tests
     ++ Tests.Peers.tests ++ Tests.Courier.tests ++ Tests.Mailbox.tests ++ Tests.Batch.tests
     ++ Tests.Pace.tests ++ Tests.Reads.tests
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
@@ -149,17 +152,20 @@ def main (args : List String) : IO UInt32 := do
   let json := Lanes.Testing.wantsJson args
   match args.filter (· != "--json") with
   | [] =>
-    let pure := pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
+    let pure := pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Corpus.tests) ++ (← Tests.Lint.tests)
       ++ (← Tests.New.tests) ++ (← Tests.Copies.tests) ++ (← Tests.Tutorial.tests) ++ (← Tests.TutorialWeb.tests) ++ (← Tests.Oracle.replayAll) ++ (← Tests.Oracle.Service.replayAll)
       ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks) ++ (← Tests.Postgres.psqlTests) ++ (← Tests.PostgresConn.checks) ++ (← Tests.PostgresPool.checks) ++ (← Tests.StoreModel.checks)
       ++ (← Tests.MultipartModel.checks) ++ (← Tests.Testing.runnerTests)
     failures json pure
     report args (pure ++ (← live)) pure.length
-  | ["fast"] => report args (pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Lint.tests)
+  | ["fast"] => report args (pure ++ (← Tests.ReadRequest.corpusTests) ++ (← Tests.Corpus.tests) ++ (← Tests.Lint.tests)
       ++ (← Tests.New.tests) ++ (← Tests.Copies.tests) ++ (← Tests.Tutorial.tests) ++ (← Tests.TutorialWeb.tests) ++ (← Tests.Oracle.replayAll) ++ (← Tests.Oracle.Service.replayAll)
       ++ (← Tests.Json.suite) ++ (← Tests.HttpConn.checks) ++ (← Tests.Postgres.psqlTests) ++ (← Tests.PostgresConn.checks) ++ (← Tests.PostgresPool.checks) ++ (← Tests.StoreModel.checks)
       ++ (← Tests.MultipartModel.checks))
   | ["live"] => report args (← live)
+  | ["corpus"] =>
+    Tests.Corpus.record
+    return 0
   | ["journal-child", path] =>
     Tests.Durable.child path
     return 0
@@ -167,5 +173,5 @@ def main (args : List String) : IO UInt32 := do
     Tests.Durable.tapeChild path round.toNat!
     return 0
   | _ =>
-    IO.eprintln "usage: lanesTest [fast|live] [--json]"
+    IO.eprintln "usage: lanesTest [fast|live|corpus] [--json]"
     return 2

@@ -73,11 +73,26 @@ abbrev Site' (d : Deployment) := admittedFronted (system d.config) (bridge d.set
 def nowSeconds : IO Nat :=
   return (← Std.Time.Timestamp.now).toMillisecondsSinceUnixEpoch.toInt.toNat / 1000
 
+/-- How the site's journal writes its inputs: the requests the gate admitted, and the scheduler's
+and the site's own. -/
+def logInput : Codec ((ReqId × Http.Request) ⊕ (SchedIn ⊕ Input)) :=
+  Codec.sum (Codec.pair Codec.nat Http.Request.codec) (Codec.of (SchedIn ⊕ Input))
+
+def logActors (config : Config) (settings : Settings) :
+    Kernel.Image.Codecs (admittedFronted (system config) (bridge settings)) :=
+  admittedFrontedActors (actors config) (bridge settings)
+
+/-- The schemas of the site's journal and snapshot, pinned in `schemas/`: `lake exe lanes lint`
+checks that the build reads what they wrote, and the corpus. -/
+def journalSchema : Schema := Journal.Entry.schemaOf logInput.schema
+
+def snapshotSchema (config : Config) (settings : Settings) : Schema :=
+  (Journal.savedOf (logActors config settings)).schema
+
 def openLog (d : Deployment) (path : System.FilePath) : IO (Journal.Log (Site' d)) :=
   Journal.Store.open (sys := Site' d)
-    { path, system := d.server.journalName
-      input := Codec.sum (Codec.pair Codec.nat Http.Request.codec) (Codec.of (SchedIn ⊕ Input))
-      actors := some (admittedFrontedActors (actors d.config) (bridge d.settings)) }
+    { path, system := d.server.journalName, input := logInput
+      actors := some (logActors d.config d.settings) }
 
 def start (d : Deployment) : Async (Server (Site' d)) := do
   let signIn ← SignIn.start d.signIn

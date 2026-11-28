@@ -11,7 +11,8 @@ import Lanes.Testing
 HTTP. `lake exe videosTest <word>…` runs only the small model checks whose names contain one of
 the words; `lake exe videosTest http`, only the bridge and the site over HTTP; `lake exe
 videosTest large [<word>…]`, the model checks at large bounds, which take minutes
-(`Videos.Check.Size`).
+(`Videos.Check.Size`). `lake exe videosTest corpus <dir>` runs the site over HTTP saving
+often, and adds its journal and snapshot to the corpus at `<dir>` (`Tests/Corpus.lean` in Lanes).
 -/
 
 def main (args : List String) : IO UInt32 := do
@@ -24,6 +25,7 @@ def main (args : List String) : IO UInt32 := do
     | [] => do
       pure (checks (← Videos.Check.run (quiet := quiet)) ++ checks Videos.Check.capTests ++ (← http))
     | ["http"] => http
+    | ["corpus", dir] => Lanes.Testing.Result.tests <$> Videos.EndToEnd.run (some dir)
     | "large" :: only => checks <$> Videos.Check.run .large only (jobs := 2) (quiet := quiet)
     | only => checks <$> Videos.Check.run .small only (quiet := quiet)
   Lanes.Testing.report args results
