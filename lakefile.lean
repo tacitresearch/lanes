@@ -52,9 +52,23 @@ lean_lib Lanes where
   roots := #[`Lanes, `Lanes.Proofs, `Lanes.Semantics, `Lanes.Testing]
   moreLinkObjs := #[native, tls, verify, sign]
 
+/-! Files that modules embed with `include_str`, which Lake does not track. A library that `needs`
+them mixes their hashes into each of its modules' traces, so that neither `.lake/build` nor the
+artifact cache serves a module built from older copies. A new `include_str` adds its file here. -/
+
+/-- The template of `lanes new`, embedded by `LanesCli.New` and `Tests.New`. -/
+input_dir templates where
+  text := true
+
+/-- The test keys `Tests.Sign` embeds. -/
+input_dir botocoreKeys where
+  path := "oracles/botocore/keys"
+  text := true
+
 @[default_target]
 lean_lib Tests where
   globs := #[.submodules `Tests]
+  needs := #[`@/templates, `@/botocoreKeys]
 
 @[default_target]
 lean_exe lanesTest where
@@ -77,6 +91,7 @@ lean_exe lanesServiceOracle where
 
 lean_lib LanesCli where
   globs := #[.submodules `LanesCli]
+  needs := #[`@/templates]
 
 /-- The `lanes` command. -/
 @[default_target]
