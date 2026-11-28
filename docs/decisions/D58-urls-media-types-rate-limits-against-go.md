@@ -1,10 +1,12 @@
 # D58. URLs, media types and rate limits against Go, and where they depart from it
 
+Status: Accepted
+
 D50's pattern, applied to three more packages of `docs/STDLIB.md`'s P0: `Lanes.Url`
-(`Lanes/Http/Url.lean`, RFC 3986) against `net/url`, `Lanes.MediaType`
-(`Lanes/Http/MediaType.lean`, RFC 9110 §8.3.1) against `mime.ParseMediaType`, and
-`Lanes.RateLimit` (`Lanes/Data/RateLimit.lean`) against `golang.org/x/time/rate`, pinned in
-`oracle/go.mod`. Each departure is a `known` predicate in `Tests/Oracle/Url.lean`,
+(`Lanes/Lib/Net/Url.lean`, RFC 3986) against `net/url`, `Lanes.MediaType`
+(`Lanes/Lib/Mime/MediaType.lean`, RFC 9110 §8.3.1) against `mime.ParseMediaType`, and
+`Lanes.RateLimit` (`Lanes/Lib/RateLimit.lean`) against `golang.org/x/time/rate`, pinned in
+`oracles/go/go.mod`. Each departure is a `known` predicate in `Tests/Oracle/Url.lean`,
 `Tests/Oracle/MediaType.lean` or `Tests/Oracle/RateLimit.lean`; most check that ours, given the
 input written our way, answers as Go did.
 

@@ -1,5 +1,7 @@
 # D11. Two import roots: `Lanes` and `Lanes.Semantics`
 
+Status: Accepted
+
 `import Lanes` is the runtime layer (Std only). `import Lanes.Semantics` adds the proof layer
 (CSLib, Mathlib). Executable code imports the first; proof files import the second.
 

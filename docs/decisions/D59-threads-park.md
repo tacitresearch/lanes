@@ -1,5 +1,7 @@
 # D59. Threads park, and a connection's loop runs where it is told something
 
+Status: Accepted
+
 The server of `docs/decisions/D57-the-server-runs-its-own-connections.md` spent about 300 µs of
 CPU on a request that answers `hello`, on two cores. Nothing spun. Lean's
 task manager ends every task with `notify_all` on one condition, on which every thread waiting

@@ -11,12 +11,11 @@ by hand:
 
 - the line counts in `TRUSTED.md` (`` `path.lean`, N lines `` or `` `path.c`, N lines ``), from
   the files;
-- the index of `docs/decisions/README.md`, from the decisions' headings, and the numbers of new
-  decisions (`new-<slug>.md`, `# D?. Title`), given on the main branch only;
-- `docs/STATUS.md`, from `docs/status/page.md` and the fragments it names, and the order of the
-  items in each fragment.
+- the index of `docs/decisions/README.md`, from the decisions' headings and status lines,
+  current ones first, and the numbers of new decisions (`new-<slug>.md`, `# D?. Title`), given
+  on the main branch only.
 
-Every line written is about one item: one file, one decision, one area. No line holds a count
+Every line written is about one item: one file or one decision. No line holds a count
 or a total over the repository, so two branches that change different items never change the
 same line, and git merges them. `lanes stats` prints the totals.
 
@@ -207,6 +206,19 @@ def parseHeading (line : String) : Option (Option Nat × String) := do
   guard (!digits.isEmpty && rest.take 2 == ['.', ' '])
   return (some (String.ofList digits).toNat!, String.ofList (rest.drop 2))
 
+/-- The text after `Status: ` on the first line of the body that is not blank: `Accepted`,
+`Superseded by D18`, or `Partly superseded by D37 (the router)`. -/
+def Decision.status? (d : Decision) : Option String := do
+  let line ← (d.body.splitOn "\n").find? fun l => !l.trimAscii.isEmpty
+  guard (line.startsWith "Status: ")
+  let status := charsFrom line 8
+  guard (["Accepted", "Superseded by ", "Partly superseded by "].any fun p => status.startsWith p)
+  return status
+
+/-- Current unless wholly superseded. -/
+def Decision.current (d : Decision) : Bool :=
+  !(d.status?.any (·.startsWith "Superseded"))
+
 def readDecisions (root : System.FilePath) : IO (List Decision × List Problem) := do
   let mut decisions : List Decision := []
   let mut problems : List Problem := []
@@ -222,7 +234,11 @@ def readDecisions (root : System.FilePath) : IO (List Decision × List Problem) 
       if heading != number then
         problems := (path, 1, "decisions",
           s!"the heading's number does not match the file's name ({name})") :: problems
-      decisions := ⟨name, number, slug, title, body⟩ :: decisions
+      let d : Decision := ⟨name, number, slug, title, body⟩
+      if d.status?.isNone then
+        problems := (path, 3, "decisions", "the line after the title is `Status: Accepted`, "
+          ++ "`Status: Superseded by Dn` or `Status: Partly superseded by Dn (the part)`") :: problems
+      decisions := d :: decisions
     | none, _ =>
       problems := (path, 1, "decisions", "a decision is `Dn-<slug>.md`, or `new-<slug>.md` "
         ++ "before it has a number") :: problems
@@ -232,15 +248,24 @@ def readDecisions (root : System.FilePath) : IO (List Decision × List Problem) 
   return (decisions.reverse, problems.reverse)
 
 def indexLine (d : Decision) (n : Nat) : String :=
-  s!"- [D{n}. {d.title}]({d.file})"
+  let link := s!"- [D{n}. {d.title}]({d.file})"
+  match d.status? with
+  | some "Accepted" | none => link
+  | some status => match status.toList with
+    | c :: cs => s!"{link}: {String.ofList (c.toLower :: cs)}"
+    | [] => link
 
-/-- The index is sorted by slug, not by number: a new decision lands at its own place in the
-list, not after the last line, where every other new one would land too. -/
+/-- Current decisions first, then those superseded. Each list is sorted by slug, not by number:
+a new decision lands at its own place in the list, not after the last line, where every other
+new one would land too. -/
 def indexText (readme : Option String) (decisions : List Decision) : String :=
   let numbered := decisions.filterMap fun d => d.number.map (d, ·)
-  let sorted := (numbered.toArray.qsort fun (a, m) (b, n) =>
+  let sorted := fun (ds : List (Decision × Nat)) => (ds.toArray.qsort fun (a, m) (b, n) =>
     a.slug < b.slug || (a.slug == b.slug && m < n)).toList
-  let index := "\n".intercalate (sorted.map fun (d, n) => indexLine d n)
+  let lines := fun ds => "\n".intercalate ((sorted ds).map fun (d, n) => indexLine d n)
+  let (current, superseded) := numbered.partition (·.1.current)
+  let index := "### Current\n\n" ++ lines current
+    ++ (if superseded.isEmpty then "" else "\n\n### Superseded\n\n" ++ lines superseded)
   let preamble := match readme with
     | none => "# Decisions\n\n## Index\n"
     | some text => match text.splitOn "\n## Index\n" with
@@ -267,8 +292,7 @@ def numberPlan (root : System.FilePath) (decisions : List Decision) : IO (List E
     edits := edits ++ [⟨s!"{decisionsDir}/{d.file}",
       .move s!"{decisionsDir}/{name}" (refer s!"# D{n}. {d.title}\n{d.body}"), "decisions",
       unnumbered⟩]
-  -- The status page is generated from its fragments, which are rewritten here.
-  let skip := "docs/STATUS.md" :: fresh.map fun d => s!"{decisionsDir}/{d.file}"
+  let skip := fresh.map fun d => s!"{decisionsDir}/{d.file}"
   for file in ← textFiles root do
     let path := (file.toString.dropPrefix (root.toString ++ "/")).toString
     if skip.contains path then continue
@@ -296,75 +320,10 @@ def decisionsPlan (root : System.FilePath) (main : Bool) : IO Plan := do
   let numbering ← if main then numberPlan root decisions else pure []
   return { edits := index ++ numbering, problems := problems ++ duplicates.reverse }
 
-/-! ## The status page -/
-
-def statusDir : String := "docs/status"
-
-/-- `<!-- sections: areas -->` names the fragments in `docs/status/areas`. -/
-def sectionsMarker? (line : String) : Option String := do
-  guard (line.startsWith "<!-- sections: " && line.endsWith " -->")
-  let inner := String.ofList ((line.toList.drop 15).take (line.length - 19))
-  guard (!inner.isEmpty)
-  return inner
-
-def generatedNote : String :=
-  "<!-- Generated by `lake exe lanes lint --fix` from `docs/status/`: edit the fragments there, "
-    ++ "not this file. -->"
-
-/-- Each run of items (lines that start `- `) sorted. Two branches that each add an item to one
-list then add it at different places, unless the two are neighbours. -/
-def sortItems (lines : List String) : List String :=
-  let (done, run) := lines.foldl (init := (([] : List String), ([] : List String)))
-    fun (done, run) line =>
-      if line.startsWith "- " then (done, run ++ [line])
-      else (done ++ sortStrings run ++ [line], [])
-  done ++ sortStrings run
-
-/-- A fragment without its blank lines at the end. -/
-def trimFragment (text : String) : List String :=
-  ((text.splitOn "\n").reverse.dropWhile (·.trimAscii.isEmpty)).reverse
-
-/-- The problems of a fragment: its first line is its heading, and each item is one line. -/
-def fragmentProblems (path : String) (lines : List String) : List Problem :=
-  let heading := if (lines.headD "").startsWith "### " then []
-    else [(path, 1, "status", "a fragment's first line is its heading, `### Name`")]
-  let wrapped := lines.zipIdx.filterMap fun (line, k) =>
-    if line.startsWith " " then
-      some (path, k + 1, "status", "one item per line: join this line to the one before")
-    else none
-  heading ++ wrapped
-
-def statusPlan (root : System.FilePath) : IO Plan := do
-  let pagePath := s!"{statusDir}/page.md"
-  let some page ← readIfExists (root / pagePath) | return {}
-  let pageLines := page.splitOn "\n"
-  let mut sections : List (String × List String) := []
-  let mut edits : List Edit := []
-  let mut problems : List Problem := []
-  for dir in pageLines.filterMap sectionsMarker? do
-    let mut here : List String := []
-    for name in ← markdownIn (root / statusDir / dir) do
-      let path := s!"{statusDir}/{dir}/{name}"
-      let text ← IO.FS.readFile (root / path)
-      let lines := sortItems (trimFragment text)
-      problems := problems ++ fragmentProblems path lines
-      edits := edits ++ (← writeIfChanged root path ("\n".intercalate lines ++ "\n") "status"
-        "its items are not sorted: run `lake exe lanes lint --fix`")
-      here := here ++ (if here.isEmpty then [] else [""]) ++ lines
-    sections := sections ++ [(dir, here)]
-  let out := pageLines.flatMap fun line =>
-    match sectionsMarker? line with
-    | some dir => ((sections.find? (·.1 == dir)).map (·.2)).getD []
-    | none => [line]
-  let text := generatedNote ++ "\n" ++ "\n".intercalate out
-  edits := edits ++ (← writeIfChanged root "docs/STATUS.md" text "status"
-    s!"{stale}; edit `docs/status/`, not this file")
-  return { edits, problems }
-
 /-! ## Applying a plan -/
 
 def plan (root : System.FilePath) (main : Bool) : IO Plan := do
-  return (← trustedPlan root) ++ (← decisionsPlan root main) ++ (← statusPlan root)
+  return (← trustedPlan root) ++ (← decisionsPlan root main)
 
 def Edit.describe (e : Edit) : String :=
   match e.change with

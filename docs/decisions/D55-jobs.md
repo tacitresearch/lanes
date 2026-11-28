@@ -1,6 +1,8 @@
 # D55. Work outside a step is a job: an actor with an outbox, a deadline per attempt and a bound
 
-`Lanes/Behaviours/{Jobs,JobsSound}.lean`, `Lanes/Semantics/JobsLive.lean`, `Lanes/Env/Jobs.lean`,
+Status: Accepted
+
+`Lanes/Behaviours/Jobs/Basic.lean`, `Lanes/Behaviours/Jobs/Sound.lean`, `Lanes/Semantics/Jobs.lean`, `Lanes/Behaviours/Jobs/IO/Pool.lean`,
 `Tests/Jobs.lean`. An application needs work that is not a function of one request and must not
 run on a shard's thread: an outbound call (an API, a mail provider, a model), slow pure work, and
 work on a schedule. D3 and D26 already give the shape, an output an adapter performs and whose

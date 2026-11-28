@@ -1,13 +1,15 @@
 # D50. A parser is proved against its RFC and tested against Go, and every difference is decided
 
+Status: Accepted
+
 A proof says the code meets its spec; it does not say the spec reads the standard right. Go's
 standard library has had years of use, so each package of the standard library Lanes builds
 (`docs/STDLIB.md`) is also run against Go's on generated inputs, and each input on which the
 two differ is either a misreading of ours, fixed, or a place where we depart from Go on purpose,
 written down as a predicate with its reason.
 
-**The pattern.** `oracle/` is a Go module (`oracle/go.mod` pins the toolchain) with one program
-per package, `oracle/<package>/main.go`, built on `oracle/internal/cases`: it reads one case per
+**The pattern.** `oracles/go/` is a Go module (`oracles/go/go.mod` pins the toolchain) with one program
+per package, `oracle/<package>/main.go`, built on `oracles/go/internal/cases`: it reads one case per
 line, `{"id": 7, "op": "decode-std", "in": "<hex>"}`, and answers one line per case,
 `{"id": 7, "ok": true, "out": …}` or `"ok": false` for a refusal. Inputs are hex so that invalid
 UTF-8 survives. On the Lean side a `Package` (`Tests/Oracle/Basic.lean`) has a generator of

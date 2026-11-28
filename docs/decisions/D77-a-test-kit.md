@@ -1,5 +1,7 @@
 # D77. A test kit, `Lanes.Testing`, beside `Lanes` and not in it
 
+Status: Accepted
+
 The fakes that the S3 client and the sign-in are tested against were test files of Lanes
 (`Tests/S3.lean`, `Tests/OAuth.lean`), and each application that serves pages wrote its own
 scripted browser: rookery, the ledger and the video site three times. An application outside

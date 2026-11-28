@@ -1,5 +1,7 @@
 # D47. The inventory is computed from the built library
 
+Status: Partly superseded by new-each-doc-has-one-job.md (the committed inventory file)
+
 D45 asks that every public definition Lanes ships have one status, stated by the code and
 generated. `lake exe lanes inventory` writes it to
 `docs/INVENTORY.md`; `lanes lint` fails when that file is stale and when a definition of
@@ -42,7 +44,7 @@ states no behaviour; what is proved is proved of the functions over it.
 5. **tested**: a declaration of `Tests/` uses it.
 6. **none**.
 
-A test or a check uses what it names, through the declarations of `Tests/` and `Examples/` it
+A test or a check uses what it names, through the declarations of `Tests/` and `Examples/` (removed) it
 names, and what those run in their own module, as for a theorem.
 
 *Why a gate and not every theorem.* A lemma that is not gated does not make a definition

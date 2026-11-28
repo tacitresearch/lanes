@@ -1,6 +1,8 @@
 # D15. JSON is a `Std`-only port of `Lean.Data.Json`
 
-`Lanes.Json` (`Lanes/Data/Json/`) is the value type, parser, printers and `ToJson`/`FromJson`
+Status: Accepted
+
+`Lanes.Json` (`Lanes/Lib/Encoding/Json/`) is the value type, parser, printers and `ToJson`/`FromJson`
 classes of Lean core, ported so that nothing imports `Lean`. It differs from the original in
 four ways:
 

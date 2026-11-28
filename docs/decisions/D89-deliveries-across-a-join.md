@@ -1,5 +1,7 @@
 # D89. What one side of a join sends the other is handled there, in every fair run
 
+Status: Accepted
+
 `Lanes/Semantics/FairJoin.lean` (section `Across the wiring`), `Lanes/Semantics/Liveness.lean`
 (`System.Run.Fair.handled`), `Lanes/Core/Run.lean` (section `Kept`), `Lanes/Semantics/Schedule.lean`
 (`Schedule.attach_end_handled`). D87 could not prove that a deleted video's object is deleted or

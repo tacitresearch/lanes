@@ -1,5 +1,7 @@
 # D?. Each generated line is about one item, and unreleased changes are fragments
 
+Status: Partly superseded by new-each-doc-has-one-job.md (the status fragments)
+
 The first recommendation of the structure proposal (pull request #83). Pull requests were taken
 off the merge queue for conflicts almost every time another one landed: 19 dequeues in 20 pull
 requests, and 48 of 135 commits only wrote the generated files again. GitHub's merge ignores

@@ -1,5 +1,7 @@
 # D64. Actors step in parallel within a wave, and connections run on threads of the server's own
 
+Status: Partly superseded by D73 (`Runtime.Config.workers` turning parallel steps on, off by default)
+
 One actor on one shard ran on one thread, and so did the kernel around it; the HTTP server ran
 each connection's loop on whichever of Lean's task threads told it something. On the warm machine
 (c7a.16xlarge, the server on 32 CPUs) hello world served 37,098 requests a second at 64

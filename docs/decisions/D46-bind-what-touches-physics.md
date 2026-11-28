@@ -1,15 +1,17 @@
 # D46. Bind what touches physics
 
+Status: Partly superseded by new-one-crypto-library.md (libsodium)
+
 Write in Lean what decides: protocols, parsers, state machines, formats, each proved. Bind what
 depends on what Lean cannot express or check, as every other language does: how long code takes
 (a timing side channel), hand-tuned assembly, the operating system. A binding keeps a pure Lean
 version beside it as the reference it is tested against, and a pure binding has that reference as
 its body, so the theorems are about the reference and what is trusted is one sentence: the C
-computes the same. The C is `native/lanes.c`, declared in `Lanes/Data/Sodium.lean` and
-`Lanes/Env/Journal.lean`, all of it counted in `TRUSTED.md`.
+computes the same. The C is `native/lanes.c`, declared in `Lanes/Lib/Crypto/Sodium.lean` and
+`Lanes/Durable/IO/Journal.lean`, all of it counted in `TRUSTED.md`.
 
 **fsync.** Lean's `IO` has `flush` and no `fsync`, so a journal survived the death of the process
-and not a loss of power, while the disk model (`Lanes/Actors/Disk.lean`) assumes each write done
+and not a loss of power, while the disk model (`Lanes/Durable/Disk.lean`) assumes each write done
 before the next begins. Now it is, on the disk as well: an append is flushed and synced; a file
 that replaces another is written beside it, synced, renamed, and its directory synced; the
 directory is synced when a journal is opened, which may have made it. A loss of power then leaves

@@ -1,7 +1,9 @@
 # D31. The gate is a system, joined in front; what a join keeps of a run is its deeds
 
-`Lanes/Http/{Gate,Front,FrontSound}.lean`, `Lanes/Actors/{Deed,MapIOSound}.lean`,
-`Lanes/Env/{Http,Node}.lean`. `gated sys` (D19) turns every output of `sys` into a message to
+Status: Accepted
+
+`Lanes/Web/Http/Gate.lean`, `Lanes/Web/Http/Front.lean`, `Lanes/Web/Http/FrontSound.lean`, `Lanes/Proof/Deed.lean`, `Lanes/Proof/MapIOSound.lean`,
+`Lanes/Web/IO/Server.lean`, `Lanes/Net/IO/Node.lean`. `gated sys` (D19) turns every output of `sys` into a message to
 the gate, so a system whose outputs are not all responses cannot sit behind it: a shard's
 parcels would be swallowed, and a process could not have both an HTTP front and peers.
 
@@ -55,11 +57,11 @@ What the projection theorems could not carry, and what was added:
   This is the general shape: prove of the part what holds per message handled, and of the
   whole who can send that message.
 
-The server. `Lanes/Env/Http.lean` has one loop, `serveOn`, for any system with a gate in it.
+The server. `Lanes/Web/IO/Server.lean` has one loop, `serveOn`, for any system with a gate in it.
 `serve` and `serveWith` run `gated sys` on it as before. `serveFronted` runs `fronted sys`: an
 output that is no response goes to the caller, and `Server.tryInput` takes an input that is no
 request, typed so that a request cannot be handed in that way and ids stay the server's.
-`Http.serveShard` (`Lanes/Env/Node.lean`) is the process `systems/raft-kv` needs:
+`Http.serveShard` (`Lanes/Net/IO/Node.lean`) is the process `examples/raft-kv` needs:
 `fronted (sys.shard hosts)` on one runtime, with `Peers` carrying the parcels.
 
 Consequences and limits:
