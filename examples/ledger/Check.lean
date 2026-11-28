@@ -133,7 +133,7 @@ def timed' : Config N :=
 /-! ## Scenarios -/
 
 def signUp (req : ReqId) (n : N) : Request N C := .signUp req n right
-def logIn (req : ReqId) (n : N) (c : C := right) : Request N C := .logIn req n c
+def logIn (req : ReqId) (n : N) (c : C := right) : Request N C := .logIn req n c 0
 def act (req : ReqId) (n : N) (session : Sid) (op : Op) : Request N C := .act req n session op
 
 /-- Both sign up and log in; the administrator opens an account that may go below zero and one
@@ -220,12 +220,12 @@ open Ledger.Web Lanes.Http
 def admin : Name := ⟨"admin", rfl⟩
 
 def settings : Settings :=
-  { key := .of "test key".toUTF8, password := { cost := { ops := 1, mem_kib := 8 }, pepper := "pepper".toUTF8 }
+  { keys := .of (.of "test key".toUTF8), password := { cost := { ops := 1, mem_kib := 8 }, pepper := "pepper".toUTF8 }
     origin := "http://127.0.0.1:8080", secure := false, admin }
 
 def alice : Name := ⟨"alice", rfl⟩
 
-def token : String := sessionToken settings alice 7
+def token : String := sessionToken settings alice 7 1000
 
 def post (path : String) (fields : List (String × String)) (cookie : Option String := some token) :
     Http.Request :=
@@ -233,7 +233,7 @@ def post (path : String) (fields : List (String × String)) (cookie : Option Str
     headers := (cookie.map fun c => [("cookie", s!"{sessionCookie}={c}")]).getD []
     body := ("&".intercalate (fields.map fun (k, v) => s!"{k}={v}")).toUTF8 }
 
-def csrf : String := Auth.formToken settings.key token
+def csrf : String := Auth.formToken settings.keys (sessionOf alice 7)
 
 /-- A request as the server hands it to the system. -/
 def decoded (r : Http.Request) : Except Http.Response In :=
@@ -253,15 +253,19 @@ def tests : List (String × Bool) :=
       same (decoded (post "transfer" (transfer ++ [("name", "bob")])))
         (.ok (.act 9 alice 7 (.transfer 1 2 5)))),
     ("bridge: a cookie whose payload names another user does not verify",
-      let forged := (Auth.tag settings.key "session" "7.alice") ++ ".7.bob"
+      let forged := token.replace ".7.alice" ".7.bob"
       same (decoded (post "transfer" transfer forged)) (.error notLoggedIn)),
+    ("bridge: a cookie names no one from its expiry on",
+      let arriving (now_s : Nat) := decode settings 9 (prepare settings (stamp now_s (post "transfer" transfer)))
+      same (arriving (999 + settings.session_s)) (.ok (.act 9 alice 7 (.transfer 1 2 5)))
+        && same (arriving (1000 + settings.session_s)) (.error notLoggedIn)),
     ("bridge: a form token of another session is refused",
       same (decoded (post "transfer" ((transfer.take 3) ++
-        [("csrf", Auth.formToken settings.key (sessionToken settings alice 8))])))
+        [("csrf", Auth.formToken settings.keys (sessionOf alice 8))])))
         (.error forbidden)),
     ("bridge: a password enters the system only as its digest",
       same (decoded (post "login" [("name", "alice"), ("password", "longenough")] none))
-        (.ok (.logIn 9 alice (settings.password.digest "alice" "longenough")))),
+        (.ok (.logIn 9 alice (settings.password.digest "alice" "longenough") 0))),
     ("bridge: a short password is refused before it reaches the system",
       match decoded (post "signup" [("name", "alice"), ("password", "short")] none) with
       | .error r => r.status == 400
@@ -299,13 +303,13 @@ def expiryWitnesses : List (Check.Property (World' timed' .viaLedger)) :=
     .sometimes "the view comes after the session's end" fun w => answered w 10 .noSession ]
 
 def lockWitnesses : List (Check.Property (World' timed' .viaLedger)) :=
-  [ .sometimes "a lock lifts" fun w => answered w 4 (.loggedIn 1 4),
+  [ .sometimes "a lock lifts" fun w => answered w 4 (.loggedIn 1 4 0),
     .sometimes "a lock holds" fun w => answered w 4 .locked,
     .sometimes "a session ends on its own" fun w => answered w 5 .noSession,
     .sometimes "a session lasts" fun w => answered w 5 (.accounts []) ]
 
 def timedWitnesses : List (Check.Property (World' timed' .viaLedger)) :=
-  [ .sometimes "a lock lifts" fun w => answered w 6 (.loggedIn 1 6),
+  [ .sometimes "a lock lifts" fun w => answered w 6 (.loggedIn 1 6 0),
     .sometimes "a lock holds" fun w => answered w 6 .locked,
     .sometimes "a session ends on its own" fun w => answered w 12 .noSession,
     .sometimes "a session lasts" fun w => answered w 12 .forbidden ]
@@ -313,7 +317,7 @@ def timedWitnesses : List (Check.Property (World' timed' .viaLedger)) :=
 /-- A user that decides a log-in as if the account were open: a lockout that does not lock,
 though failures are counted and the lock's timer is armed. -/
 def ignoreLock : UserMsg C → Option (Profile C) → Option (Profile C)
-  | .ask _ (.logIn _), some p => some { p with attempts := { p.attempts with locked := false } }
+  | .ask _ (.logIn ..), some p => some { p with attempts := { p.attempts with locked := false } }
   | _, u => u
 
 abbrev leaky (config : Config N) : System (sig N C) where

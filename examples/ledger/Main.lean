@@ -31,7 +31,7 @@ def main (args : List String) : IO UInt32 := do
       else none
     | IO.eprintln "ledger: Argon2id needs at least 8 KiB"; return 2
   let settings : Settings :=
-    { key := .of (secrets.extract 0 32)
+    { keys := .of (.of (secrets.extract 0 32))
       password := { cost, pepper := secrets.extract 32 64 }
       origin := s!"http://127.0.0.1:{port}"
       secure := false
@@ -42,8 +42,9 @@ def main (args : List String) : IO UInt32 := do
   let digest_ms := (← IO.monoMsNow) - started
   let config : Config Name := { admin }
   let server ← (Http.serve (Sys config) (bridge settings)
-    { port := port.toUInt16, journal, system := "ledger 4" } { snapshotEvery := 256 }
-    (some (saving config))).block
+    { port := port.toUInt16, journal, system := "ledger 5" } { snapshotEvery := 256 }
+    (some (saving config))
+    (arrive := some fun r => do return .ok (stamp ((← Http.Ops.wallMs) / 1000) r))).block
   IO.println s!"ledger listening on http://127.0.0.1:{server.port.getD 0} (a password digest takes {digest_ms} ms)"
   (← IO.getStdout).flush
   Lanes.block (server.stopOnSignal 10000)

@@ -75,9 +75,10 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Lib/Time/Format.lean` | `oracles/go/time` | |
 | `Lanes/Web/Auth/IdToken.lean` | | The claims of an ID token, decided and proved (`OAuth.IdToken.verify_accepted`); its JWS is `Jose`'s |
 | `Lanes/Web/Auth/Jose.lean` | `oracles/jwcrypto` | |
-| `Lanes/Web/Auth/Login.lean` | | Not a format: failed attempts and their bounds |
+| `Lanes/Web/Auth/Login.lean` | | Not a format: failed attempts and sessions, and their bounds |
 | `Lanes/Web/Auth/OAuth.lean` | | A flow, model-checked against an attacker's browser (`Tests/OAuth.lean`); the providers' documents are recorded (`integrations/google/recorded`) |
-| `Lanes/Web/Auth/Token.lean` | | Tokens only Lanes writes and reads; proved to accept exactly what it signs (`Auth.verify_sign`) |
+| `Lanes/Web/Auth/Password.lean` | | PHC strings of Argon2id: read and written back as libsodium's `crypto_pwhash_str` wrote four (`Tests/Crypto.lean`), and proved to read back as written (`Auth.Phc.parse?_encode`); no reference is run on generated strings, since none is linked in CI's toolchain |
+| `Lanes/Web/Auth/Token.lean` | | Tokens only Lanes writes and reads; proved to accept exactly what it signs, before it expires (`Auth.verify_eq_some`) |
 | `Lanes/Web/Html/Basic.lean` | | Proved against a model of the HTML tokenizer (`Html.lex_render`); not yet compared with html5lib or a browser |
 | `Lanes/Web/Html/Htmx.lean` | | Attributes from routes, not a format of its own |
 | `Lanes/Web/Html/Syntax.lean` | | The template syntax, elaborated to `Html.Basic`'s values |

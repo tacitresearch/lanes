@@ -149,12 +149,15 @@ def read (payload : String) : Option Ticket :=
     return { provider := ".".intercalate provider, state, expires_ms := ← expires.toNat? }
   | _ => none
 
-/-- The binding cookie's value. -/
-def toCookie (key : Hmac.Key) (t : Ticket) : String := Auth.sign key "sign-in" t.payload
+/-- The binding cookie's value: a token that outlives its ticket by an hour, so that a callback
+in that hour is told the ticket expired (`check`), and a later one that it is unknown. -/
+def toCookie (key : Hmac.Key) (t : Ticket) : String :=
+  Auth.sign (.of key) "sign-in" (t.expires_ms / 1000 + 3600) t.payload
 
-/-- The ticket of a binding cookie, if the server's key tagged it. -/
-def ofCookie (key : Hmac.Key) (cookie : String) : Option Ticket :=
-  (Auth.verify key "sign-in" cookie).bind read
+/-- The ticket of a binding cookie, if the server's key tagged it and it has not expired at
+`now_ms`. -/
+def ofCookie (key : Hmac.Key) (now_ms : Nat) (cookie : String) : Option Ticket :=
+  (Auth.verify (.of key) "sign-in" (now_ms / 1000) cookie).bind read
 
 def derive (key : Hmac.Key) (purpose state : String) : String :=
   b64 (key.mac (Auth.message purpose state))
@@ -171,7 +174,7 @@ cookie is `cookie`: its ticket, if the server tagged it for this state, this pro
 not expired. -/
 def check (key : Hmac.Key) (now_ms : Nat) (provider : String) (cookie : Option String)
     (state : String) : Except Refusal Ticket :=
-  match cookie.bind (Ticket.ofCookie key) with
+  match cookie.bind (Ticket.ofCookie key now_ms) with
   | none => .error .unknownState
   | some t =>
     if !same t.state state then .error .otherBrowser
@@ -183,7 +186,7 @@ def check (key : Hmac.Key) (now_ms : Nat) (provider : String) (cookie : Option S
 request's cookie carries, for its state, on its provider's route, before its expiry. -/
 theorem check_ok {key : Hmac.Key} {now_ms : Nat} {provider : String} {cookie : Option String}
     {state : String} {t : Ticket} (h : check key now_ms provider cookie state = .ok t) :
-    (∃ c, cookie = some c ∧ Ticket.ofCookie key c = some t) ∧ t.state = state
+    (∃ c, cookie = some c ∧ Ticket.ofCookie key now_ms c = some t) ∧ t.state = state
       ∧ t.provider = provider ∧ now_ms < t.expires_ms := by
   unfold check at h
   split at h

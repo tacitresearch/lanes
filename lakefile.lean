@@ -60,6 +60,11 @@ artifact cache serves a module built from older copies. A new `include_str` adds
 input_dir templates where
   text := true
 
+/-- The `lean-toolchain` that `LanesCli.New` copies into a new app. -/
+input_file leanToolchain where
+  path := "lean-toolchain"
+  text := true
+
 /-- The test keys `Tests.Sign` embeds. -/
 input_dir botocoreKeys where
   path := "oracles/botocore/keys"
@@ -91,7 +96,7 @@ lean_exe lanesServiceOracle where
 
 lean_lib LanesCli where
   globs := #[.submodules `LanesCli]
-  needs := #[`@/templates]
+  needs := #[`@/templates, `@/leanToolchain]
 
 /-- The `lanes` command. -/
 @[default_target]

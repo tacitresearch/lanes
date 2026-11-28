@@ -115,12 +115,34 @@ import Lanes.Semantics
 /-- info: 'Lanes.OAuth.identity?_withIdentity' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.OAuth.identity?_withIdentity
 
+-- Lanes.Web.Auth.Password
+/-- info: 'Lanes.Auth.Phc.parse?_encode' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Auth.Phc.parse?_encode
+
+/-- info: 'Lanes.Auth.Stored.read?_text' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Auth.Stored.read?_text
+
+/-- info: 'Lanes.Auth.Password.verify_hash' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Auth.Password.verify_hash
+
+/-- info: 'Lanes.Auth.Password.verify_phc' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Auth.Password.verify_phc
+
+/-- info: 'Lanes.Auth.Password.verify_raw' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Auth.Password.verify_raw
+
 -- Lanes.Web.Auth.Token
 /-- info: 'Lanes.Auth.verify_sign' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Auth.verify_sign
 
 /-- info: 'Lanes.Auth.checkForm_formToken' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Auth.checkForm_formToken
+
+/-- info: 'Lanes.Auth.verify_expired' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Auth.verify_expired
+
+/-- info: 'Lanes.Auth.verify_rotate' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Auth.verify_rotate
 
 -- Lanes.Web.Auth.TokenSound
 /-- info: 'Lanes.Auth.verify_eq_some' depends on axioms: [propext, Classical.choice, Quot.sound] -/

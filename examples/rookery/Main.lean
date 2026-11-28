@@ -30,15 +30,16 @@ def main (args : List String) : IO UInt32 := do
       else none
     | IO.eprintln "rookery: Argon2id needs at least 8 KiB"; return 2
   let settings : Settings :=
-    { key := .of (secrets.extract 0 32)
+    { keys := .of (.of (secrets.extract 0 32))
       password := { cost, pepper := secrets.extract 32 64 }
       origin := s!"http://127.0.0.1:{port}"
       secure := false }
   let config : Config := { maxPerWindow }
   let server ← (Http.serve (Sys config) (bridge settings)
-    { port := port.toUInt16, journal, system := "rookery 1", streams := some streams, poll_ms := 500 }
+    { port := port.toUInt16, journal, system := "rookery 2", streams := some streams, poll_ms := 500 }
     { snapshotEvery := 256 }
-    (some (saving config))).block
+    (some (saving config))
+    (arrive := some fun r => do return .ok (stamp ((← Http.Ops.wallMs) / 1000) r))).block
   IO.println s!"rookery listening on http://127.0.0.1:{server.port.getD 0}"
   (← IO.getStdout).flush
   Lanes.block (server.stopOnSignal 10000)

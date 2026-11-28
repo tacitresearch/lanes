@@ -111,7 +111,7 @@ theorem bounded_decide (config : Config N) (self : N) (req : ReqId) {u : Option 
   | some p =>
     cases ask with
     | signUp => exact h
-    | logIn c =>
+    | logIn c at_s =>
       simp only [User.decide, User.logIn]
       split
       · exact h

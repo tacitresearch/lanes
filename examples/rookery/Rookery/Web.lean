@@ -46,7 +46,11 @@ abbrev Out := Response Name
 
 /-- What the bridge is built with. The key and the pepper are secrets of the deployment. -/
 structure Settings where
-  key : Hmac.Key
+  keys : Auth.Keys
+  /-- How long a session's cookie is good for, in seconds; the system may end it sooner. -/
+  session_s : Nat := 30 * 24 * 3600
+  /-- How long an API token is good for, in seconds; a newer one ends it sooner. -/
+  apiToken_s : Nat := 365 * 24 * 3600
   password : Auth.Password
   /-- The origin pages are served from, which a cross-site form does not have. -/
   origin : String
@@ -89,11 +93,25 @@ def posted : String := "posted"
 
 /-! ## Sessions and tokens -/
 
-def sessionToken (s : Settings) (name : Name) (session : Sid) : String :=
-  Auth.sign s.key "session" s!"{session}.{name.val}"
+/-- A session as its token's payload, and what its form tokens are bound to. -/
+def sessionOf (name : Name) (session : Sid) : String := s!"{session}.{name.val}"
 
-def apiToken (s : Settings) (name : Name) (generation : Nat) : String :=
-  Auth.sign s.key "api" s!"{generation}.{name.val}"
+/-- The token of a session's cookie, signed at `at_s`. -/
+def sessionToken (s : Settings) (name : Name) (session : Sid) (at_s : Nat) : String :=
+  Auth.sign s.keys "session" (at_s + s.session_s) (sessionOf name session)
+
+def apiToken (s : Settings) (name : Name) (generation at_s : Nat) : String :=
+  Auth.sign s.keys "api" (at_s + s.apiToken_s) s!"{generation}.{name.val}"
+
+/-- The header `arrive` writes the time a request arrived in, which a client's is dropped. -/
+def arrivedHeader : String := "rookery-arrived"
+
+/-- When the request arrived, in seconds. -/
+def arrived (r : Http.Request) : Nat := ((r.header? arrivedHeader).bind String.toNat?).getD 0
+
+/-- What `arrive` does: the request with the time it arrived, and none a client wrote. -/
+def stamp (now_s : Nat) (r : Http.Request) : Http.Request :=
+  { r with headers := r.headers.filter (·.1 != arrivedHeader) ++ [(arrivedHeader, toString now_s)] }
 
 /-- A number and a name, as a session's and a token's payloads hold them. -/
 def numbered? (payload : String) : Option (Nat × Name) :=
@@ -118,9 +136,9 @@ def prepare (s : Settings) (r : Http.Request) : Http.Request :=
   let kept := r.headers.filter fun (name, _) =>
     name != "cookie" && name != "authorization" && name != verifiedSession
       && name != verifiedToken && name != passwordDigest
-  let session := (r.cookie? sessionCookie >>= Auth.verify s.key "session").map
+  let session := (r.cookie? sessionCookie >>= Auth.verify s.keys "session" (arrived r)).map
     (verifiedSession, ·)
-  let token := (bearer? r >>= Auth.verify s.key "api").map (verifiedToken, ·)
+  let token := (bearer? r >>= Auth.verify s.keys "api" (arrived r)).map (verifiedToken, ·)
   let digest := match r.field? "name" >>= Name.ofString?, r.field? "password" with
     | some name, some password =>
       [(passwordDigest, if password.length < s.minPassword then "short"
@@ -131,10 +149,10 @@ def prepare (s : Settings) (r : Http.Request) : Http.Request :=
     body := if (r.field? "password").isSome
       then (encodeForm (r.form.filter (·.1 != "password"))).toUTF8 else r.body }
 
-/-- The session `prepare` verified, its name, and the session's token, signed again. -/
-def verified? (s : Settings) (r : Http.Request) : Option (String × Name × Sid) := do
+/-- The session `prepare` verified, as its form tokens are bound to, its name and its id. -/
+def verified? (r : Http.Request) : Option (String × Name × Sid) := do
   let (sid, name) ← numbered? (← r.header? verifiedSession)
-  return (sessionToken s name sid, name, sid)
+  return (sessionOf name sid, name, sid)
 
 def cookie (s : Settings) (value : String) : Cookie :=
   { name := sessionCookie, value, secure := s.secure, sameSite := .lax }
@@ -188,25 +206,25 @@ def LoginPage (notice : Option Html := none) : Html :=
 def profileLink (n : Name) : String :=
   ((Slug.ofString? n.val).map Routes.profile.link).getD (Routes.home.link ())
 
-def Nav (s : Settings) (token : String) (name : Name) : Html :=
+def Nav (s : Settings) (session : String) (name : Name) : Html :=
   <nav>
     <a href={Routes.home.link ()}>"rookery"</a>
     <a href={profileLink name}>{name.val}</a>
     <form method="post" action={Routes.logOut.link ()}>
-      <input type="hidden" name="csrf" value={Auth.formToken s.key token}/>
+      <input type="hidden" name="csrf" value={Auth.formToken s.keys session}/>
       <button type="submit">"Log out"</button>
     </form>
   </nav>
 
-def csrfField (s : Settings) (token : String) : Html :=
-  <input type="hidden" name="csrf" value={Auth.formToken s.key token}/>
+def csrfField (s : Settings) (session : String) : Html :=
+  <input type="hidden" name="csrf" value={Auth.formToken s.keys session}/>
 
-def HomePage (s : Settings) (token : String) (name : Name) : Html :=
+def HomePage (s : Settings) (session : String) (name : Name) : Html :=
   Layout "Home" [
-    <Nav s={s} token={token} name={name}/>,
+    <Nav s={s} session={session} name={name}/>,
     <main>
       <form {Hx.request Routes.post ()} {Hx.target "#posted"}>
-        {csrfField s token}
+        {csrfField s session}
         <textarea name="body" rows="3" maxlength="280" required placeholder="What is happening?"></textarea>
         <button type="submit">"Post"</button>
         <span id="posted" role="status"></span>
@@ -215,18 +233,18 @@ def HomePage (s : Settings) (token : String) (name : Name) : Html :=
       <div {Hx.events Routes.timelineEvents ()}>"…"</div>
       <h2>"Accounts"</h2>
       <form {Hx.request Routes.follow ()} {Hx.target "#followed"}>
-        {csrfField s token}
+        {csrfField s session}
         <input name="name" required placeholder="name"/>
         <button type="submit">"Follow"</button>
         <span id="followed" role="status"></span>
       </form>
       <form {Hx.request Routes.unfollow ()} {Hx.target "#followed"}>
-        {csrfField s token}
+        {csrfField s session}
         <input name="name" required placeholder="name"/>
         <button type="submit">"Unfollow"</button>
       </form>
       <form {Hx.request Routes.delete ()} {Hx.target "#deleted"}>
-        {csrfField s token}
+        {csrfField s session}
         <input name="id" type="number" min="0" required placeholder="post number"/>
         <button type="submit">"Delete my post"</button>
         <span id="deleted" role="status"></span>
@@ -234,7 +252,7 @@ def HomePage (s : Settings) (token : String) (name : Name) : Html :=
       <h2>"API token"</h2>
       <p>"A bot posts with a token. A new one ends every earlier one."</p>
       <form {Hx.request Routes.token ()} {Hx.target "#token"}>
-        {csrfField s token}
+        {csrfField s session}
         <button type="submit">"New token"</button>
       </form>
       <pre id="token"></pre>
@@ -293,16 +311,16 @@ def credentials (s : Settings) (r : Http.Request) : Except Http.Response (Name �
 /-- A request whose cookie names a session, as an input; or how the bridge answers it. -/
 def signedIn (s : Settings) (r : Http.Request) (changes : Bool)
     (input : Name → Sid → Except Http.Response In) : Except Http.Response In :=
-  match verified? s r with
+  match verified? r with
   | none => .error notLoggedIn
-  | some (token, name, session) =>
-    if changes && !(r.sameOrigin s.origin && (r.field? "csrf").any (Auth.checkForm s.key token))
+  | some (session, name, sid) =>
+    if changes && !(r.sameOrigin s.origin && (r.field? "csrf").any (Auth.checkForm s.keys session))
     then .error forbidden
-    else input name session
+    else input name sid
 
 def shell (s : Settings) (r : Http.Request) : Except Http.Response In :=
-  match verified? s r with
-  | some (token, name, _) => .error (page (HomePage s token name))
+  match verified? r with
+  | some (session, name, _) => .error (page (HomePage s session name))
   | none => .error (page (LoginPage))
 
 def webOp (s : Settings) (id : ReqId) (r : Http.Request)
@@ -378,12 +396,12 @@ def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response
           (credentials s r).map fun (n, d) => .signUp id n d (r.field? "bot" == some "yes")
         else .error forbidden,
       Routes.logIn.handle fun () r =>
-        if r.sameOrigin s.origin then (credentials s r).map fun (n, d) => .logIn id n d
+        if r.sameOrigin s.origin then (credentials s r).map fun (n, d) => .logIn id n d (arrived r)
         else .error forbidden,
       Routes.logOut.handle fun () r =>
         signedIn s r true fun name session => .ok (.logOut id name session),
       Routes.token.handle fun () r =>
-        signedIn s r true fun name session => .ok (.newToken id name session),
+        signedIn s r true fun name session => .ok (.newToken id name session (arrived r)),
       Routes.timeline.handle fun () r =>
         signedIn s r false fun name session => .ok (.web id name session .timeline),
       Routes.timelineEvents.handle fun () r =>
@@ -435,16 +453,16 @@ def encodeHtml (s : Settings) : Reply Name → Http.Response
   | .signedUp => page (LoginPage (some <span>"Signed up. Log in."</span>))
   | .nameTaken => page (LoginPage (some (Error "That name is taken."))) 409
   | .full => page (LoginPage (some (Error "No more accounts can be made."))) 503
-  | .loggedIn name session =>
+  | .loggedIn name session at_s =>
     (Http.Response.redirect (Routes.home.link ())).setCookie
-      (cookie s (sessionToken s name session))
+      (cookie s (sessionToken s name session at_s))
   | .refused => page (LoginPage (some (Error "Wrong name or password."))) 401
   | .locked => page (LoginPage (some (Error "Too many failed log-ins. Try again later."))) 429
   | .loggedOut =>
     (Http.Response.redirect (Routes.login.link ())).clearCookie (cookie s "")
   | .noSession => notLoggedIn.clearCookie (cookie s "")
-  | .token name generation =>
-    fragment <span>{s!"Authorization: Bearer {apiToken s name generation}"}</span>
+  | .token name generation at_s =>
+    fragment <span>{s!"Authorization: Bearer {apiToken s name generation at_s}"}</span>
   | .posted id => (fragment <span>{s!"Posted #{id}."}</span>).trigger posted
   | .rateLimited => fragment (Error "Too many posts for now. Wait a minute.")
   | .tooManyPosts => fragment (Error "You keep as many posts as you may. Delete one first.")

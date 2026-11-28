@@ -209,8 +209,8 @@ def libsodiumTests : List (String × Bool) :=
         : Auth.Password).digest "alice" "longenough").hex
         == "d8da2482ae31637fd29537b3d11e1dd5960a0677b6ca8f3fabc11ea8301296da") ]
 
-/-- Strings libsodium 1.0.18's `crypto_pwhash_str` made, each with its password. Lanes stores raw
-digests, not these, but the hash in each must be `Argon2id.hash` of its salt at its cost. -/
+/-- Strings libsodium 1.0.18's `crypto_pwhash_str` made, each with its password: the PHC strings
+Lanes stores (`Auth.Phc`). -/
 def libsodiumStrings : List (String × String) :=
   [ ("password",
       "$argon2id$v=19$m=65536,t=2,p=1$E+tvRm1Cu4oTuZFABAPCHw$LsKhhcuq+lm2cwEIYZpzPqBwajj1j8tESD/wTFB7y7s"),
@@ -221,37 +221,25 @@ def libsodiumStrings : List (String × String) :=
       "$argon2id$v=19$m=1023,t=3,p=1$8AnvIv1+aZqutOp1asgPtA$Xqgs3JYhyhyNs8kck9wdtKu6nLCsy+I6ZHk9mqMifOk") ]
 
 def verifiesString (password encoded : String) : Bool :=
-  let number (field key : String) : Option Nat :=
-    match field.splitOn "=" with
-    | [k, n] => if k == key then n.toNat? else none
-    | _ => none
-  match encoded.splitOn "$" with
-  | ["", "argon2id", "v=19", params, salt, digest] =>
-    match params.splitOn ",", Base64.decode .rawStd salt, Base64.decode .rawStd digest with
-    | [m, t, "p=1"], some salt, some digest =>
-      match number m "m", number t "t" with
-      | some kib, some ops =>
-        if h : salt.size = 16 ∧ 0 < ops.toUInt32 ∧ 8 ≤ kib.toUInt32 then
-          let cost : Argon2id := { ops := ops.toUInt32, mem_kib := kib.toUInt32,
-                                   ops_pos := h.2.1, mem_min := h.2.2 }
-          Bytes.same (cost.hash (bytesOf password) salt h.1) digest
-        else false
-      | _, _ => false
-    | _, _, _ => false
-  | _ => false
+  (Auth.Phc.parse? encoded).any (·.check (bytesOf password))
 
 def libsodiumStringTests : List (String × Bool) :=
   (libsodiumStrings.map fun (password, encoded) =>
-    (s!"argon2id: libsodium's string {encoded.take 30}… verifies",
-      verifiesString password encoded))
+    (s!"argon2id: libsodium's string {encoded.take 30}… reads, verifies and is written back alike",
+      verifiesString password encoded
+        && (Auth.Phc.parse? encoded).map (·.encode) == some encoded))
   ++ [ ("argon2id: and not with another password",
-      !verifiesString "passwore" (libsodiumStrings.head?.map (·.2) |>.getD "")) ]
+      !verifiesString "passwore" (libsodiumStrings.head?.map (·.2) |>.getD "")),
+    ("argon2id: a stored string verifies under a deployment of another cost, and asks to be hashed again",
+      (Auth.Stored.read? (libsodiumStrings.head?.map (·.2) |>.getD "")).map
+        (({ cost := { ops := 1, mem_kib := 64 }, pepper := .empty } : Auth.Password).verify "u" "password")
+        == some .rehash) ]
 
 /-- RFC 9106 §5.3:32 bytes of 1 as the password, 16 of 2 as the salt, 8 of 3 as the secret and 12
 of 4 as associated data, three passes over 32 KiB in four lanes. -/
 def rfc9106Tests : List (String × Bool) :=
   let tag := ({ ops := 3, mem_kib := 32 } : Argon2id).derive 4 (repeated 1 32) (salt 2).1
-    (repeated 3 8) (repeated 4 12) (salt 2).2 ⟨by decide, by decide, by decide⟩
+    (repeated 3 8) (repeated 4 12) (by rw [(salt 2).2]; decide) ⟨by decide, by decide, by decide⟩
   [ ("argon2id: RFC 9106's example",
       Bytes.hex tag == "0d640df58d78766c08c037a34a8b53c9d01ef0452d75b65eb52520e96b01e659") ]
 

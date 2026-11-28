@@ -35,7 +35,7 @@ def Verdict.msg (self : N) (req : ReqId) : Verdict N → LedgerMsg N
 
 def Request.ofAsk (name : N) (req : ReqId) : Ask C → Request N C
   | .signUp c => .signUp req name c
-  | .logIn c => .logIn req name c
+  | .logIn c at_s => .logIn req name c at_s
   | .act session op => .act req name session op
 
 theorem Request.ofAsk_eq (x : Request N C) : Request.ofAsk x.name x.req x.ask = x := by

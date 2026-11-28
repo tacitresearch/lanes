@@ -71,7 +71,8 @@ lanes_data inductive Op where
 lanes_data inductive Reply (N : Type) where
   | signedUp
   | nameTaken
-  | loggedIn (name : N) (session : Sid)
+  /-- A session opened at `at_s`, when its cookie is signed. -/
+  | loggedIn (name : N) (session : Sid) (at_s : Nat)
   /-- Wrong name or wrong password: which one is not said. -/
   | refused
   | locked

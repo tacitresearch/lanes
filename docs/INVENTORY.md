@@ -504,6 +504,7 @@ them by area.
 | `Codec.map` | proved | its type, `Codec` |
 | `Codec.sigma` | proved | its type, `Codec` |
 | `Codec.subtype` | proved | its type, `Codec` |
+| `Codec.withSchema` | proved | its type, `Codec` |
 | `Codec.bool` | proved | its type, `Codec` |
 | `Codec.fin` | proved | its type, `Codec` |
 | `Codec.int` | proved | its type, `Codec` |
@@ -531,8 +532,16 @@ them by area.
 | `Codec.of` | proved | its type, `Codec` |
 | `Codec.fresh` | none |  |
 | `Codec.tuple` | none |  |
+| `Codec.fieldTuple` | none |  |
 | `Codec.product` | none |  |
 | `Codec.inject` | none |  |
+| `Codec.injectCtor` | none |  |
+| `Codec.nameLit` | none |  |
+| `Codec.typeName` | none |  |
+| `Codec.fieldsTerm` | none |  |
+| `Codec.structTerm` | none |  |
+| `Codec.sumBytes` | none |  |
+| `Codec.sumTerm` | none |  |
 
 ## `Lanes/Data/Declare.lean`
 
@@ -553,6 +562,9 @@ them by area.
 | `Declare.independent` | none |  |
 | `Declare.migrate` | none |  |
 | `Declare.enum` | none |  |
+| `Declare.constantDefaults` | none |  |
+| `Declare.ctorArgs` | none |  |
+| `Declare.ctorBinder` | none |  |
 
 ## `Lanes/Data/Enum.lean`
 
@@ -586,6 +598,45 @@ them by area.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Quorum.isMajority` | proved | `Quorum.majority_inter` |
+
+## `Lanes/Data/Schema.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Schema.Fields.nil` | proved | its type, `Schema.Fields` |
+| `Schema.Fields.cons` | proved | its type, `Schema.Fields` |
+| `Schema.Ctors.nil` | proved | its type, `Schema.Ctors` |
+| `Schema.Ctors.cons` | proved | its type, `Schema.Ctors` |
+| `Schema.Of.nat` | proved | its type, `Schema.Of` |
+| `Schema.Of.int` | proved | its type, `Schema.Of` |
+| `Schema.Of.string` | proved | its type, `Schema.Of` |
+| `Schema.Of.bytes` | proved | its type, `Schema.Of` |
+| `Schema.Of.unit` | proved | its type, `Schema.Of` |
+| `Schema.Of.map` | proved | its type, `Schema.Of` |
+| `Schema.Of.record` | proved | its type, `Schema.Of` |
+| `Schema.Of.variants` | proved | its type, `Schema.Of` |
+| `Schema.Of.list` | proved | its type, `Schema.Of` |
+| `Schema.Of.bool` | proved | its type, `Schema.Of` |
+| `Schema.Of.pair` | proved | its type, `Schema.Of` |
+| `Schema.Of.sum` | proved | its type, `Schema.Of` |
+| `Schema.Of.option` | proved | its type, `Schema.Of` |
+| `Schema.Of.sigma` | proved | its type, `Schema.Of` |
+| `Schema.paren` | tested | `Tests/Schema.lean` |
+| `Schema.name` | tested | `Tests/Schema.lean` |
+| `Schema.names` | tested | `Tests/Schema.lean` |
+| `Schema.named` | tested | `Tests/Schema.lean` |
+| `Schema.namedAll` | tested | `Tests/Schema.lean` |
+| `Schema.namedFields` | tested | `Tests/Schema.lean` |
+| `Schema.namedCtors` | tested | `Tests/Schema.lean` |
+| `Schema.argument` | tested | `Tests/Schema.lean` |
+| `Schema.display` | tested | `Tests/Schema.lean` |
+| `Schema.displayFields` | tested | `Tests/Schema.lean` |
+| `Schema.displayArgs` | tested | `Tests/Schema.lean` |
+| `Schema.displayCtor` | tested | `Tests/Schema.lean` |
+| `Schema.was` | tested | `Tests/Schema.lean` |
+| `Schema.Field.text` | tested | `Tests/Schema.lean` |
+| `Schema.declaration` | tested | `Tests/Schema.lean` |
+| `Schema.text` | tested | `Tests/Schema.lean` |
 
 ## `Lanes/Durable/Disk.lean`
 
@@ -748,7 +799,7 @@ them by area.
 | `hmac` | trusted | TRUSTED.md: The C |
 | `Bytes.same` | trusted | TRUSTED.md: The C |
 | `randomBytes` | trusted | TRUSTED.md: The C |
-| `Argon2id.derive` | trusted | TRUSTED.md: The C |
+| `Argon2id.derive` | proved | `Auth.Password.verify_phc` |
 | `Argon2id.hash` | trusted | TRUSTED.md: The C |
 
 ## `Lanes/Lib/Crypto/Pbkdf2.lean`
@@ -850,7 +901,7 @@ them by area.
 | `Base64.Alphabet.valueOf` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and others |
 | `Base64.Alphabet.value?` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and others |
 | `Base64.Encoding.std` | proved | `Postgres.Conn.onMessage_binds`, `Postgres.Scram.respond_binds` |
-| `Base64.Encoding.rawStd` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
+| `Base64.Encoding.rawStd` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
 | `Base64.Encoding.url` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
 | `Base64.Encoding.rawUrl` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean`, `Tests/Oracle/Jose.lean` and others |
 | `Base64.sextet` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and others |
@@ -1551,6 +1602,35 @@ them by area.
 | `Peers.Action.parcel?` | spec | used only in statements |
 | `Peers.Courier.leftover` | spec | used only in statements |
 
+## `Lanes/Net/Handshake.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Peers.Handshake.magic` | proved | through `Peers.Handshake.Hello.read`, `Peers.Handshake.Hello.write` and others: `Peers.Handshake.Hello.read_write_append`, `Peers.Handshake.Reachable.ready_proved` and others |
+| `Peers.Handshake.version` | proved | `Peers.Handshake.Hello.read_write_append` |
+| `Peers.Handshake.proofSize` | proved | `Peers.Handshake.Reachable.ready_proved` |
+| `Peers.Handshake.Hello.records` | proved | `Peers.Handshake.Hello.read_write_append` |
+| `Peers.Handshake.Hello.write` | proved | `Peers.Handshake.Hello.read_write_append` |
+| `Peers.Handshake.Hello.read` | proved | `Peers.Handshake.Hello.read_write_append`, `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.Role.other` | proved | `Peers.Handshake.Reachable.ready_proved` |
+| `Peers.Handshake.Role.label` | proved | through `Peers.Handshake.hear`, `Peers.Handshake.step`: `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.Refusal.message` | tested | `Tests/Fronted.lean`, `Tests/Peers.lean` |
+| `Peers.Handshake.Refusal.quiet` | tested | `Tests/Fronted.lean`, `Tests/Peers.lean` |
+| `Peers.Handshake.transcript` | proved | `Peers.Handshake.Reachable.ready_proved` |
+| `Peers.Handshake.proofOf` | proved | `Peers.Handshake.Reachable.ready_proved` |
+| `Peers.Handshake.differs` | proved | `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.refuse` | proved | through `Peers.Handshake.hear`, `Peers.Handshake.step`: `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.check` | proved | through `Peers.Handshake.hear`, `Peers.Handshake.step`: `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.hear` | proved | `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.start` | tested | `Tests/Peers.lean` |
+| `Peers.Handshake.step` | proved | `Peers.Handshake.Reachable.ready_proved` |
+
+## `Lanes/Net/HandshakeSound.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Peers.Handshake.Heard` | spec | a predicate |
+
 ## `Lanes/Net/IO/Node.lean`
 
 | Definition | Status | Evidence |
@@ -1561,6 +1641,7 @@ them by area.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
+| `Peers.Config.minKeyBytes` | trusted | TRUSTED.md: The transport between processes |
 | `Peers.start` | trusted | TRUSTED.md: The transport between processes |
 | `Peers.send` | trusted | TRUSTED.md: The transport between processes |
 | `Peers.stop` | trusted | TRUSTED.md: The transport between processes |
@@ -2471,15 +2552,6 @@ them by area.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Auth.instDecidableEqDigest` | proved | its type, `Decidable` |
-| `Auth.instHashableDigest` | tested | `Tests/Auth.lean` |
-| `Auth.instReprDigest` | tested | `Tests/Auth.lean` |
-| `Auth.Digest.codec` | proved | its type, `Codec` |
-| `Auth.instCodableDigest` | proved | its type, `Codable` |
-| `Auth.Digest.hex` | tested | `Tests/Auth.lean`, `Tests/Crypto.lean` |
-| `Auth.Digest.ofHex?` | tested | `Tests/Auth.lean` |
-| `Auth.Password.salt` | tested | `Tests/Auth.lean`, `Tests/Crypto.lean` |
-| `Auth.Password.digest` | tested | `Tests/Auth.lean`, `Tests/Crypto.lean` |
 | `Auth.Attempts.codec` | proved | its type, `Codec` |
 | `Auth.instCodableAttempts` | proved | its type, `Codable` |
 | `Auth.Attempts.fail` | proved | `Auth.Attempts.bounded_fail`, `Auth.Attempts.fail_repeat`, `Auth.Attempts.locked_stays` and others |
@@ -2546,17 +2618,57 @@ them by area.
 | `OAuth.refusedResponse` | checked | `Tests/OAuth.lean` |
 | `OAuth.Endpoint.parse` | tested | `Tests/OAuth.lean` |
 
+## `Lanes/Web/Auth/Password.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Auth.instDecidableEqDigest` | proved | its type, `Decidable` |
+| `Auth.instHashableDigest` | tested | `Tests/Auth.lean` |
+| `Auth.instReprDigest` | tested | `Tests/Auth.lean` |
+| `Auth.Digest.codec` | proved | its type, `Codec` |
+| `Auth.instCodableDigest` | proved | its type, `Codable` |
+| `Auth.Digest.hex` | proved | through `Auth.Password.verify`, `Auth.Stored.text`: `Auth.Password.verify_hash`, `Auth.Password.verify_phc` and others |
+| `Auth.Digest.ofHex?` | proved | through `Auth.Stored.read?`: `Auth.Stored.read?_text` |
+| `Auth.Phc.cut` | proved | through `Auth.Phc.parse?`, `Auth.Stored.read?`: `Auth.Phc.parse?_encode`, `Auth.Stored.read?_text` |
+| `Auth.Phc.after` | proved | through `Auth.Phc.parse?`, `Auth.Stored.read?`: `Auth.Phc.parse?_encode`, `Auth.Stored.read?_text` |
+| `Auth.Phc.number?` | proved | through `Auth.Phc.parse?`, `Auth.Stored.read?`: `Auth.Phc.parse?_encode`, `Auth.Stored.read?_text` |
+| `Auth.Phc.encode` | proved | `Auth.Phc.parse?_encode` |
+| `Auth.Phc.parse?` | proved | `Auth.Phc.parse?_encode` |
+| `Auth.Phc.check` | proved | through `Auth.Password.verify`: `Auth.Password.verify_hash`, `Auth.Password.verify_phc` and others |
+| `Auth.Phc.instDecidableEq` | proved | its type, `Decidable` |
+| `Auth.Phc.instRepr` | tested | `Tests/Auth.lean` |
+| `Auth.Stored.text` | proved | `Auth.Stored.read?_text` |
+| `Auth.Stored.read?` | proved | `Auth.Stored.read?_text` |
+| `Auth.Stored.codec` | proved | its type, `Codec` |
+| `Auth.Stored.instCodable` | proved | its type, `Codable` |
+| `Auth.Password.salt` | proved | through `Auth.Password.verify`: `Auth.Password.verify_hash`, `Auth.Password.verify_phc` and others |
+| `Auth.Password.digest` | proved | through `Auth.Password.verify`: `Auth.Password.verify_hash`, `Auth.Password.verify_phc` and others |
+| `Auth.Password.hash` | proved | `Auth.Password.verify_hash` |
+| `Auth.Password.current` | proved | through `Auth.Password.verify`: `Auth.Password.verify_hash`, `Auth.Password.verify_phc` and others |
+| `Auth.Password.verify` | proved | `Auth.Password.verify_hash`, `Auth.Password.verify_phc`, `Auth.Password.verify_raw` |
+
 ## `Lanes/Web/Auth/Token.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Hmac.Key.of` | checked | `Tests/OAuth.lean` |
 | `Hmac.Key.mac` | proved | `Auth.checkForm_other`, `Auth.verify_sign_other` |
+| `Auth.Keys.of` | tested | `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
+| `Auth.Keys.find?` | proved | `Auth.checkForm_iff`, `Auth.checkForm_other`, `Auth.verify_eq_some` and others |
+| `Auth.Keys.rotate` | proved | `Auth.verify_rotate` |
 | `Auth.message` | proved | `Auth.checkForm_other`, `Auth.message_inj`, `Auth.verify_sign_other` |
-| `Auth.tag` | proved | through `Auth.checkForm`, `Auth.sign`: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and others |
-| `Auth.sign` | proved | `Auth.verify_eq_some`, `Auth.verify_sign`, `Auth.verify_sign_other` |
-| `Auth.verify` | proved | `Auth.verify_eq_some`, `Auth.verify_sign`, `Auth.verify_sign_other` |
-| `Auth.formToken` | proved | `Auth.checkForm_formToken`, `Auth.checkForm_iff`, `Auth.checkForm_other` |
+| `Auth.tag` | proved | through `Auth.checkForm`, `Auth.sign` and others: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and others |
+| `Auth.decimal` | proved | through `Auth.checkForm`, `Auth.sign` and others: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and others |
+| `Auth.head` | proved | `Auth.verify_sign_other` |
+| `Auth.signWith` | proved | `Auth.verify_eq_some`, `Auth.verify_expired`, `Auth.verify_sign_other` |
+| `Auth.sign` | proved | `Auth.verify_rotate`, `Auth.verify_sign` |
+| `Auth.splitDot` | proved | through `Auth.checkForm`, `Auth.verify`: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and others |
+| `Auth.fields` | proved | through `Auth.checkForm`, `Auth.verify`: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and others |
+| `Auth.verify` | proved | `Auth.verify_eq_some`, `Auth.verify_expired`, `Auth.verify_rotate` and others |
+| `Auth.formHead` | proved | `Auth.checkForm_other` |
+| `Auth.formTokenWith` | proved | `Auth.checkForm_iff`, `Auth.checkForm_other` |
+| `Auth.formToken` | proved | `Auth.checkForm_formToken` |
+| `Auth.formId` | proved | through `Auth.checkForm`: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and others |
 | `Auth.checkForm` | proved | `Auth.checkForm_formToken`, `Auth.checkForm_iff`, `Auth.checkForm_other` |
 
 ## `Lanes/Web/Html/Basic.lean`
@@ -3470,6 +3582,15 @@ them by area.
 | `Cli.Inventory.load` | none |  |
 | `Cli.Inventory.counts` | none |  |
 | `Cli.Inventory.run` | none |  |
+
+## `LanesCli/Journal.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Cli.Journal.values` | none |  |
+| `Cli.Journal.schemaProgram` | none |  |
+| `Cli.Journal.usage` | none |  |
+| `Cli.Journal.run` | none |  |
 
 ## `LanesCli/Lint.lean`
 
