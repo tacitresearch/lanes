@@ -16,17 +16,31 @@ with the process.
 
 open Lanes Lanes.OAuth Videos
 
-def client (origin name : String) : IO (Option Client) := do
-  let some id ← IO.getEnv s!"{name.toUpper}_CLIENT_ID" | return none
-  let some secret ← IO.getEnv s!"{name.toUpper}_CLIENT_SECRET" | return none
-  return some { id, secret := ⟨secret⟩, redirect := s!"{origin}/sign-in/{name}/callback" }
+structure Setup where
+  origin : String
+  /-- Each provider whose client is in the environment, with its client. -/
+  providers : List (Provider × Client)
+
+open Environment in
+def client (origin : String) (p : Provider) : Environment.Reader (Option (Provider × Client)) := do
+  let name := p.name.toUpper
+  let id ← opt s!"{name}_CLIENT_ID" (doc := s!"The client registered with {p.name}.")
+  let secret ← secret? s!"{name}_CLIENT_SECRET" (doc := s!"The secret of {p.name}'s client.")
+  check (id.isSome == secret.isSome) s!"{name}_CLIENT_SECRET"
+    s!"{name}_CLIENT_ID and {name}_CLIENT_SECRET are set together or not at all"
+  return match id, secret with
+    | some id, some secret => some (p, { id, secret, redirect := s!"{origin}/sign-in/{p.name}/callback" })
+    | _, _ => none
+
+open Environment in
+def setup (port : Nat) : Environment.Reader Setup := do
+  let origin ← get "LANES_URL" s!"http://localhost:{port}" (doc := "The site's public origin.")
+  let providers ← [Google.provider, GitHub.provider].filterMapM (client origin)
+  return { origin, providers }
 
 def main (args : List String) : IO Unit := do
   let port := (args.head? >>= String.toNat?).getD 8080
-  let origin := (← IO.getEnv "LANES_URL").getD s!"http://localhost:{port}"
-  let mut providers := []
-  for p in [Google.provider, GitHub.provider] do
-    if let some c ← client origin p.name then providers := providers ++ [(p, c)]
+  let { origin, providers } ← Environment.load (setup port) "signIn"
   let settings : Videos.Settings :=
     { keys := .of (.of (← randomBytes 32)), secure := origin.startsWith "https:" }
   let signIn ← SignIn.start { providers, secure := settings.secure }

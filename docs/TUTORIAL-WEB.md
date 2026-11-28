@@ -109,15 +109,14 @@ OpenID Connect provider (Google, Okta, Keycloak) is read from its discovery docu
 the deployment so that nothing is fetched at start. In `Main.lean`:
 
 ```lean
-def provider (origin : String) : IO (OAuth.Provider × OAuth.Client) := do
-  let path ← need "SHELF_OIDC_DISCOVERY"
+def provider (path : String) : IO OAuth.Provider := do
   let some d := OAuth.Discovery.read (← IO.FS.readFile path)
     | throw (IO.userError s!"shelf: {path} is not a discovery document")
-  let id ← need "SHELF_OIDC_CLIENT_ID"
-  let secret ← need "SHELF_OIDC_CLIENT_SECRET"
-  return (d.provider "oidc",
-    { id, secret := ⟨secret⟩, redirect := s!"{origin}/sign-in/oidc/callback" })
+  return d.provider "oidc"
 ```
+
+The path of the document and the client registered with the provider come from the
+environment, with the rest of the configuration (step 6).
 
 A member is the identity's issuer and subject, which do not change; the address can. The
 callback does not enter the system: the bridge answers it with a session cookie signed with the
@@ -389,26 +388,39 @@ bridge's, tested. The code of this step is `Tests/TutorialWeb/Check.lean`,
 
 ## 6. Run it
 
-The configuration is read once, in `main` (rule 2.5). Nothing secret is in the code or the
-repository. The database is named as libpq's variables name it, and at the start `main` runs
-the migrations not yet run and checks the tables (`Postgres.Typed.prepare`); `docs/DEPLOY.md`
-says how to run it as a container, several at once:
+The configuration is read once, at the start (rule 2.5). Nothing secret is in the code or the
+repository. `setup` is a reader of the environment (`Lanes/Outside/Environment.lean`): it names
+each variable, its default and what it is for, and `Environment.load` runs it on the process's
+environment. When a variable is unset or not valid it goes on, so the shelf refuses to start
+with every problem at once, and a secret's value is never shown:
 
 ```lean
-  let origin := ((← IO.getEnv "LANES_URL").filter (!·.isEmpty)).getD s!"http://localhost:{port}"
-  let region := ((← IO.getEnv "AWS_REGION").filter (!·.isEmpty)).getD "us-east-1"
-  let bucket : S3.Bucket :=
-    { name := ← need "LANES_MEDIA_BUCKET", region, endpoint := S3.Endpoint.aws region }
+def setup (port : Nat) : Environment.Reader Setup := do
+  let host ← get "LANES_HOST" "127.0.0.1" (doc := "The address to listen on.")
+  let origin ← get "LANES_URL" s!"http://localhost:{port}" (doc := "The site's public origin.")
+  let region ← get "AWS_REGION" "us-east-1" (doc := "The media bucket's region.")
+  let name ← need "LANES_MEDIA_BUCKET" (doc := "The media bucket.")
+  let discovery ← need "SHELF_OIDC_DISCOVERY" (doc := "The path of the provider's discovery document.")
+  let id ← need "SHELF_OIDC_CLIENT_ID" (doc := "The client registered with the provider.")
+  let secret ← secret "SHELF_OIDC_CLIENT_SECRET" (doc := "The client's secret.")
+```
+
+```lean
+  let d ← Environment.load (setup port) "shelf"
+  let key ← loadKey ((args[1]?.map System.FilePath.mk).getD "shelf.secrets")
   let some creds ← S3.credentialsFromEnv
 ```
+
+The database is named as libpq's variables name it, and at the start `main` runs the
+migrations not yet run and checks the tables (`Postgres.Typed.prepare`); `docs/DEPLOY.md` says
+how to run it as a container, several at once.
 
 The shelf signs its upload forms and links in the bridge, a pure function given its credentials
 once at start, so `main` reads a key of a user that may use the media bucket from the
 environment: a role's credentials would expire under it. An application that signs where IO
 runs, in an `arrive` or a handler, needs no such key on AWS: `Aws.Credentials.find` gives the
 instance's or the task's role, and `S3.presignNow` and `S3.Post.formNow` sign with it, session
-token included (`Lanes/Services/Aws/README.md`). The shelf reads, with the key, `SHELF_OIDC_DISCOVERY`, the path of the provider's discovery document, and
-`SHELF_OIDC_CLIENT_ID` and `SHELF_OIDC_CLIENT_SECRET`. The bucket allows a form's `POST` and a
+token included (`Lanes/Services/Aws/README.md`). The bucket allows a form's `POST` and a
 presigned `GET` from the site's origin. Register `<LANES_URL>/sign-in/oidc/callback` with the
 provider. The session key is made at the first start in `shelf.secrets`, or the path given
 after the port; losing it ends every session and nothing else.

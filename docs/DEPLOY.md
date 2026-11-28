@@ -44,6 +44,11 @@ ENTRYPOINT ["myapp", "8080"]
 
 ## Configuration, from the environment
 
+What `lanes new` writes reads its variables once, at the start, with `setup` in `Main.lean`, a
+reader of the environment (`Lanes/Outside/Environment.lean`). A variable that is not valid, or
+required and unset, stops the start, and every such variable is listed at once; a secret's
+value is never shown. `Environment.describe setup` lists the variables, each with its text and its default.
+
 - **The database**: `DATABASE_URL`, a `postgresql://` URI or libpq's `keyword=value` pairs,
   which what `lanes new` writes passes to `Postgres.Client.fromEnv`; for what it leaves out,
   libpq's variables (`PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`, `PGSSLMODE`, …),

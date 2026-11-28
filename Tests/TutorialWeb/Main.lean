@@ -8,9 +8,9 @@ import Tests.TutorialWeb.Web
 /-!
 `shelf [port] [secrets]`: the site. `secrets` holds the key that signs session cookies
 and form tokens, 32 random bytes made at the first start. Everything else comes from the
-environment, read once here (rule 2.5); no key or secret is in the code. The shelf is in
-PostgreSQL, as libpq's variables say; at the start the migrations of `migrations/` not yet run
-are run, and the site refuses to start on tables other than the declared ones.
+environment, read once by `setup` (rule 2.5); no key or secret is in the code. The shelf
+is in PostgreSQL, as libpq's variables say; at the start the migrations of `migrations/` not
+yet run are run, and the site refuses to start on tables other than the declared ones.
 -/
 
 open Lanes Shelf
@@ -23,38 +23,46 @@ def loadKey (path : System.FilePath) : IO ByteArray := do
   IO.FS.writeBinFile path bytes
   return bytes
 
-def need (name : String) : IO String := do
-  let some value := (← IO.getEnv name).filter (!·.isEmpty)
-    | throw (IO.userError s!"shelf: {name} is not set")
-  return value
+structure Setup where
+  host : String
+  origin : String
+  bucket : S3.Bucket
+  /-- The path of the OpenID Connect provider's discovery document. -/
+  discovery : String
+  client : OAuth.Client
+  idle_ms : Nat
+  drain_ms : Nat
 
-/-- The OpenID Connect provider whose discovery document is the file `SHELF_OIDC_DISCOVERY`,
-and the client registered with it. -/
-def provider (origin : String) : IO (OAuth.Provider × OAuth.Client) := do
-  let path ← need "SHELF_OIDC_DISCOVERY"
+open Environment in
+def setup (port : Nat) : Environment.Reader Setup := do
+  let host ← get "LANES_HOST" "127.0.0.1" (doc := "The address to listen on.")
+  let origin ← get "LANES_URL" s!"http://localhost:{port}" (doc := "The site's public origin.")
+  let region ← get "AWS_REGION" "us-east-1" (doc := "The media bucket's region.")
+  let name ← need "LANES_MEDIA_BUCKET" (doc := "The media bucket.")
+  let discovery ← need "SHELF_OIDC_DISCOVERY" (doc := "The path of the provider's discovery document.")
+  let id ← need "SHELF_OIDC_CLIENT_ID" (doc := "The client registered with the provider.")
+  let secret ← secret "SHELF_OIDC_CLIENT_SECRET" (doc := "The client's secret.")
+  let idle_ms ← get "LANES_IDLE_MS" 10000 (doc := "How long an idle connection is kept.")
+  let drain_ms ← get "LANES_DRAIN_MS" 10000
+    (doc := "How long SIGTERM or SIGINT waits for the requests in flight.")
+  return { host, origin, discovery, idle_ms, drain_ms
+           bucket := { name, region, endpoint := S3.Endpoint.aws region }
+           client := { id, secret, redirect := s!"{origin}/sign-in/oidc/callback" } }
+
+/-- The OpenID Connect provider whose discovery document is the file at `path`. -/
+def provider (path : String) : IO OAuth.Provider := do
   let some d := OAuth.Discovery.read (← IO.FS.readFile path)
     | throw (IO.userError s!"shelf: {path} is not a discovery document")
-  let id ← need "SHELF_OIDC_CLIENT_ID"
-  let secret ← need "SHELF_OIDC_CLIENT_SECRET"
-  return (d.provider "oidc",
-    { id, secret := ⟨secret⟩, redirect := s!"{origin}/sign-in/oidc/callback" })
-
-def ms (name : String) (default : Nat) : IO Nat := do
-  let some text ← IO.getEnv name | return default
-  let some n := text.toNat? | throw (IO.userError s!"shelf: {name} is not a number: {text}")
-  return n
+  return d.provider "oidc"
 
 def main (args : List String) : IO UInt32 := do
   let port := (args[0]? >>= String.toNat?).getD 8080
+  let d ← Environment.load (setup port) "shelf"
   let key ← loadKey ((args[1]?.map System.FilePath.mk).getD "shelf.secrets")
-  let origin := ((← IO.getEnv "LANES_URL").filter (!·.isEmpty)).getD s!"http://localhost:{port}"
-  let region := ((← IO.getEnv "AWS_REGION").filter (!·.isEmpty)).getD "us-east-1"
-  let bucket : S3.Bucket :=
-    { name := ← need "LANES_MEDIA_BUCKET", region, endpoint := S3.Endpoint.aws region }
   let some creds ← S3.credentialsFromEnv
     | throw (IO.userError "shelf: AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are not set")
-  let host := (← IO.getEnv "LANES_HOST").getD "127.0.0.1"
-  let settings : Settings := { keys := .of (.of key), origin, bucket, creds, providers := ["oidc"] }
+  let settings : Settings :=
+    { keys := .of (.of key), origin := d.origin, bucket := d.bucket, creds, providers := ["oidc"] }
   let postgres ← Postgres.Client.fromEnv
   let problems ← (Postgres.Typed.prepare postgres schema
     (← Postgres.Typed.readMigrations "migrations")).block
@@ -65,12 +73,12 @@ def main (args : List String) : IO UInt32 := do
     { pool := ← Postgres.Pool.new postgres, handler := handler {} }
   let server ← (start {
     settings
-    server := { host, port := port.toUInt16
-                idle_ms := ← ms "LANES_IDLE_MS" 10000
+    server := { host := d.host, port := port.toUInt16, idle_ms := d.idle_ms
                 ops := { readinessPath := some "/readyz", livenessPath := some "/healthz"
                          metricsPath := some "/metrics", accessLog := .stderr } }
-    signIn := { providers := [← provider origin], secure := settings.secure } } store.call).block
-  IO.println s!"shelf listening on http://{host}:{server.port.getD 0}"
+    signIn := { providers := [(← provider d.discovery, d.client)], secure := settings.secure } }
+      store.call).block
+  IO.println s!"shelf listening on http://{d.host}:{server.port.getD 0}"
   (← IO.getStdout).flush
-  Lanes.block (server.stopOnSignal (← ms "LANES_DRAIN_MS" 10000))
+  Lanes.block (server.stopOnSignal d.drain_ms)
   return 0
