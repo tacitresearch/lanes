@@ -1,11 +1,12 @@
 # Working on Lanes
 
-Lanes is a framework for verified software in Lean 4: actors with pure step functions, one
-semantics, a proved runtime kernel, a model checker, proofs, and adapters. This file is the rules,
+Lanes is a runtime and library for building software in Lean 4: actors with pure step
+functions, one semantics, a proved runtime kernel, a model checker, proofs, models of what a
+program talks to, and the library applications need. This file is the rules,
 for agents and for people. `README.md` is the front door; `docs/ARCHITECTURE.md` says how the
 pieces fit and, area by area, what is claimed with its evidence and the limits of the design;
 `docs/decisions/` says why, and `TRUSTED.md` what is trusted. The work, and what is known to be
-missing, are GitHub issues (the direction is issue #93; fixable limits are labelled
+missing, are GitHub issues (the direction is D110 and issue #239; fixable limits are labelled
 `known-limit`).
 
 Rules carry numbers (rule 2.6) because code, decisions and reviews cite them. Never renumber; a
@@ -157,6 +158,17 @@ size.
 
 1.7 **One concept, one name**, in code, specs and docs; names state units and bounds
 (`timeout_ms`, `maxBatch`).
+
+1.8 **Decide what belongs from first principles, not from our examples.** Lanes is a runtime and
+library people use to build software in Lean, so a piece is judged by what it gives them, not by
+whether our own examples happen to use it. For any piece, whether added, kept or removed, weigh:
+reach (would people building software in Lean want it, and what could they build with it that
+they cannot today?), cost (code, proofs, trusted lines, and concepts a newcomer must learn) and
+coupling (does it stand alone as a library piece, or does it force a design choice on the core?).
+A general piece whose reach is worth its cost stays even if no example uses it; a piece that pulls
+its design into everything else goes even if it works. Say how you weighed these in the PR when you
+add or remove something. *Why:* a library is used for things its authors did not build, and the
+journal showed that a feature can be finished, proved and still not worth its cost (D110).
 
 2.1 **Make illegal states unrepresentable.** A role is a sum type that carries its own data, not
 flags in a record; bounds are subtypes and `Fin`. *Why:* a state the type rules out is an
