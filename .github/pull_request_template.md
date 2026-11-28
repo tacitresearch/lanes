@@ -1,3 +1,6 @@
+Fixes #n
+<!-- First line: "Fixes #n" or "Part of #n" (CONTRIBUTING.md). GitHub closes the issue when a PR that says "Fixes" merges. -->
+
 ## What and why
 
 <!-- One paragraph. Cite the rules of AGENTS.md that shaped a choice ("rule 2.6"). -->

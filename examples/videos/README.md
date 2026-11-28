@@ -64,6 +64,10 @@ lake exe videosWaves           # how wide the waves of the journal are, as it ru
   and the thumbnail, tried up to ten times over about ten minutes, and cancels the start of a
   round under way; one given up on, or refused because the scheduler is full, is
   logged (`Out.orphan`).
+- **Reads.** The feed, a watch page and a channel page change nothing (`Web.read?`). `Web.view`
+  answers them from the site's state, read at the end of a batch of the shard
+  (`Lanes.Http.View`, `docs/decisions/D108-reads-from-state.md`): they take no entry in the journal
+  and no step, and wait at most `ServerConfig.reads`' deadline for the read, then get `504`.
 - **Pages** are server-rendered with Lanes' templates. Every form that changes something carries
   a token bound to the session (`Auth.formToken`) and must come from the site's origin; the style
   sheet and the script are served by the bridge, since templates refuse inline code.
@@ -90,6 +94,7 @@ model-checked (`Videos/Check.lean`).
 | The scheduler holds at most `maxJobs` jobs and no key twice: one delete of an object at a time | `Videos.jobs_bounded` |
 | Every job ends, whatever the store and the worker do: in a fair run in which the scheduler does not crash, a check, a last check, the start of a transcode or a delete held stops being held | `Videos.job_ends` |
 | A delete answered schedules the delete of the object, and its end is reported as given up exactly when the scheduler gave it up | `Videos.Site.delete_schedules`, `Videos.Site.delete_reported` |
+| A read answered from the state is what the system answers the same request with: the bridge decodes the feed, a watch or a channel page as an input that leaves the site as it was, and encodes its one output as the view's response from that site; with the peek at a batch boundary (`Lanes.Batch.run_peeks`), it is the answer the request would get as the next entry there | `Videos.Web.view_answers` |
 
 `listed_confirmed`, `listed_transcoded`, `report_names`, `deleted_never_served`, `Gone.run` and
 `shows_handle` are about runs of the spec's functions, `Site.handle` and `Site.recover`, which is what the actor runs; the others

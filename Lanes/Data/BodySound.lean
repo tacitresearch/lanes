@@ -475,6 +475,10 @@ theorem read_write {limits : Limits} {s : Schema} {v : Value} {bytes : ByteArray
     · cases h
   · cases h
 
+theorem readAny_writeAny {limits : Limits} {v : Value} {bytes : ByteArray}
+    (h : writeAny limits v = .ok bytes) : readAny limits bytes = .ok v := by
+  simp only [readAny, read_write h]
+
 /-! Each value has one body: what is read is what the writer writes for the value read. -/
 
 theorem toUInt8_toNat (b : UInt8) : b.toNat.toUInt8 = b := by

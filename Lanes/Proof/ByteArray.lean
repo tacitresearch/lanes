@@ -67,6 +67,26 @@ theorem getElem?_append_front (pre bytes : ByteArray) (i : Nat) :
   have : pre.data.size = pre.size := rfl
   omega
 
+theorem getElem?_append_left {a : ByteArray} (b : ByteArray) {i : Nat} (h : i < a.size) :
+    (a ++ b)[i]? = a[i]? := by
+  rw [getElem?_pos (a ++ b) i (by rw [ByteArray.size_append]; omega), getElem?_pos a i h,
+    ByteArray.getElem_append_left h]
+
+theorem getElem?_extract (bytes : ByteArray) (i j k : Nat) :
+    (bytes.extract i j)[k]? = if i + k < j then bytes[i + k]? else none := by
+  by_cases h : k < (bytes.extract i j).size
+  · have h' := h
+    rw [ByteArray.size_extract] at h'
+    rw [getElem?_pos (bytes.extract i j) k h, ByteArray.getElem_extract,
+      getElem?_pos bytes (i + k) (by omega)]
+    simp only [show i + k < j by omega, ↓reduceIte]
+  · rw [ByteArray.size_extract] at h
+    rw [getElem?_neg _ _ (by rw [ByteArray.size_extract]; omega)]
+    by_cases hk : i + k < j
+    · simp only [hk, ↓reduceIte]
+      rw [getElem?_neg _ _ (by omega)]
+    · simp [hk]
+
 theorem getElem_of_getElem? {bytes : ByteArray} {q : Nat} {b : UInt8}
     (h : bytes[q]? = some b) : ∃ hq : q < bytes.size, bytes[q] = b := by
   by_cases hq : q < bytes.size

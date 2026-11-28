@@ -20,7 +20,9 @@ whose package is not its directory's. They move into their packages' directories
 change to this table's packages. `scripts/layers.py` reads this file to plan those moves.
 
 The runtime requires the standard library because the courier authenticates every connection
-with HMAC-SHA-256 (`Lanes/Net/Handshake.lean`).
+with HMAC-SHA-256 (`Lanes/Net/Handshake.lean`). The framing of a file and a link
+(`Lanes/Durable/Frame.lean`) is in the standard library, not the model as D99 has it, because
+its checksum is SHA-256 (`Lanes/Lib/Crypto/Native.lean`).
 -/
 
 namespace Lanes.Cli.Layers
@@ -71,7 +73,6 @@ def Package.mayImport (p q : Package) : Bool :=
 prefix that a path starts with gives the package. -/
 def homes : List (String × Package) := [
   ("Lanes/Data/", .model),
-  ("Lanes/Durable/Frame.lean", .model),
   ("Lanes/Proof/List/", .model),
   ("Lanes/Proof/List.lean", .model),
   ("Lanes/Proof/Utf8.lean", .model),
@@ -88,6 +89,7 @@ def homes : List (String × Package) := [
   ("Lanes/Outside/", .actors),
   ("Lanes/Semantics/", .actors),
   ("Lanes/Lib/", .std),
+  ("Lanes/Durable/Frame.lean", .std),
   ("Lanes/Web/IO/Tls.lean", .std),
   ("Lanes/Runtime/", .runtime),
   ("Lanes/Net/", .runtime),

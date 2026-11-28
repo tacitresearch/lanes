@@ -405,6 +405,15 @@ def sharedCacheTests : List (String × Bool) :=
   [ ("shared cache: no reply, and no answer the bridge gives itself, may be kept and given to "
       ++ "another viewer", Http.SharedCache.leaks (encoded ++ direct) == []) ]
 
+/-- How many requests the journal at `path` holds, and how many of them are reads. -/
+def journalled (d : Deployment) (path : System.FilePath) : IO (Nat × Nat) := do
+  let log ← openLog d path
+  let requests := log.past.filterMap fun
+    | .input (.inl (_, r)) => some r
+    | _ => none
+  log.close
+  return (requests.length, (requests.filter fun r => (read? r).isSome).length)
+
 /-- The flow against the fake S3 and the provider, both run here. -/
 def run : IO (List (String × Bool)) := do
   let journal ← scratch
@@ -416,10 +425,12 @@ def run : IO (List (String × Bool)) := do
       let d := deployment store.bucket creds provider worker journal
       let results ← flow d provider worker (fun key => store.holds key) (store.refuse 1)
         (return (← store.refusing) == 0)
+      let (entered, reads) ← journalled d journal
       worker.stop
       store.stop
       provider.stop
-      return results : Async _).block
+      return results ++ [("videos: the feed, the watch pages and the channel pages are answered "
+        ++ "from the state, and none is journalled", 0 < entered && reads == 0)] : Async _).block
   finally
     remove journal
 

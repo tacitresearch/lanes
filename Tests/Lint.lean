@@ -177,7 +177,7 @@ def layerTests (root : System.FilePath) : IO (List (String × Bool)) := do
         && !Layers.Package.std.mayImport .actors && !Layers.Package.runtime.mayImport .durable
         && Layers.Package.all.all fun p => p.mayImport p),
     ("Layers.home?: the longest prefix wins",
-      Layers.home? "Lanes/Durable/Frame.lean" == some .model
+      Layers.home? "Lanes/Durable/Frame.lean" == some .std
         && Layers.home? "Lanes/Durable/Journal.lean" == some .durable
         && Layers.home? "Lanes/Lib/Postgres/Conn.lean" == some .postgres
         && Layers.home? "Tests/Main.lean" == none),

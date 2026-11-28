@@ -19,11 +19,14 @@ import Lanes.Semantics
 /-- info: 'Lanes.Batch.run_sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Batch.run_sound
 
-/-- info: 'Lanes.Batch.run_peek' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Batch.run_peek
+/-- info: 'Lanes.Batch.run_erase_peeks' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.run_erase_peeks
 
-/-- info: 'Lanes.Batch.settle_kernel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Batch.settle_kernel
+/-- info: 'Lanes.Batch.run_peeks' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.run_peeks
+
+/-- info: 'Lanes.Batch.Peek.get_of' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.Peek.get_of
 
 /-- info: 'Lanes.Batch.run_resolved' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Batch.run_resolved
@@ -190,6 +193,19 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Mailbox.after_close' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Mailbox.after_close
+
+-- Lanes.Runtime.PeekSound
+/-- info: 'Lanes.Batch.chain_sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.chain_sound
+
+/-- info: 'Lanes.Batch.chain_peek' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.chain_peek
+
+/-- info: 'Lanes.Batch.Sound.handed_prefix' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.Sound.handed_prefix
+
+/-- info: 'Lanes.Batch.chain_peek_after' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.chain_peek_after
 
 -- Lanes.Runtime.Release
 /-- info: 'Lanes.Event.filterMap_eq_of_awake' depends on axioms: [propext, Classical.choice, Quot.sound] -/

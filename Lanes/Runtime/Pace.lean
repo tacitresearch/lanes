@@ -196,7 +196,7 @@ def observe (c : Config) (workers : Nat) (p : Pace) (spread : Kernel.Spread)
 
 /-- The units of work in a batch: the messages delivered, the timers fired, the actors
 started. -/
-def work {σ : Signature} {sys : System σ} {P : σ.Id → Type} (acts : Array (Batch.Act sys P)) :
+def work {σ : Signature} {sys : System σ} {P : List σ.Id → Type} (acts : Array (Batch.Act sys P)) :
     Nat :=
   acts.foldl (init := 0) fun
     | n, .record events => events.foldl (init := n) fun

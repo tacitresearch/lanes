@@ -33,12 +33,12 @@ proved function tells it to.
 | Actors and systems | `Lanes/Core/{Actor,System,World,Step,Run}.lean` | the definition everything else is about |
 | Proof tools for systems | `Lanes/Proof/{Lift,Ghost,Monotone,Equiv,Deed}.lean` | `System.invariant_of_actor`, `Inductive.of_monotone`, `System.Invariant.of_ghost` |
 | The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers,Wave}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed`, `Kernel.runWaves_eq` |
-| The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,Mailbox,MailboxSound,Pace}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Batch.run_spread`, `Mailbox.batch_since_take`; the shell itself is trusted |
+| The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,PeekSound,Mailbox,MailboxSound,Pace}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Batch.run_spread`, `Batch.run_erase_peeks`, `Batch.chain_peek_after`, `Mailbox.batch_since_take`; the shell itself is trusted |
 | Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame,Reading}.lean`, `Lanes/Runtime/Log.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash`, `Journal.Disk.Torn.load_readings` |
 | Migrations | `Lanes/Durable/{Migration,Upgrade}.lean` | `Migration.inv_exec`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.holds`, `Journal.Upgrade.inv_load` |
 | Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left`, `System.Run.Fair.right` |
 | Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound,Handshake,HandshakeSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent`, `Peers.Handshake.Reachable.ready_proved` |
-| The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Admit,AdmitSound,Waiting,Conn,ConnSound,Stream,Sse,SseSound,Loopback}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Front.World.refines`, `Http.Front.pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes`, `Http.Conn.read_streamed`, `Http.Sse.parse_written` |
+| The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Admit,AdmitSound,View,Waiting,Conn,ConnSound,Stream,Sse,SseSound,Loopback}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Front.World.refines`, `Http.Front.pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes`, `Http.Conn.read_streamed`, `Http.Sse.parse_written` |
 | Metrics, health and the access log | `Lanes/Lib/Metrics.lean`, `Lanes/Web/Http/{Ops,OpsSound}.lean`, `Lanes/Web/IO/Ops.lean` | `Metrics.Histogram.observeAll_eq`, `Metrics.readLabelValue_escapeLabel`, `Http.Ops.route?_default`, `Http.Ops.route?_metrics`, `Http.Ops.answer_ready`, `Http.Ops.Access.parse_line`; that none of it reaches a system is trusted and tested |
 | Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/{Clock,IO/Clock}.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
 | Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events,ObjectStore,Multipart,Queue,Cache,Clock,Throttle}.lean`, `Lanes/Outside/Effects/`, `Lanes/Web/Http/SharedCache.lean`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `ObjectStore.read_sent`, `ObjectStore.held_sent`, `Multipart.read_listed`, `Queue.received_le`, `Cache.read_sent`, `Clock.wall_back_le`, `Throttle.wait_le`, `SharedCache.serve_storable`, `SharedCache.serve_of_leaks`, `System.Emits.outputs`; that a real service conforms is trusted |
@@ -129,7 +129,13 @@ a pure function that returns the kernel after the batch and a list of acts: appe
 entries, hand over these outputs, save this image, answer this peek. The shell performs the acts
 in order and decides nothing. Proved: the journal describes the kernel (`Batch.run_kernel`); an
 output is handed over only after the entries that produce it are appended, and a save falls
-only where every output is handed over (`Batch.run_sound`); a take returns exactly what went in
+only where every output is handed over (`Batch.run_sound`); a peek, which reads the states of a
+list of actors, is answered at the end of its batch after every other act, with the states of
+the kernel the batch's journal describes (`Batch.run_peeks`), and a batch with its peeks taken
+out is the same batch (`Batch.run_erase_peeks`), so reads leave no trace in the journal; over
+the whole history, a peek asked after an output was handed over sees a world the semantics
+reaches by a run that put that output out first (`Batch.chain_peek_after`,
+`Lanes/Runtime/PeekSound.lean`); a take returns exactly what went in
 since the last, in order, and the inbox never holds more than its capacity
 (`Mailbox.batch_since_take`, `Mailbox.Reachable.bounded`). Trusted: that the shell performs the
 acts as given (`TRUSTED.md`, the first row).
@@ -203,6 +209,16 @@ which the runtime needs without a journal: recovery rebuilds exactly the kernel 
 lead to (`Journal.recover_kernel`), and hands over again exactly what was produced after the last mark
 (`Journal.recover_handed`).
 
+The files are in format 2 (`Lanes/Durable/Format.lean`, D97): each begins with a header, a
+manifest (the format, the Lanes and Lean that wrote it, the application's label, the runtime and
+its policy, the digest of the schema) and the schema of what follows, then holds one body per entry
+in a frame whose checksum is the first 128 bits of SHA-256. A reader matches the file's schema with
+its own by name (`Schema.Plan.of`), so a journal written with an older schema of the inputs opens,
+and a start writes it again with its own (`Disk.mend`). A prelude written for a system and a schema
+is accepted by a reader of the same with no plan (`Journal.Prelude.check_frames`); a file of
+format 1 is refused as such (`Refusal.format`), and no cut of a format-2 file looks like one
+(`Journal.Kind.formerly_cut`).
+
 Each output carries an id: its journal's, made at random when the journal is begun, and its
 origin, the place in the history of the entry that produced it and its place among that entry's
 outputs (`docs/decisions/D105-output-ids.md`). A batch hands an output over with the origin its
@@ -274,17 +290,21 @@ Where: `Lanes/Durable/`, `Lanes/Runtime/Log.lean`, `Lanes/Durable/IO/Journal.lea
 | Recovery rebuilds the kernel the journal describes; a snapshot gives what a full replay gives | `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Lanes/Runtime/Log.lean`; gate `Tests/Axioms/Runtime.lean` | None | proved |
 | A process that dies anywhere in an append or a save leaves files that load as the kernel it had | `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.save_crash`, `Journal.Disk.Torn.mend`, `Lanes/Durable/Disk.lean`; gate `Tests/Axioms/Durable.lean`; a child killed with SIGKILL while it works, `Tests/Durable.lean` | The file system behaves as the model: flushed bytes stay, a torn append leaves a prefix, a rename is atomic | proved over a model; the model trusted; tested |
 | A start whose read of the journal or the snapshot fails refuses, and one whose reads do not loads the kernel the shard had: a read error never loses committed entries | `Journal.Disk.Torn.load_readings`, `Journal.Disk.ofReadings_eq`, `Lanes/Durable/Reading.lean`; gate `Tests/Axioms/Durable.lean`; a journal that is a link to itself refused and left as it was, `Tests/Durable.lean` | A read that fails says so, and only "no such file" is read as a file not there (`Lanes/Durable/IO/Journal.lean`, trusted) | proved over a model; tested |
-| A start on the files of an older version replays them as that version did, migrates the kernel, and dying anywhere in the migration's writes gives the same migrated kernel at the next start | `Journal.Upgrade.begin_torn`, `Journal.Upgrade.begin_crash`, `Lanes/Durable/Upgrade.lean`; gate `Tests/Axioms/Durable.lean`; `examples/migration/Check.lean` (version 1 stopped, version 2 started on its files, a migration cut after its first write) | The old shard started at boot and its journal has its header; the old and new labels differ; the store reads the old label with the old system's codecs; the file system behaves as the model | proved over a model; tested |
+| A start on the files of an older version replays them as that version did, migrates the kernel, and dying anywhere in the migration's writes gives the same migrated kernel at the next start | `Journal.Upgrade.begin_torn`, `Journal.Upgrade.begin_crash`, `Lanes/Durable/Upgrade.lean`; gate `Tests/Axioms/Durable.lean`; `examples/migration/Check.lean` (version 1 stopped, version 2 started on its files, a migration cut after its first write) | The old shard started at boot and its journal has its prelude; the old and new labels differ; the store reads the old label with the old system's codecs; the file system behaves as the model | proved over a model; tested |
 | After a migration the files are those of a running shard that started from the migrated kernel, so every crash theorem goes on | `Journal.Upgrade.holds`, with `Journal.Disk.Holds` and `Journal.Disk.Torn` taking the kernel a history starts from; gate `Tests/Axioms/Durable.lean` | The mark and the migrated snapshot fit in a frame | proved over a model |
 | Across a migration, an invariant of each new actor that its own steps keep, and that every state an old actor reaches migrates into, holds of every actor in every state the new shard reaches and at every later start | `Migration.inv_exec`, `Kernel.exec_inductive`, `Journal.Upgrade.inv_load`; gate `Tests/Axioms/Durable.lean`, `Tests/Axioms/Runtime.lean`; `Quota.within_quota`, `Quota.within_quota_at_start`, gate `examples/migration/Quota/Axioms.lean` | The application proves `Migration.keeps` and `Migration.lands`; for `inv_load`, the old shard started at boot. Invariants proved only from boot and refinement to the spec are not carried | proved |
-| Every existing journal reads as before: an unversioned header is version 0 | `Journal.label_zero`; `ledgerLive`, `rookeryLive`, `raftLive`, `raftProcs` replay their journals (CI) | None | proved; tested |
+| A label of version 0 is the system's name alone | `Journal.label_zero`; `ledgerLive`, `rookeryLive`, `raftLive`, `raftProcs` replay their journals (CI) | None | proved; tested |
+| A file is in format 2: a header, a manifest and the schema, then one body per entry; a prelude written for a system and a schema is accepted by a reader of the same with no plan, and refused by a reader of another system as that system's | `Journal.Prelude.check_frames`, `Journal.Prelude.check_other`, `Journal.Prelude.named?_frames`, `Lanes/Durable/Format.lean`; gate `Tests/Axioms/Durable.lean`; `Tests/Format.lean` | The manifest and the schema fit their bounds and a frame (`Journal.preludeFits`) | proved; tested |
+| A file of format 1 is refused as format 1, never read as something else, and no cut of a format-2 file looks like one | `Journal.Kind.formerly_cut`, `Journal.open?`; gate `Tests/Axioms/Durable.lean`; format-1 journals and a snapshot built byte by byte, refused, `Tests/Format.lean` | None | proved; tested |
+| A journal written with an older schema of its inputs opens through matching by name, and a start writes it again with its own schema before it appends | `Journal.open?`, `Disk.mend`; `Tests/Format.lean` (an argument added with a default, a constructor inserted; a field with no default refused at the prelude, naming it); the rules of matching, `Lanes/Data/MatchSound.lean` | The disk theorems are of files written with the reader's own schema | proved for the same schema; tested for older ones |
 | Every journal append is synced before the next, so a loss of power leaves what a death would | `Lanes/Durable/IO/Journal.lean` (`append` flushes and calls `fsync`, `native/lanes.c`) | `fsync` and the disk do what they promise | trusted |
 | Every segment the shipper puts holds the history's entries at the positions its key names; a restore at a point starts with the kernel the local journal had after that many entries, and hands nothing over | `Journal.Ship.Holds.put`, `Journal.Restore.journal_restores`, `Lanes/Durable/{Ship,Restore}.lean`; gate `Tests/Axioms/Durable.lean`; `Tests/Ship.lean`, against the fake S3; through `S3.backup` against moto, `oracles/moto/s3-backup.jsonl` | The object store keeps what it answered put; the thread that puts performs what `Ship` decides (`Lanes/Durable/IO/Ship.lean`, TRUSTED) | proved; the IO trusted, tested |
 
 Also:
 
-- A journal that is damaged, another system's, or written with another codec is refused and
-  left as it is (`Journal.open?`), and one process at a time holds a journal.
+- A journal that is damaged, another system's, of another format or runtime policy, or holding
+  inputs its reader's types cannot read is refused and left as it is (`Journal.open?`), and one
+  process at a time holds a journal.
 - A shard with codecs for its actors saves its kernel and cuts the journal, so a restart
   replays only what came after the last save; tested by killing a process while it saves.
 
@@ -390,6 +410,19 @@ than it arrived (`Http.Front.run_answered_le`), its waiting list stays within `m
 (`Http.Front.run_bounded`), and every waiting request is answered if every deadline that stays
 armed is passed to it (`Http.Front.pending_answered`).
 
+A request that changes nothing can be answered from the state (`Lanes/Web/Http/View.lean`, the
+decision "Reads from the state"). The application gives `serve` a `view` beside its bridge: for a
+request it names, the actors it reads and its response from their states. Such a read never
+enters the system. It waits behind a gate of its own, `Gate.step` over `readSig`
+(`ServerConfig.reads`: its own deadline and bound), for a peek of those actors at the end of the
+shard's next batch (`Runtime.tryPeek`), and is answered from their states off the shard's thread,
+or `504` at its deadline. So it reads every actor it names at one boundary between entries, sees
+every entry before it and none after (`Batch.run_peeks`), and leaves the journal, the outputs and
+their ids as they would be without it (`Batch.run_erase_peeks`). That a view answers what the
+request would if it entered is the application's claim, proved of its views
+(`Videos.Web.view_answers` in `examples/videos`). `Http.Front.World` does not model reads: that
+the server does what the gate of reads decides is trusted, as for the gate.
+
 Proved of `served sys` for every system, bridge and configuration: no request is answered more
 often than it arrived where the link from outside to the gate does not duplicate
 (`Http.served_answered_le_arrived`), a waiting request keeps its deadline armed
@@ -412,7 +445,7 @@ from a full inbox leaves the gate's state as it was; it reads the shard's output
 (`Gate.receive`), and the server's ticker hands it each deadline that passes, which it answers
 `504` (`docs/decisions/D106-gate-before-shard.md`). The journal holds only what the gate
 admitted, so a replay reads none of the gate's settings. It answers
-`503` itself when the inbox is full and `405` for a method an application cannot handle. With `ServerConfig.ioThreads`
+`503` itself when the inbox is full and `501` for a method it does not know (#171). With `ServerConfig.ioThreads`
 above zero (four by default), the connections run on that many threads of the server's own, each on one for its
 whole life; Lean has one libuv loop a process, which every read and write still goes through. `Http.serveFronted` serves
 `admittedFronted sys`, whose other inputs and outputs pass the gate by, and `Http.serveShard`
@@ -1019,7 +1052,8 @@ with its schema, which holds every name, so the bytes hold none, and reads it ba
 `Codec.Limits` (`docs/decisions/D97-data-format.md`). Data written under an older schema is
 read by name (`Lanes/Data/Match.lean`): `Schema.Plan.of` matches the writer's schema with the
 reader's once, refusing what cannot be read with a `Codec.Error` that names it, and
-`Body.decodeWith` reads each value through the plan. The journal does not use either yet. The
+`Body.decodeWith` reads each value through the plan. The journal and the snapshot use both, in
+format 2 of the files (Journal, snapshots and the disk model). The
 standard library is in `Lanes/Lib/`: encodings, addresses and URLs, time, media types,
 metrics, rate limits, the PostgreSQL protocol (below) and cryptography, with the C it binds
 (Bound C). All of it is total and `Std`-only. A parser or encoder is proved against its
@@ -1051,7 +1085,7 @@ Also:
 - SHA-256, HMAC-SHA-256, the comparison of byte strings, and Argon2id from OpenSSL's libcrypto (`Native`, bound from `native/lanes.c`), random bytes from its `RAND_bytes` (`Lanes.randomBytes`), with SHA-256, HMAC-SHA-256 and the comparison also in pure Lean as references, both tested against the NIST and RFC 4231 vectors and compared on thousands of random inputs (`Bytes.same_iff`, `Bytes.unhex?_hex` proved).
 - The token bucket of x/time/rate with exact arithmetic (`RateLimit.allowed_le`: at most `burst + rate · w` in a window of `w`; `RateLimit.allow_after_reserve`), compared with Go's on generated cases.
 - URI references (RFC 3986: `Url.parse_print`, resolution as §5.2 with §5.4's examples evaluated and no dot segment left, `Url.dotFree_resolve`, idempotent normalization, `Url.normalize_normalize`), compared with Go's standard library on generated cases.
-- `Frame` (length and checksum framing with the torn-write theorem).
+- `Frame` (length and checksum framing with the torn-write theorem); the checksum is the first 128 bits of SHA-256, and FNV-1a is no longer used.
 - `lanes_data` (a structure or an inductive type declared once, deriving `Codable`, `Enum` and a field-by-field `LawfulBEq` from the declaration's text, without linking `Lean`).
 
 ### Limits
@@ -1133,8 +1167,9 @@ it (`lanes journal schema`, `LanesCli/Journal.lean`). Lint's rule `layering` kee
 of `Lanes/` from importing a package above its own: `LanesCli/Layers.lean` gives the packages of
 `docs/decisions/D99-layered-packages.md`, what each requires, and each file's package by the
 longest prefix of its path. The runtime requires std, for the HMAC of the courier's handshake
-(`Lanes/Net/Handshake.lean`). CI (`.github/`) runs the build with warnings as errors, lint, the
-tests, the model checks, the differential tests against the oracles, the examples and a
+(`Lanes/Net/Handshake.lean`), and the framing of files and links (`Lanes/Durable/Frame.lean`) is
+in std, for its SHA-256 checksum. CI (`.github/`) runs the build with warnings as errors, lint,
+the tests, the model checks, the differential tests against the oracles, the examples and a
 generated app on every pull request, and the build and tests on macOS; a pull request that
 changes only documentation is built and linted only. Model checks run at small bounds on a pull
 request and at large bounds nightly (`.github/workflows/large.yml`).

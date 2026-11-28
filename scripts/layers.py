@@ -36,7 +36,7 @@ REQUIRES, PACKAGES = read_layers()
 # Each file's path inside its package: a path prefix today and the path it becomes. The longest
 # prefix wins; a path that no prefix names keeps its path.
 MOVES = [
-    ("Lanes/Durable/Frame.lean", "Lanes/Data/Frame.lean"),
+    ("Lanes/Durable/Frame.lean", "Lanes/Lib/Frame.lean"),
     ("Lanes/Durable/OutputId.lean", "Lanes/Runtime/OutputId.lean"),
     ("Lanes/Net/", "Lanes/Peers/"),
     ("Lanes/Outside/IO/Clock.lean", "Lanes/Runtime/IO/Clock.lean"),

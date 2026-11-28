@@ -46,6 +46,19 @@ import Lanes.Semantics
 /-- info: 'Lanes.Journal.Disk.Holds.load_save_crash' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.Disk.Holds.load_save_crash
 
+-- Lanes.Durable.Format
+/-- info: 'Lanes.Journal.Prelude.check_frames' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Prelude.check_frames
+
+/-- info: 'Lanes.Journal.Prelude.check_other' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Prelude.check_other
+
+/-- info: 'Lanes.Journal.Kind.formerly_cut' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Kind.formerly_cut
+
+/-- info: 'Lanes.Journal.Prelude.named?_frames' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.Prelude.named?_frames
+
 -- Lanes.Durable.Frame
 /-- info: 'Lanes.Frame.encode_append' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Frame.encode_append
@@ -69,9 +82,6 @@ import Lanes.Semantics
 #guard_msgs in #print axioms Lanes.Frame.decode_checksum_ne
 
 -- Lanes.Durable.Journal
-/-- info: 'Lanes.Journal.header_inj' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Journal.header_inj
-
 /-- info: 'Lanes.Journal.label_zero' depends on axioms: [propext] -/
 #guard_msgs in #print axioms Lanes.Journal.label_zero
 
@@ -126,8 +136,8 @@ import Lanes.Semantics
 #guard_msgs in #print axioms Lanes.Journal.resumeIds_eq_recoverIds
 
 -- Lanes.Durable.Snapshot
-/-- info: 'Lanes.Journal.savedHeader_inj' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Journal.savedHeader_inj
+/-- info: 'Lanes.Journal.savedOpen?_saved' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Journal.savedOpen?_saved
 
 /-- info: 'Lanes.Journal.saved?_other' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.saved?_other
