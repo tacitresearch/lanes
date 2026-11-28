@@ -500,41 +500,43 @@ them by area.
 | `Codec.Error.Problem.text` | tested | `Tests/Body.lean` |
 | `Codec.Error.pathText` | tested | `Tests/Body.lean` |
 | `Codec.Error.instToString` | tested | `Tests/Body.lean` |
-| `Body.fail` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
-| `Body.within` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
-| `Body.writeNat` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
-| `Body.natBytes` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
-| `Body.zigzag` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
-| `Body.unzigzag` | proved | through `Body.read`: `Body.read_eq_ok_iff` |
-| `Body.writeNum` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
-| `Body.writeBlob` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
-| `Body.writeCount` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
-| `Body.readNatFrom` | proved | through `Body.read`: `Body.read_eq_ok_iff` |
-| `Body.readNat` | proved | through `Body.read`: `Body.read_eq_ok_iff` |
-| `Body.readBlob` | proved | through `Body.read`: `Body.read_eq_ok_iff` |
-| `Body.readCount` | proved | through `Body.read`: `Body.read_eq_ok_iff` |
-| `Body.consumes` | proved | through `Body.read`: `Body.read_eq_ok_iff` |
-| `Body.consumesFields` | proved | through `Body.read`: `Body.read_eq_ok_iff` |
-| `Body.Tag.nat` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
-| `Body.Tag.int` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
-| `Body.Tag.string` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
-| `Body.Tag.bytes` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
-| `Body.Tag.list` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
-| `Body.Tag.ctor` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
-| `Body.writeAt` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
+| `Body.fail` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.within` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.writeNat` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.natBytes` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.zigzag` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.unzigzag` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.writeNum` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.writeBlob` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.writeCount` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.readNatFrom` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.readNat` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.readBlob` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.readCount` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.consumes` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.consumesFields` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.Tag.nat` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.Tag.int` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.Tag.string` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.Tag.bytes` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.Tag.list` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.Tag.ctor` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.writeAt` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
 | `Body.writeFields` | spec | used only in statements |
 | `Body.writeItems` | spec | used only in statements |
 | `Body.writeEntries` | spec | used only in statements |
-| `Body.writeTagged` | proved | through `Body.write`: `Body.read_eq_ok_iff` |
+| `Body.writeTagged` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
 | `Body.writeTaggedItems` | spec | used only in statements |
-| `Body.readAt` | proved | through `Body.read`: `Body.read_eq_ok_iff` |
+| `Body.readAt` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
 | `Body.readFields` | spec | used only in statements |
 | `Body.readItems` | spec | used only in statements |
 | `Body.readEntries` | spec | used only in statements |
-| `Body.readTagged` | proved | through `Body.read`: `Body.read_eq_ok_iff` |
+| `Body.readTagged` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
 | `Body.readTaggedItems` | spec | used only in statements |
-| `Body.write` | proved | `Body.read_eq_ok_iff` |
+| `Body.write` | proved | `Body.encode_decode`, `Body.read_eq_ok_iff` |
 | `Body.read` | proved | `Body.read_eq_ok_iff` |
+| `Body.encode` | proved | `Body.decode_encode` |
+| `Body.decode` | proved | `Body.decode_encode`, `Body.encode_decode` |
 
 ## `Lanes/Data/Codec.lean`
 

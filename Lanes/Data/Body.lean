@@ -52,6 +52,7 @@ inductive Error.Step where
   | item (index : Nat)
   deriving Repr, DecidableEq, Inhabited
 
+/-- What is wrong where an error is. -/
 inductive Error.Problem where
   /-- The bytes end inside a value. -/
   | ended
@@ -63,6 +64,7 @@ inductive Error.Problem where
   | overrun (count left : Nat)
   /-- A constructor's index past the schema's constructors. -/
   | index (found count : Nat)
+  /-- A string whose bytes are not UTF-8. -/
   | utf8
   /-- A tag of a value written with tags that is none of them. -/
   | tag (found : Nat)
@@ -70,6 +72,8 @@ inductive Error.Problem where
   | trailing (count : Nat)
   /-- The writer was given a value that does not fit the schema. -/
   | misfit
+  /-- A value that fits the schema but that its type does not take, such as `5` for a `Fin 3`. -/
+  | refused
   deriving Repr, DecidableEq, Inhabited
 
 /-- An error of the body: the byte where it is, the path to it, outermost first, and what. -/
@@ -96,6 +100,7 @@ def Problem.text : Problem → String
   | .tag found => s!"tag {found}, which no value has"
   | .trailing count => s!"{count} bytes after the value"
   | .misfit => "a value that does not fit its schema"
+  | .refused => "a value its type does not take"
 
 /-- The path as text: `Shape.circle.centre / Point.x`, a type inside another after a slash. -/
 def pathText (path : List Step) : String :=
@@ -521,6 +526,26 @@ def read (limits : Limits) (s : Schema) (bytes : ByteArray) : Except Error Value
     match readAt limits bytes limits.maxDepth s 0 with
     | .ok (v, stop) => if stop = bytes.size then .ok v else fail stop (.trailing (bytes.size - stop))
     | .error e => .error e
+
+variable {α : Type}
+
+/-- The bytes of `a`, written with its type's schema. -/
+def encode (limits : Limits) (s : Schema.Of α) (a : α) : Except Error ByteArray :=
+  write limits s.schema (s.toValue a)
+
+/-- The `α` that is all of `bytes`, read with its type's schema. A value that reads but that the
+type does not take is refused at the value's first byte, `0`, under the type's name when it has
+one. -/
+def decode (limits : Limits) (s : Schema.Of α) (bytes : ByteArray) : Except Error α :=
+  match read limits s.schema bytes with
+  | .error e => .error e
+  | .ok v =>
+    match s.ofValue v with
+    | some a => .ok a
+    | none =>
+      match s.schema with
+      | .record type _ _ | .sum type _ _ => within (.type type) (fail 0 .refused)
+      | _ => fail 0 .refused
 
 end Body
 

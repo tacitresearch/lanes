@@ -9,7 +9,7 @@ import Tests.Schema
 each kind of value, values of declared types read back, each limit refused by the reader and by
 the writer with its name, a count larger than the bytes left, errors that name the
 type, the constructor and the field, and, over every short byte string, that whatever reads is
-what the writer writes. The laws are `Body.read_write` and `Body.write_read`; these run the
+what the writer writes; then a type's values through `Body.encode` and `Body.decode`. The laws are `Body.read_write` and `Body.write_read`; these run the
 compiled code. -/
 
 namespace Tests.Body
@@ -44,6 +44,21 @@ def roundTrip {α : Type} [BEq α] (c : Codec α) (a : α) : Bool :=
     | .ok v => v == c.toValue a && c.ofValue v == some a
     | .error _ => false
   | .error _ => false
+
+/-- Encoded with `Body.encode`, then decoded as itself. -/
+def decoded {α : Type} [BEq α] (c : Codec α) (a : α) : Bool :=
+  match Body.encode limits c.toOf a with
+  | .ok bytes =>
+    match Body.decode limits c.toOf bytes with
+    | .ok b => b == a
+    | .error _ => false
+  | .error _ => false
+
+/-- The error of decoding `bytes` as an `α`, or `none` if they decode. -/
+def decodeRefusal {α : Type} (c : Codec α) (bytes : List UInt8) : Option Codec.Error :=
+  match Body.decode limits c.toOf bytes.toByteArray with
+  | .ok _ => none
+  | .error e => some e
 
 /-- Every byte string up to `n` bytes long. -/
 def strings : Nat → List (List UInt8)
@@ -167,6 +182,13 @@ def tests : List (String × Bool) :=
       writeRefusal .nat (.int 0) == some { offset := 0, problem := .misfit }
         && writeRefusal point (.ctor 0 [.int 0])
           == some { offset := 1, path := [.type "Tests.Schema.Point"], problem := .misfit }
-        && writeRefusal shape (.ctor 7 []) == some { offset := 0, problem := .misfit }) ]
+        && writeRefusal shape (.ctor 7 []) == some { offset := 0, problem := .misfit }),
+    ("body: a type's value is encoded and decoded, and a value its type does not take is refused",
+      decoded (Codec.of (Tests.Schema.Shape String)) (.circle ⟨1, -2, none⟩ 3)
+        && decoded (Codec.of (Fin 3)) 2
+        && decodeRefusal (Codec.of (Fin 3)) [5] == some { offset := 0, problem := .refused }
+        && decodeRefusal (Codec.of (Fin 3)) [2] == none
+        && decodeRefusal (Codec.of (Fin 3)) [2, 0]
+          == some { offset := 1, problem := .trailing 1 }) ]
 
 end Tests.Body

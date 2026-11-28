@@ -278,9 +278,11 @@ lanes_data inductive Id (F : Type) where
   names) and a map each way to `Value`, with the law `ofValue (toValue a) = some a`
   (`Lanes/Data/Schema.lean`); `lake exe lanes journal schema --type T` prints it. `Body.write`
   and `Body.read` turn a `Value` into bytes and back with its schema, under `Codec.Limits`, and
-  each value has one body (`Body.read_eq_ok_iff`); the files do not use it yet. Every field's type
-  needs `Codable`: `Nat`, `Int`, `String`, `Bool`, `Unit`, `ByteArray`, `Fin n`, `Option`,
-  `List`, pairs, sums, sigma types, subtypes, `Std.ExtTreeMap`, and types declared this way.
+  each value has one body (`Body.read_eq_ok_iff`); `Body.encode` and `Body.decode` do it for a
+  type, through its `Schema.Of` (`Body.decode_encode`). The files do not use it yet. Every
+  field's type needs `Codable`: `Nat`, `Int`, `String`, `Bool`, `Unit`, `ByteArray`, `Fin n`,
+  `Option`, `List`, pairs, sums, sigma types, subtypes, `Std.ExtTreeMap`, and types declared
+  this way.
 - `Enum` lists every value. `LawfulBEq` compares a structure field by field, for one that holds a
   function on an `Enum` type and so has no `DecidableEq`.
 - Arguments are `(x y : T)` or `(x : T := default)`, fields `x : T` or `x : T := default`,

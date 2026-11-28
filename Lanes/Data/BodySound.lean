@@ -10,6 +10,7 @@ public import Lanes.Proof.ByteArray
 /-!
 The body reads back what it writes (`Body.read_write`), and what reads is what the writer writes
 for the value read (`Body.write_read`), for every schema, value and limits: a value has one body.
+A value of a type reads back as itself (`Body.decode_encode`).
 Each reader is proved with the writer it mirrors (`readAt_writeAt`, `writeAt_readAt`), from any
 bytes before the value and after it.
 -/
@@ -908,5 +909,24 @@ theorem write_read {limits : Limits} {s : Schema} {v : Value} {bytes : ByteArray
 theorem read_eq_ok_iff {limits : Limits} {s : Schema} {v : Value} {bytes : ByteArray} :
     read limits s bytes = .ok v ↔ write limits s v = .ok bytes :=
   ⟨write_read, read_write⟩
+
+/-- A value of a type reads back as itself: the body's law and the type's
+`ofValue (toValue a) = some a`. -/
+theorem decode_encode {α : Type} {limits : Limits} {s : Schema.Of α} {a : α} {bytes : ByteArray}
+    (h : encode limits s a = .ok bytes) : decode limits s bytes = .ok a := by
+  simp only [decode, read_write h, s.ofValue_toValue]
+
+/-- What decodes is the type's reading of a value whose body is all of `bytes`. -/
+theorem encode_decode {α : Type} {limits : Limits} {s : Schema.Of α} {a : α} {bytes : ByteArray}
+    (h : decode limits s bytes = .ok a) :
+    ∃ v, s.ofValue v = some a ∧ write limits s.schema v = .ok bytes := by
+  unfold decode at h
+  split at h
+  · cases h
+  · rename_i v hr
+    split at h
+    · cases h
+      exact ⟨v, by assumption, write_read hr⟩
+    · split at h <;> simp [within, fail] at h
 
 end Lanes.Body
