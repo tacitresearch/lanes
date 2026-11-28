@@ -6,43 +6,6 @@ import Lanes.Semantics
 
 /-! The axiom gate (rule 5.5, see `Tests/Axioms.lean`) for the theorems of `Lanes/Runtime/`. -/
 
--- Lanes.Runtime.Batch
-/-- info: 'Lanes.Batch.group_ins' depends on axioms: [propext, Classical.choice] -/
-#guard_msgs in #print axioms Lanes.Batch.group_ins
-
-/-- info: 'Lanes.Batch.run_kernel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Batch.run_kernel
-
-/-- info: 'Lanes.Batch.run_handed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Batch.run_handed
-
-/-- info: 'Lanes.Batch.run_sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Batch.run_sound
-
-/-- info: 'Lanes.Batch.run_erase_peeks' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Batch.run_erase_peeks
-
-/-- info: 'Lanes.Batch.run_peeks' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Batch.run_peeks
-
-/-- info: 'Lanes.Batch.Peek.get_of' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Batch.Peek.get_of
-
-/-- info: 'Lanes.Batch.run_resolved' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Batch.run_resolved
-
-/-- info: 'Lanes.Batch.run_spread' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Batch.run_spread
-
-/-- info: 'Lanes.Batch.turnAll_eq_exec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Batch.turnAll_eq_exec
-
-/-- info: 'Lanes.Batch.turnAll_spread' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Batch.turnAll_spread
-
-/-- info: 'Lanes.Batch.turn_eq_exec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Batch.turn_eq_exec
-
 -- Lanes.Runtime.KernelSound
 /-- info: 'Lanes.Kernel.exec_inductive' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.exec_inductive
@@ -117,52 +80,15 @@ import Lanes.Semantics
 /-- info: 'Lanes.Kernel.WellFormed.wait_forever' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.WellFormed.wait_forever
 
--- Lanes.Runtime.MailboxSound
-/-- info: 'Lanes.Mailbox.Reachable.sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Mailbox.Reachable.sound
+-- Lanes.Runtime.Peek
+/-- info: 'Lanes.Peek.get_of' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Peek.get_of
 
-/-- info: 'Lanes.Mailbox.Reachable.offer_full_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Mailbox.Reachable.offer_full_iff
+/-- info: 'Lanes.Peek.others_of' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Peek.others_of
 
-/-- info: 'Lanes.Mailbox.Reachable.bounded' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Mailbox.Reachable.bounded
-
-/-- info: 'Lanes.Mailbox.Reachable.asleep_empty' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Mailbox.Reachable.asleep_empty
-
-/-- info: 'Lanes.Mailbox.Reachable.not_asleep_waiting' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Mailbox.Reachable.not_asleep_waiting
-
-/-- info: 'Lanes.Mailbox.rest_eq_false' depends on axioms: [propext] -/
-#guard_msgs in #print axioms Lanes.Mailbox.rest_eq_false
-
-/-- info: 'Lanes.Mailbox.batch_since_take' depends on axioms: [propext, Classical.choice] -/
-#guard_msgs in #print axioms Lanes.Mailbox.batch_since_take
-
-/-- info: 'Lanes.Mailbox.wake_since_take' depends on axioms: [propext, Classical.choice] -/
-#guard_msgs in #print axioms Lanes.Mailbox.wake_since_take
-
-/-- info: 'Lanes.Mailbox.close_since_take' depends on axioms: [propext, Classical.choice] -/
-#guard_msgs in #print axioms Lanes.Mailbox.close_since_take
-
-/-- info: 'Lanes.Mailbox.woken_after_rest' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Mailbox.woken_after_rest
-
-/-- info: 'Lanes.Mailbox.after_close' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Mailbox.after_close
-
--- Lanes.Runtime.PeekSound
-/-- info: 'Lanes.Batch.chain_sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Batch.chain_sound
-
-/-- info: 'Lanes.Batch.chain_peek' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Batch.chain_peek
-
-/-- info: 'Lanes.Batch.Sound.handed_prefix' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Batch.Sound.handed_prefix
-
-/-- info: 'Lanes.Batch.chain_peek_after' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Batch.chain_peek_after
+/-- info: 'Lanes.Peek.init_of_not_others' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Peek.init_of_not_others
 
 -- Lanes.Runtime.Release
 /-- info: 'Lanes.Event.filterMap_eq_of_awake' depends on axioms: [propext, Classical.choice, Quot.sound] -/
@@ -174,51 +100,24 @@ import Lanes.Semantics
 /-- info: 'Lanes.SysState.Leads.reachable' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.SysState.Leads.reachable
 
--- Lanes.Runtime.Wave
-/-- info: 'Lanes.Kernel.frame_handle' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Kernel.frame_handle
+-- Lanes.Runtime.SchedSound
+/-- info: 'Lanes.Sched.Step.sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Sched.Step.sound
 
-/-- info: 'Lanes.Kernel.frame_startActor' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Kernel.frame_startActor
+/-- info: 'Lanes.Sched.Step.inv' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Sched.Step.inv
 
-/-- info: 'Lanes.Kernel.frame_fire' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Kernel.frame_fire
+/-- info: 'Lanes.Sched.Run.sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Sched.Run.sound
 
-/-- info: 'Lanes.Kernel.setState_settle' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Kernel.setState_settle
+/-- info: 'Lanes.Sched.Run.reachable' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Sched.Run.reachable
 
-/-- info: 'Lanes.Kernel.handle_setState' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Kernel.handle_setState
+/-- info: 'Lanes.Sched.Model.init_spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Sched.Model.init_spec
 
-/-- info: 'Lanes.Kernel.Plan.fixAll_local' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Kernel.Plan.fixAll_local
+/-- info: 'Lanes.Sched.Slot.take_push' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Sched.Slot.take_push
 
-/-- info: 'Lanes.Kernel.handleAhead_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Kernel.handleAhead_eq
-
-/-- info: 'Lanes.Kernel.run1Ahead_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Kernel.run1Ahead_eq
-
-/-- info: 'Lanes.Kernel.stepAhead_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Kernel.stepAhead_eq
-
-/-- info: 'Lanes.Kernel.runBatchAhead_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Kernel.runBatchAhead_eq
-
-/-- info: 'Lanes.Kernel.good_plan' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Kernel.good_plan
-
-/-- info: 'Lanes.Kernel.runBatch_add' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Kernel.runBatch_add
-
-/-- info: 'Lanes.Kernel.wave_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Kernel.wave_eq
-
-/-- info: 'Lanes.Kernel.waves_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Kernel.waves_eq
-
-/-- info: 'Lanes.Kernel.runWaves_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Kernel.runWaves_eq
-
-/-- info: 'Lanes.Kernel.exec_inputs' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Kernel.exec_inputs
+/-- info: 'Lanes.Sched.Slot.put_push' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Sched.Slot.put_push
