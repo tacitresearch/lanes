@@ -156,6 +156,36 @@ def oracleTests (root : System.FilePath) : IO (List (String × Bool)) := do
         (1, "`Lanes/Web/E.lean` has no row under Protocol modules: name its oracle, or why it has none"),
         (1, "`Lanes/Outside/M.lean` has no row under Outside models: name its oracle, or why it has none")])]
 
+def layerTests (root : System.FilePath) : IO (List (String × Bool)) := do
+  project root
+  discard <| lint root { fix := true }
+  write root "Lanes.lean" "import Lanes.Runtime.A\n"
+  write root "LanesCli/Layers.lean" ""
+  write root "Lanes/Runtime/A.lean"
+    "module\n\npublic import Std\npublic import Lanes.Data.C\nimport all Lanes.Durable.B\n"
+  write root "Lanes/Durable/B.lean" "module\n\n/- import Lanes.Web.D -/\npublic import Lanes.Runtime.A\n"
+  write root "Lanes/Data/C.lean" "module\n"
+  write root "Lanes/Stray.lean" "module\n"
+  let report ← lint root
+  let found := (report.findings.filter (·.rule == "layering")).map fun f => (f.file.toString, f.line)
+  return [
+    ("lint layering: an import of a package not required, and a module in no package, are found; "
+        ++ "imports down, of Std and in comments are not",
+      found == [("Lanes/Runtime/A.lean", 5), ("Lanes/Stray.lean", 1)]),
+    ("Layers: what each package requires, below too",
+      Layers.Package.runtime.mayImport .model && Layers.Package.web.mayImport .std
+        && !Layers.Package.std.mayImport .actors && !Layers.Package.runtime.mayImport .durable
+        && Layers.Package.all.all fun p => p.mayImport p),
+    ("Layers.home?: the longest prefix wins",
+      Layers.home? "Lanes/Durable/Frame.lean" == some .std
+        && Layers.home? "Lanes/Durable/Journal.lean" == some .durable
+        && Layers.home? "Lanes/Lib/Postgres/Conn.lean" == some .postgres
+        && Layers.home? "Tests/Main.lean" == none),
+    ("Layers.imported?: the module of an import line, with its modifiers",
+      Layers.imported? "public meta import all Lanes.X" == some "Lanes.X"
+        && Layers.imported? "import Lanes" == some "Lanes"
+        && Layers.imported? "def x := 1" == none)]
+
 def changelog : String :=
   "# Changelog\n\nIntro.\n\n## [Unreleased]\n\nNote.\n\n## [0.1.0] - 2026-01-01\n\nOld.\n"
 
@@ -197,9 +227,10 @@ def tests : IO (List (String × Bool)) := do
   let third ← scratch
   let fourth ← scratch
   let fifth ← scratch
+  let sixth ← scratch
   try
     let results := (← fixTests root) ++ (← problemTests other) ++ (← linkTests third)
-      ++ (← oracleTests fourth) ++ (← changelogTests fifth)
+      ++ (← oracleTests fourth) ++ (← changelogTests fifth) ++ (← layerTests sixth)
     return results ++ [
       ("withCommas", Generated.withCommas 1587 == "1,587" && Generated.withCommas 50 == "50"
         && Generated.withCommas 1000000 == "1,000,000"),
@@ -226,7 +257,7 @@ def tests : IO (List (String × Bool)) := do
         (Report.mk [⟨"A.lean", 3, "no-sorry", "no"⟩] [] 2).json
           == "{\"files\":2,\"fixed\":[],\"failed\":1,\"results\":[{\"name\":\"no-sorry\",\"kind\":\"proof\",\"status\":\"failed\",\"path\":\"A.lean\",\"line\":3,\"detail\":\"no\"}]}")]
   finally
-    for dir in [root, other, third, fourth, fifth] do
+    for dir in [root, other, third, fourth, fifth, sixth] do
       if ← dir.pathExists then IO.FS.removeDirAll dir
 
 end Tests.Lint

@@ -61,6 +61,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Lib/Metrics.lean` | `oracles/go/expfmt` | |
 | `Lanes/Lib/Mime/MediaType.lean` | `oracles/go/mime` | |
 | `Lanes/Lib/Net/Ip.lean` | `oracles/go/netip` | |
+| `Lanes/Lib/Net/Percent.lean` | `oracles/go/url` | Through the URL's cases, which decode and encode with it (`Tests/Oracle/Url.lean`) |
 | `Lanes/Lib/Net/Url.lean` | `oracles/go/url` | |
 | `Lanes/Lib/Postgres/Bytes.lean` | `Tests/Postgres.lean`, `oracles/postgres` | The fields of the messages, in the sessions recorded from PostgreSQL 16 and psql 16 (`Tests/Postgres/`) |
 | `Lanes/Lib/Postgres/Conn.lean` | `Tests/Postgres.lean`, `oracles/postgres` | A state machine, not a format: the recorded sessions, and the live runs |

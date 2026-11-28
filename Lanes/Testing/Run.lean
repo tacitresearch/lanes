@@ -4,7 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes
+public import Lanes.Check.Search
+public import Lanes.Lib.Encoding.Json.Printer
 
 /-!
 The runner behind an application's `lake test`, and Lanes' own: named results of tests, model

@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Lanes.Lib.Net.Ip
-public import Lanes.Web.Http.Basic
+public import Lanes.Lib.Net.Percent
 
 /-!
 URI references as RFC 3986 writes them: a scheme, an authority (userinfo, host, port), a path, a

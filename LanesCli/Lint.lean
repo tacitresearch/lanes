@@ -3,6 +3,7 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import LanesCli.Changelog
+import LanesCli.Layers
 
 /-!
 # `lanes lint`
@@ -21,7 +22,9 @@ Source-level checks of the rules in `AGENTS.md` that can be decided from the tex
   and `CHANGELOG.md`'s Unreleased section has none of its own (`LanesCli/Changelog.lean`).
 - `layering` (rule 1.6): files that import Mathlib, CSLib or a proof module (`Lanes.Semantics`,
   `App.Proofs`) live in a proof directory, one named `…Proofs` included, or are named
-  `…Proofs.lean`, so executable code never links them.
+  `…Proofs.lean`, so executable code never links them. In Lanes itself, also: each module of
+  `Lanes/` imports modules of Lanes only from its own package and the packages it requires
+  (`LanesCli/Layers.lean`), so each layer builds without the ones above it.
 - `links`: every repository path that a Markdown file at the root or under `docs/` writes in
   backquotes exists (`a/{b,c}.lean` names two). `docs/decisions/` records the past and is not
   checked.
@@ -169,6 +172,34 @@ def checkC (root file : System.FilePath) (trusted : String) : List Finding :=
   let relative := (file.toString.dropPrefix (root.toString ++ "/")).toString
   if (trusted.splitOn relative).length > 1 then []
   else [⟨relative, 1, "trusted-listed", "C in a file that TRUSTED.md does not name (rule 5.5)"⟩]
+
+/-- `layering`, in Lanes itself (a project with `Lanes.lean` and `LanesCli/Layers.lean`): each
+module of `Lanes/` is in a package of `Layers.homes`, and imports modules of Lanes only from that
+package and the packages it requires. -/
+def checkLayers (root : System.FilePath) (files : Array System.FilePath) : IO (List Finding) := do
+  unless (← (root / "Lanes.lean").pathExists) && (← (root / "LanesCli" / "Layers.lean").pathExists)
+  do return []
+  let ours := files.toList.filterMap fun file =>
+    let relative := (file.toString.dropPrefix (root.toString ++ "/")).toString
+    if relative == "Lanes.lean" || relative.startsWith "Lanes/" then some relative else none
+  let mut findings : List Finding := []
+  for path in ours do
+    match Layers.home? path with
+    | none =>
+      findings := findings ++ [⟨path, 1, "layering",
+        "in no package: give it one in `LanesCli/Layers.lean` (rule 1.6)"⟩]
+    | some p =>
+      let code := stripCommentsAndStrings (← IO.FS.readFile (root / path))
+      for (text, k) in (code.splitOn "\n").zipIdx do
+        if let some module := Layers.imported? text then
+          let target := Layers.pathOf module
+          if let some q := if ours.contains target then Layers.home? target else none then
+            unless p.mayImport q do
+              findings := findings ++ [⟨path, k + 1, "layering",
+                s!"`{module}` is in {q.name}, which {p.name} does not require: move what it "
+                  ++ "needs down, or what imports it up, or pass it in (rule 1.6, "
+                  ++ "`LanesCli/Layers.lean`)"⟩]
+  return findings
 
 /-! ## Paths that docs cite -/
 
@@ -393,6 +424,7 @@ def lint (root : System.FilePath) (options : Options := {}) : IO Report := do
   findings := findings ++ (← sourceFiles root "c").toList.flatMap (checkC root · trusted)
   for file in files do
     findings := findings ++ (← checkFile root file trusted)
+  findings := findings ++ (← checkLayers root files)
   findings := findings ++ (← checkLinks root)
   findings := findings ++ (← checkOracles root)
   findings := findings ++ (← inventory root)
