@@ -1,9 +1,9 @@
-# D98. A small proof surface, and each property written once (a proposal)
+# D98. A small proof surface, and each property written once
 
 Status: Accepted
 
 *A proposal for tacitresearch/lanes#100, part C of the design direction (#93). It moves no code.
-The owner agreed to the headline on 2026-11-27; the parts below are for the owner to decide.
+The owner set the direction (#93, item 10); the details are settled at their stated defaults.
 Every count and line number was checked against `main` at `cb53031` on 2026-11-28.*
 
 Applications are going to prove theorems against Lanes in their own repositories. Today a proof
@@ -528,7 +528,9 @@ bodies closed a goal in one line, as kv-cache's concrete stale read does. What i
 Steps 3 and 4 come early because they change what the template teaches, and every new app starts
 from it. Hiding the bodies comes last because it needs every lemma first.
 
-### Questions for the owner
+### Details settled
+
+Each detail below is settled at the default it states (the owner's rule: small and reversible choices are taken at their default, and changed later if needed).
 
 1. **How to hide bodies.** By the module system (`@[no_expose]`, so `B` cannot unfold), or only by
    a lint on the examples? *Default:* the lint first, while the lemmas are written; then
