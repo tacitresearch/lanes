@@ -124,6 +124,8 @@ structure Runtime (sys : System σ) [Hashable σ.Id] where
   private agenda : IO.Ref (Std.TreeMap Kernel.Due ((i : σ.Id) × σ.Msg i × Kernel.Due))
   private alarms : IO.Ref Nat
   private timer : Parker
+  /-- What the watchdog sleeps on between two looks, so that `stop` wakes it. -/
+  private watchdog : Parker
   /-- Taken shared by a step that sends, from its write-back to its last push, and alone by a
   step that stops its actor. -/
   private sending : Std.BaseSharedMutex
@@ -410,12 +412,15 @@ private def boot (rt : Runtime sys) (onOutput : σ.Out → Async Unit) : BaseIO 
     rt.ledgerDo fun l => ((), { l with timers := l.timers + after })
 
 /-- The watchdog's thread: every quarter of `stepLimitMs`, a step that has run longer than it is
-handed to `onStuck`, once. -/
-private def watch (rt : Runtime sys) : IO Unit := do
+handed to `onStuck`, once. It ends when the workers are ending or have ended (`done`); `stop`
+and the end of the workers wake it, so that it does not keep the process for a quarter of the
+limit. -/
+private def watch (rt : Runtime sys) (done : IO.Ref Bool) : IO Unit := do
   let limit := rt.config.stepLimitMs
   repeat
-    if ← rt.ending then break
-    IO.sleep (max 1 (limit / 4)).toUInt32
+    if (← rt.ending) || (← done.get) then break
+    rt.watchdog.parkAtMost (max 1 (limit / 4))
+    if (← rt.ending) || (← done.get) then break
     let now ← IO.monoMsNow
     for w in [0:rt.busy.size] do
       let some b := rt.busy[w]? | continue
@@ -432,7 +437,10 @@ private def run (rt : Runtime sys) (onOutput : σ.Out → Async Unit) : IO Unit 
   rt.boot onOutput
   rt.recovered.set true
   let timer ← IO.asTask (prio := .dedicated) rt.ring
-  if rt.config.stepLimitMs != 0 then discard <| IO.asTask (prio := .dedicated) rt.watch
+  let done ← IO.mkRef false
+  let watcher ← if rt.config.stepLimitMs != 0 then
+      some <$> IO.asTask (prio := .dedicated) (rt.watch done)
+    else pure none
   let threads ← (List.range rt.workers).mapM fun w =>
     IO.asTask (prio := .dedicated) (rt.worker w onOutput)
   let mut error : Option IO.Error := none
@@ -440,6 +448,9 @@ private def run (rt : Runtime sys) (onOutput : σ.Out → Async Unit) : IO Unit 
     if let .error e ← IO.wait t then error := some e
   rt.timer.unpark
   discard <| IO.wait timer
+  done.set true
+  rt.watchdog.unpark
+  if let some w := watcher then discard <| IO.wait w
   if let some e := error then
     rt.config.log.error "a worker stopped on an error" [("error", .str (toString e))]
   let (room, idle) ← rt.ledgerDo Sched.Ledger.close
@@ -483,6 +494,7 @@ def startWith (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
     agenda := ← IO.mkRef ∅
     alarms := ← IO.mkRef 0
     timer := ← Parker.new
+    watchdog := ← Parker.new
     sending := ← Std.BaseSharedMutex.new
     recording := ← Std.BaseMutex.new
     log := ← IO.mkRef #[]
@@ -623,6 +635,7 @@ def stop (rt : Runtime sys) : Async Unit := do
   rt.stopping.set true
   for p in rt.parkers do p.unpark
   rt.timer.unpark
+  rt.watchdog.unpark
   discard <| await rt.finished.result?
 
 /-- Whether the runtime has started: booted and handed over what booting put out. -/
