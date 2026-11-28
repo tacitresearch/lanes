@@ -1,4 +1,4 @@
-# D101. The step's final shape: a context, quarantine, restarts and totality (a proposal)
+# D101. The step's final shape: a context, quarantine, restarts and totality
 
 Status: Accepted
 
@@ -539,7 +539,9 @@ Each a small pull request, the first three independent of the rest:
    refusal of a quarantined input, `lanes journal quarantined` and `redrive`.
    The contract (#86) states it with the named sets.
 
-## Questions for the owner
+## Details settled
+
+Each detail below is settled at the default it states (the owner's rule: small and reversible choices are taken at their default, and changed later if needed).
 
 Each has the default I would take.
 
