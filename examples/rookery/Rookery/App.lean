@@ -123,10 +123,15 @@ structure Config where
   timelineMax : Nat := 50
   window_s : Nat := 60
   lockout_s : Nat := 300
-  sessions : Auth.Rows.Sessions.Config := {}
+  /-- A session ends this long after it was last used, and after it began. -/
+  idle_s : Int64 := 86400
+  absolute_s : Int64 := 2592000
 
 def Config.failures (config : Config) : Auth.Rows.Failures.Config :=
   { limit := config.maxFailures }
+
+def Config.sessions (config : Config) : Auth.Rows.Sessions.Config :=
+  { idle_s := config.idle_s, absolute_s := config.absolute_s }
 
 def schema (config : Config) : Schema :=
   [members.table, posts.table, follows.table, windows.table, counters.table, keys.table,

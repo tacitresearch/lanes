@@ -114,7 +114,7 @@ Also:
   `answered_le_handled`, `System.handled_le_put`, `Worker.committed_only`,
   `Shop.charged_at_most_once`), and one that does not takes `env.mayRestart = false` or
   `EnvModel.Faultless` (`Server.implements`, `Once.server_implements`, `KV.implements_once`,
-  `Rookery.implements`, every leads-to).
+  every leads-to).
 - The deterministic scheduler gives seeded runs, replayable event lists and drivers for the
   outside world; `FairScheduler` takes the event the system has owed longest, counting a timer
   that is armed again as owed from then, and its run is a fair run of the proof layer.
@@ -1174,9 +1174,9 @@ service from an outbox (`examples/payments`, `Shop.charged_at_most_once`); a to-
 (`examples/todo-db`); `examples/sign-in`, members of a video site signed in with Google or
 GitHub, with sessions; uploads that stream (`examples/upload`); reminders in a jobs table
 (`examples/reminders`);
-and `examples/rookery`, a small social network for bots whose claims are proved of its spec,
-which it is proved to implement with deadlines (`Rookery.implements`); the theorem that joins the
-two is not written. The tests import none of them; the systems of `examples/kv-cache` and
+and `examples/rookery`, a small social network for bots kept in PostgreSQL, whose claims are
+proved per transaction and so of every database the store's model allows (`Rookery.others_kept`,
+`Rookery.bounded_always`). The tests import none of them; the systems of `examples/kv-cache` and
 `examples/watchdog` are copied into `Tests/Fixtures/`, and
 `Tests/Copies.lean` fails when a copy differs from its example. Each application
 below has its claims, their evidence and premises, and its limits.
@@ -1187,7 +1187,8 @@ below has its claims, their evidence and premises, and its limits.
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| Counter (what `lanes new` writes): implements its spec | `Counter.implements`, `examples/counter/Counter/Proofs.lean` | A faultless environment | proved, no axiom gate |
+| Counter (what `lanes new` writes): the count never passes its limit, in every database the store may hold | `Counter.within_always`, from `Counter.preserves` and `Db.invariant`, `examples/counter/Counter/Proofs.lean` | PostgreSQL at `SERIALIZABLE` behaves like the store's model | proved, no axiom gate |
+| Counter: it refuses to start when the database's tables differ from the declared ones, and a restart keeps the count | `examples/counter/Check.lean` on PostgreSQL, when `LANES_POSTGRES` names one | | tested |
 
 ### Bank
 
@@ -1328,7 +1329,7 @@ Also:
 
 ### rookery
 
-A small social network for bots and their owners as a web application with a JSON API: sign-up, log-in, sessions, API tokens, posts, follows, timelines, deletes and a rate limit, all in one actor that runs the spec's functions. Its friction log is in `examples/rookery/README.md`.
+A small social network for bots and their owners as a web application with a JSON API: sign-up, log-in, sessions, API tokens, posts, follows, timelines, deletes and a rate limit. Its data is in PostgreSQL, each request one pure transaction behind a front that keeps nothing; its failed log-ins and sessions are rows (`Lanes/Web/Auth/Rows.lean`), its API memo `Keys.once`. Its README says which claims moved from proved to checked when it left its one actor, and its friction log.
 
 Where: `examples/rookery`, a package of its own.
 
@@ -1336,16 +1337,11 @@ Where: `examples/rookery`, a package of its own.
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| Rookery: posts never lost and deleted only by their author, a deleted post in no read, timelines exactly the newest posts followed, the rate limit, API changes acted on once per `seq` and another change with a `seq` used refused, no other account's secrets, every bound | `examples/rookery/Rookery/Proofs/` (`Board.run_keeps`, `Board.Gone.run`, `Board.timeline_complete`, `Board.rate_limit`, `Board.handle_api_again`, `Board.handle_api_reused`, `Board.handle_secret`, `Board.Bounded.handle` and the rest); gate `examples/rookery/Rookery/Proofs/Axioms.lean` | Statements about the spec's functions (`Board.handle`, `Board.fire`) and every sequence of them, for every configuration | proved, of the spec |
-| Rookery: the system implements its spec with deadlines | `Rookery.implements`, `examples/rookery/Rookery/Proofs/Refines.lean`; same gate | The link from outside to the board does not duplicate and the process does not restart; requests may be lost and reordered and the board may crash | proved |
-| Rookery, of every run of the system: a response carries the secrets of no account but the one its request, which arrived before it, was made as; every list of posts handed over is a read of a board the spec's functions reach (so the timeline claims above apply to it); once a delete made through the web is answered `deleted`, no read whose request arrives afterwards shows the post | `Rookery.output_secret`, `Rookery.output_read`, `Rookery.deleted_unread`, `examples/rookery/Rookery/Proofs/Traces.lean`, from `Rookery.implements` and `System.Implements.history`; same gate | The link from outside to the board does not duplicate and the process does not restart; for the third, requests have distinct ids. Of `system`, not of `Http.served system` (the gate's refinement is not proved) | proved |
-| Rookery, of every run of the system: a post answered `posted` to a web post, or shown in a read, is on its author's account in the board of every read whose request arrives later, until a request made as its author to delete it arrives (the read lists at most `timelineMax` posts, so it is the board that holds the post, and the timeline claims say which the read shows); after a position where an account's window passes and before the next, the web posts it makes that arrive after it are answered `posted` with at most `maxPerWindow` distinct ids; of the API changes one account sends with one `seq`, every two replies but `stale`, `badToken` and `reused` are the same, to the same change | `Rookery.posted_kept`, `Rookery.shown_kept`, `Rookery.rate_limit_run`, `Rookery.api_once`, `examples/rookery/Rookery/Proofs/Runs.lean`, from `Rookery.implements` and `System.Implements.history` (which passes each deadline where the run shows it, `System.Implements.Explains.fired`, `fires`); same gate | The link from outside to the board does not duplicate and the process does not restart; requests have distinct ids. Of `system`, not of `Http.served system`. The rate limit counts web posts only, and `posted_kept` starts from a web post or a read: an API post's repeated `seq` is answered `posted` from the memo, after the post was deleted or in a later window | proved |
-| Rookery: a request is made as the account its cookie or token verifies; no secret reaches the system | `examples/rookery/Check.lean` (`bridge`), `lake exe rookeryLive` (CI) | HMAC is a pseudorandom function | tested |
-
-Also:
-
-- Checked: the spec model-checked alone and the system against it on two accounts, with timers firing at any moment, crashes, and requests lost and reordered.
-- Checked: three seeded bugs (fan-out on write that keeps a deleted post, a delete by another account, a rate limit off by one) found.
+| Rookery: a request changes only the rows of the account it is made as, so only a post's author deletes it | `Rookery.others_kept`, from `Rookery.run_good` and `Txn.All.others`, `examples/rookery/Rookery/Proofs.lean`; gate `examples/rookery/Rookery/Proofs/Axioms.lean` | Of each transaction | proved |
+| Rookery: no window holds more than `maxPerWindow` posts and no account more than `maxFailures` failed log-ins, in every database the store may hold | `Rookery.bounded_always`, from `Db.invariant`; same gate | PostgreSQL at `SERIALIZABLE` behaves like the store's model | proved |
+| Rookery: a response names the account its request was made as, the only one a session or token is signed for; an API change sent again with its `seq` writes nothing while its key is stored | `Rookery.handler_name`, `Rookery.api_again`; same gate | | proved |
+| Rookery: a deleted post is in no later read, a retried change is answered the same, a lock and the oldest session closed where due, the bounds on accounts, posts kept, follows and sessions | `examples/rookery/Check.lean`, beside the store's model, with lost answers and a restart | Small bounds | checked |
+| Rookery: a request is made as the account its cookie or token verifies; no password, cookie or token reaches the system; passwords are checked against the stored PHC hash and stored again at a new cost; after SIGKILL and a restart everything is as it was | `examples/rookery/Check.lean` (`Bridge`), `examples/rookery/Rookery/Live.lean` on PostgreSQL (CI, through `scripts/with-postgres`) | HMAC is a pseudorandom function | tested |
 
 ### Every application
 
@@ -1353,5 +1349,4 @@ Also:
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| Rookery: the system behind the HTTP gate (`Http.served`) implements the spec | Only the gate's own theorems (at most once, deadlines, answers) |  | not proved |
 | Every request to an application is answered | Only the gate's: an admitted request is answered, at the latest with `504` |  | not proved for the applications' own logic |

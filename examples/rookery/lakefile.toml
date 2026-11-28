@@ -15,7 +15,7 @@ path = "../.."
 # executables, which import `Rookery`, do not link them.
 [[lean_lib]]
 name = "Rookery"
-roots = ["Rookery", "Rookery.Proofs"]
+roots = ["Rookery", "Rookery.Proofs", "Rookery.Proofs.Axioms"]
 
 # Model checks, the bridge's tests, and with LANES_POSTGRES the application on PostgreSQL,
 # run by `lake test` (Lanes rule 5.1).

@@ -29,6 +29,9 @@ import Lanes.Semantics
 /-- info: 'Lanes.Db.Op.rows_apply' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Db.Op.rows_apply
 
+/-- info: 'Lanes.Db.Txn.All.others' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Db.Txn.All.others
+
 /-- info: 'Lanes.Db.Op.insert_rows' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Db.Op.insert_rows
 

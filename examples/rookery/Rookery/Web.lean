@@ -279,18 +279,13 @@ def jsonError (text : String) (status : Nat) : Http.Response :=
 
 /-! ### Passwords, where the request arrives -/
 
-/-- A stored hash that matches no password, checked for a name nobody has, so that a log-in
-takes as long whether or not the name is taken. -/
-def nobody (s : Settings) : Auth.Stored :=
-  .phc (s.password.hash (ByteArray.mk (Array.replicate 16 0)) rfl "")
-
 /-- What a log-in's password checked against the stored hash gives; with a hash not as the
-deployment makes one now, its new hash under `salt`. -/
+deployment makes one now, its new hash under `salt`. A name nobody has checks no hash, so it is
+answered sooner; a sign-up tells as much, as it says when a name is taken. -/
 def check (s : Settings) (salt : ByteArray) (h : salt.size = 16) (name password : String)
     (stored : Option String) : Checked :=
   match stored >>= Auth.Stored.read? with
-  | none => match s.password.verify name password (nobody s) with
-    | _ => .wrong
+  | none => .wrong
   | some st => match s.password.verify name password st with
     | .wrong => .wrong
     | .ok => .right none
