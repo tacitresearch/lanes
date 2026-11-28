@@ -1,6 +1,8 @@
 # D56. A deadline may pass where a message is served
 
-The ledger did not refine its timed spec (`systems/ledger/README.md`, friction log; D42's
+Status: Accepted
+
+The ledger did not refine its timed spec (`examples/ledger/README.md`, friction log; D42's
 limits). `user n` decides a view while its session is live, the session's timer fires at
 `user n`, the administrator's payment is served at the ledger, and then the view is served
 there and shows the payment: the spec orders view, session end, payment, and the view cannot
@@ -71,7 +73,7 @@ Limits:
   `Released.visible` take `deadlines` only, so they say nothing yet of a deadline a delivery
   passes; their proofs read only that a start is not visible, and carry over.
 
-Used: `systems/ledger`. A view racing the end of its session passes (22,109 states, and 95,966
+Used: `examples/ledger`. A view racing the end of its session passes (22,109 states, and 95,966
 with a user crashing), and the abuse scenario with timers firing at any moment (108,105 states,
 527,757 with a user crashing); the old design, kept as `Ending.atUser`, still fails in 43 steps,
 and a notice lost fails in 16 steps on a lossy link and in 17 with the ledger crashing. The

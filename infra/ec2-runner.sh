@@ -1,6 +1,6 @@
 #!/bin/bash
 # GitHub Actions runners for Lanes on one Ubuntu 24.04 machine: EC2 user-data, or run with sudo.
-# infra/lanes-ci.yaml runs it on the warm runner machine; docs/RUNNERS.md says how and why.
+# infra/lanes-ci.yaml runs it on the warm runner machine; infra/README.md says how and why.
 #
 #   REPO=owner/name TOKEN=<registration token> ec2-runner.sh    # set up; safe to run again
 #   REPO=owner/name TOKEN_SECRET=<secret> ec2-runner.sh         # the same, registering by itself

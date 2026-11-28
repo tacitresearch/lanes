@@ -1,5 +1,7 @@
 # D23. Time is data, and a shard is a thread
 
+Status: Accepted
+
 *Refines D18, after a second independent review.*
 
 The kernel now owns the clock's meaning. The shell reports what the clock says
@@ -35,7 +37,7 @@ Consequences:
 - Every kernel operation is total and consumes the kernel: there is no "nothing to do" result
   that would force the caller to keep a second reference.
 - The agenda holds exactly the pending timers, whatever the shell does
-  (`Kernel.exec_wellFormed`, in `Lanes/Actors/KernelTimers.lean`). Soundness does not depend on
+  (`Kernel.exec_wellFormed`, in `Lanes/Runtime/KernelTimers.lean`). Soundness does not depend on
   it (`fire_sound` holds for any timer the shell could name); promptness does. From it: a timer
   that is due is fired and not slept through, a kernel that says there is work does some, the
   shell sleeps until exactly the earliest deadline, and idle means nothing queued and nothing

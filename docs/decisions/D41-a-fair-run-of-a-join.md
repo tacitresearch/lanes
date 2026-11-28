@@ -1,6 +1,8 @@
 # D41. A fair run of a join is a fair run of its left side, seen without the messages from outside
 
-`Lanes/Semantics/{Projection,FairJoin,FrontLive}.lean`, `Lanes/Actors/{JoinSound,MapIOSound,Run}.lean`.
+Status: Partly superseded by D86 (the right side of a join)
+
+`Lanes/Semantics/Projection.lean`, `Lanes/Semantics/FairJoin.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Proof/JoinSound.lean`, `Lanes/Proof/MapIOSound.lean`, `Lanes/Core/Run.lean`.
 D31 left `gated` in place because its liveness theorem is about its own fair runs and nothing
 carried a fair run of a join to a fair run of one side. This is that theorem, and with it the
 liveness of `fronted`.
@@ -74,7 +76,7 @@ Consequences and limits:
   `GateLive.lean` that is not a premise has one now. `Gate.lean` keeps `Bridge`, `GateConfig`,
   `GateMsg`, `Gate.step` and loses `gatedSig`, `liftEffect`, `gate`, `gated`, `gatedActors`
   and `outside`; `GateSound.lean` and `GateLive.lean` go; `serve` and `serveWith` in
-  `Lanes/Env/Http.lean` run a fronted system; `Tests/{Gate,Fair,SystemSound,Web,Axioms}.lean`,
+  `Lanes/Web/IO/Server.lean` run a fronted system; `Tests/{Gate,Fair,SystemSound,Web,Axioms}.lean`,
   `TRUSTED.md` and the docs follow. The served system can keep `gated`'s signature from outside
   as `(fronted sys bridge config).filterMapIO .inl Sum.getLeft?`: requests in, responses out,
   outputs that are no response dropped as the gate drops them now, and its theorems follow from

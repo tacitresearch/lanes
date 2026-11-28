@@ -1,14 +1,16 @@
 # D18. The runtime is a proved kernel inside a thin shell
 
+Status: Accepted
+
 *Supersedes D13 and D16.*
 
-`Lanes/Actors/Kernel.lean` holds every runtime decision as pure functions over a hash map of
+`Lanes/Runtime/Kernel.lean` holds every runtime decision as pure functions over a hash map of
 actors and a queue: accept an input, take the oldest message (starting its receiver if it is
 down), fire a timer. `Kernel.abs` reads a kernel state as a `SysState`, and
 `run1_sound`, `accept_sound`, `fire_sound` and `abs_boot` prove each operation is a run of
 `SysState.step` under `Kernel.env`, with the reported events being that run.
 
-`Lanes/Actors/Runtime.lean` is one task per shard that feeds the kernel from a bounded inbox
+`Lanes/Runtime/IO/Shell.lean` is one task per shard that feeds the kernel from a bounded inbox
 and carries out its commands (hand over an output, arm a timer).
 
 Why: the first runtime was 400 lines of concurrent IO making decisions under locks. A review

@@ -1,16 +1,18 @@
 # D19. The HTTP adapter's logic is a gate actor
 
-`Lanes/Http/Gate.lean` defines `gate`, an actor that parses each request into an input, keeps
+Status: Partly superseded by D31 and D43 (the gate is a system joined in front, not `gated`)
+
+`Lanes/Web/Http/Gate.lean` defines `gate`, an actor that parses each request into an input, keeps
 the list of waiting requests, and answers each one: with the system's response, with `504` when
 its timer fires, or with `503` beyond `maxPending`. `gated sys` is `sys` with the gate in
-front; the inner actors' outputs become messages to the gate. `Lanes/Env/Http.lean` serves
+front; the inner actors' outputs become messages to the gate. `Lanes/Web/IO/Server.lean` serves
 `gated sys` and only moves bytes.
 
 Why: the first adapter kept the waiting table in a mutex and the deadline in a per-request
 `select`. A review found two defects there. As an actor the logic is checked and proved
 together with the application. `Tests/Gate.lean` explores every race between a response and its
 deadline on two requests and shows each is answered exactly once. `gate_bounded` proves the
-table's bound. `Lanes/Http/GateSound.lean` proves the safety half for every system, bridge and
+table's bound. `Lanes/Http/GateSound.lean` (removed) proves the safety half for every system, bridge and
 configuration:
 
 - `Http.answered_le_arrived`: in any run, no request id is output more often than it was input.

@@ -1,5 +1,7 @@
 # D36. What a durable system has to say for itself: a map with a codec, a journal begun on purpose, a name that covers the replay
 
+Status: Partly superseded by D66 (a changed system refusing its old files)
+
 The fifth review ran `raftNode` as three processes and found three things the framework had
 left for the application to get right, and the application had not.
 
@@ -33,6 +35,6 @@ left for the application to get right, and the application had not.
   replayed, and the two files could be given a new name there.
 
 `snapshotEvery` counts journal entries. For `raftNode` it is 65,536, with the measurements
-beside it in `systems/raft-kv/Main.lean`: a save writes the whole state, Raft's log included,
+beside it in `examples/raft-kv/Main.lean`: a save writes the whole state, Raft's log included,
 so it is as rare as a journal of a few megabytes allows. A rule that saves when the journal
 has outgrown the last snapshot would need no number, and is the better default.
