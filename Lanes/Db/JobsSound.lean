@@ -436,6 +436,181 @@ theorem claimed_has {Q A : Type} (app : Handler Q A) (cfg : Config) (x : Q ⊕ R
       obtain ⟨out, -, hout⟩ := run_map _ _ h
       cases hout
 
+
+/-! ## Bounds, and every job due taken -/
+
+theorem claimAll_length (cfg : Config) (now : Int64) :
+    ∀ (js : List (Job W)) {db : Db} {out : List (Job W)} {db' : Db},
+      (q.claimAll cfg now js).run db = .ok (out, db') → out.length ≤ js.length := by
+  intro js
+  induction js with
+  | nil =>
+    intro db out db' h
+    simp only [claimAll, Txn.pure_eq, Txn.run_pure, Except.ok.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, -⟩ := h
+    simp
+  | cons j js ih =>
+    intro db out db' h
+    simp only [claimAll, Txn.bind_eq] at h
+    obtain ⟨b, db₁, -, h⟩ := Txn.run_bind_ok_inv h
+    obtain ⟨rest, db₂, h₂, h⟩ := Txn.run_bind_ok_inv h
+    simp only [Txn.pure_eq, Txn.run_pure, Except.ok.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, -⟩ := h
+    have := ih h₂
+    split <;> simp <;> omega
+
+/-- Every job claimed for an attempt is answered. -/
+theorem claimAll_answers (cfg : Config) (now : Int64) :
+    ∀ (js : List (Job W)) {db : Db} {out : List (Job W)} {db' : Db},
+      (q.claimAll cfg now js).run db = .ok (out, db') →
+        ∀ j ∈ js, (cfg.claimed now j).status = .pending → cfg.claimed now j ∈ out := by
+  intro js
+  induction js with
+  | nil => intro _ _ _ _ j hj; cases hj
+  | cons j js ih =>
+    intro db out db' h j' hj' hp
+    simp only [claimAll, Txn.bind_eq] at h
+    obtain ⟨b, db₁, -, h⟩ := Txn.run_bind_ok_inv h
+    obtain ⟨rest, db₂, h₂, h⟩ := Txn.run_bind_ok_inv h
+    simp only [Txn.pure_eq, Txn.run_pure, Except.ok.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, -⟩ := h
+    rcases List.mem_cons.mp hj' with rfl | hj'
+    · simp [hp]
+    · have := ih h₂ j' hj' hp
+      split
+      · exact List.mem_cons_of_mem _ this
+      · exact this
+
+theorem scan_length {s : Scan} {db : Db} {js : List (Job W)} {db' : Db}
+    (h : (q.rows.scan s).run db = .ok (js, db')) : js.length ≤ s.limit := by
+  obtain ⟨rows, db₁, h₁, h₂⟩ := Txn.run_bind_ok_inv h
+  obtain ⟨-, hr⟩ := Op.apply_ok _ (Txn.run_single h₁)
+  have hr' : rows = Scan.run { s with table := q.table } (db.rows q.name) := hr
+  rw [Txn.run_mapM_length _ _ h₂, hr']
+  exact List.length_take_le _ _
+
+/-- **A claim is bounded.** It answers at most `batch_max` jobs, and at most its limit. -/
+theorem claim_length (cfg : Config) (now : Int64) (limit : Nat) {db : Db} {out : List (Job W)}
+    {db' : Db} (h : (q.claim cfg now limit).run db = .ok (out, db')) :
+    out.length ≤ cfg.batch_max ∧ out.length ≤ limit := by
+  simp only [claim, Txn.bind_eq] at h
+  obtain ⟨js, db₁, h₁, h₂⟩ := Txn.run_bind_ok_inv h
+  have h1 := scan_length h₁
+  have h2 := claimAll_length cfg now js h₂
+  simp only [due] at h1
+  omega
+
+theorem claimed_pending {cfg : Config} {now : Int64} {j : Job W}
+    (h : (cfg.claimed now j).status = .pending) :
+    cfg.spent j = false ∧ (cfg.claimed now j).attempts = j.attempts + 1 ∧
+      (cfg.claimed now j).due_ms = now + Int64.ofNat cfg.lease_ms := by
+  unfold Config.claimed at h ⊢
+  split at h
+  · simp at h
+  · next hs => simp [hs]
+
+/-- **Attempts are bounded.** Each job a claim answers is leased for one more attempt of a job
+whose attempts were not spent: the attempts of a run never pass `attempts_max`. -/
+theorem claim_attempts (cfg : Config) (now : Int64) (limit : Nat) {db : Db} {out : List (Job W)}
+    {db' : Db} (hF : q.Functional db) (h : (q.claim cfg now limit).run db = .ok (out, db')) :
+    ∀ j' ∈ out, ∃ j ∈ q.jobs db, j.attempts.toInt.toNat < cfg.attempts_max ∧
+      j'.attempts = j.attempts + 1 ∧ j'.id = j.id ∧ j'.lease = j.lease + 1 := by
+  intro j' hj'
+  obtain ⟨j, hj, heq, hst⟩ := ((claim_keeps cfg now limit hF h).2.2 j' hj').2
+  subst heq
+  obtain ⟨hs, ha, -⟩ := claimed_pending hst
+  refine ⟨j, hj, ?_, ha, claimed_id cfg now j, ?_⟩
+  · simpa [Config.spent] using hs
+  · unfold Config.claimed; split <;> rfl
+
+theorem Scan.run_all (s : Scan) (rows : List Row) (h : (rows.filter s.matches).length ≤ s.limit) :
+    ∀ x ∈ rows, s.matches x = true → x ∈ s.run rows := by
+  intro x hx hm
+  unfold Scan.run
+  rw [List.take_of_length_le (by simpa using h)]
+  exact List.mem_mergeSort.mpr (List.mem_filter.mpr ⟨hx, hm⟩)
+
+theorem mapM_decode_all {rows : List Row} {db : Db} {js : List (Job W)} {db' : Db}
+    (h : (rows.mapM q.rows.decode).run db = .ok (js, db')) : ∀ x ∈ rows, ∀ j, q.ofRow x = some j → j ∈ js := by
+  induction rows generalizing db js db' with
+  | nil => intro x hx; cases hx
+  | cons x rest ih =>
+    simp only [List.mapM_cons, Txn.bind_eq] at h
+    obtain ⟨j₀, db₁, h₀, h⟩ := Txn.run_bind_ok_inv h
+    obtain ⟨js', db₂, h₁, h⟩ := Txn.run_bind_ok_inv h
+    simp only [Txn.pure_eq, Txn.run_pure, Except.ok.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, -⟩ := h
+    intro y hy j hj
+    rcases List.mem_cons.mp hy with rfl | hy
+    · have h₀' : q.ofRow y = some j₀ := q.rows.run_decode h₀
+      rw [h₀'] at hj
+      obtain rfl := Option.some.inj hj
+      exact List.mem_cons_self
+    · exact List.mem_cons_of_mem _ (ih h₁ y hy j hj)
+
+/-- A pending job due by `now_ms` is one the claim's scan looks for. -/
+theorem due_matches {now : Int64} {limit : Nat} {x : Row} {j : Job W} (hx : q.ofRow x = some j)
+    (hp : j.status = .pending) (hdue : j.due_ms.toInt ≤ now.toInt) :
+    ({ q.due now limit with table := q.table } : Scan).matches x = true := by
+  unfold ofRow at hx
+  split at hx
+  · next id key work dueV status attempts lease every note =>
+    simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.some.injEq] at hx
+    obtain ⟨w, -, st, hst, rfl⟩ := hx
+    simp only at hp hdue
+    subst hp
+    have : status = 0 := by
+      unfold Status.ofCode at hst
+      split at hst
+      · assumption
+      · split at hst <;> (try split at hst) <;> (try split at hst) <;> simp at hst
+    subst this
+    simp [Scan.matches, Scan.conds, Scan.columns, due, byDue, Cond.holds, Value.compare, Status.code,
+      Int.compare_eq_gt]
+    omega
+  · cases hx
+
+/-- **Every job due is taken.** A claim whose scan finds no more pending jobs due by its time
+than its limit leases every one whose attempts are not spent, and answers it, for an attempt. -/
+theorem claim_takes (cfg : Config) (now : Int64) (limit : Nat) {db : Db} {out : List (Job W)}
+    {db' : Db} (h : (q.claim cfg now limit).run db = .ok (out, db'))
+    (hroom : ((db.rows q.name).filter
+      ({ q.due now (min limit (min cfg.batch_max Scan.limit_max)) with table := q.table } : Scan).matches).length
+        ≤ min limit (min cfg.batch_max Scan.limit_max)) :
+    ∀ j ∈ q.jobs db, j.status = .pending → j.due_ms.toInt ≤ now.toInt → cfg.spent j = false →
+      cfg.claimed now j ∈ out := by
+  intro j hj hp hdue hs
+  simp only [claim, Txn.bind_eq] at h
+  obtain ⟨js, db₁, h₁, h₂⟩ := Txn.run_bind_ok_inv h
+  obtain ⟨rows, db₂, h₃, h₄⟩ := Txn.run_bind_ok_inv h₁
+  have ha := Txn.run_single h₃
+  obtain ⟨-, hr⟩ := Op.apply_ok _ ha
+  obtain rfl := Op.apply_read _ rfl ha
+  obtain ⟨x, hx, hx'⟩ := mem_jobs.mp hj
+  have hm := due_matches (limit := min limit (min cfg.batch_max Scan.limit_max)) hx' hp hdue
+  have hin : x ∈ rows := by
+    rw [hr]; exact Scan.run_all _ _ hroom x hx hm
+  have hjs := mapM_decode_all h₄ x hin j hx'
+  refine claimAll_answers cfg now js h₂ j hjs ?_
+  unfold Config.claimed; simp [hs, hp]
+
+/-- **Only the current attempt counts.** A finish whose lease is not the job's changes nothing
+and answers that it was not counted. -/
+theorem finish_stale (cfg : Config) {id lease now : Int64} {v : Verdict} {db : Db} {b : Bool}
+    {db' : Db} (hstale : ∀ j ∈ q.jobs db, j.id = id → j.lease ≠ lease)
+    (h : (q.finish cfg id lease now v).run db = .ok (b, db')) : db' = db ∧ b = false := by
+  simp only [finish, Txn.bind_eq] at h
+  obtain ⟨r, db₁, h₁, h₂⟩ := Txn.run_bind_ok_inv h
+  obtain ⟨rfl, hr⟩ := get_mem h₁
+  cases r with
+  | none => simp at h₂; exact ⟨h₂.2.symm, h₂.1⟩
+  | some j =>
+    obtain ⟨hj, hid⟩ := hr j rfl
+    simp only at h₂
+    split at h₂
+    · next hc => exact absurd hc.2 (hstale j hj hid)
+    · simp at h₂; exact ⟨h₂.2.symm, h₂.1⟩
+
 end Queue
 
 end Lanes.Db.Jobs
