@@ -1,4 +1,6 @@
-# D?. The step's final shape: a context, quarantine, restarts and totality (a proposal)
+# D101. The step's final shape: a context, quarantine, restarts and totality (a proposal)
+
+Status: Accepted
 
 *A proposal for tacitresearch/lanes#99, items 8 and 9 of the design direction (#93). It moves no
 code. Every fact below about the code was checked on `main`; the experiments were run on Lean
