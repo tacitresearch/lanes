@@ -11,8 +11,9 @@ should be is at the end.
 cd examples/videos
 mkdir -p .lake && ln -s ../../../.lake/packages .lake/packages   # share the fetched dependencies
 lake build            # the site, the proofs and the tests
-lake test             # model checks, the bridge, and the site over HTTP against a fake S3 and worker, ~10 min
+lake test             # model checks at small bounds, the bridge, and the site over HTTP against a fake S3 and worker, under a minute
 lake exe videosTest pipeline   # only the model checks whose names contain a word; `http`, only the site
+lake exe videosTest large      # the model checks at large bounds, nightly in CI: about ten minutes
 ```
 
 ## How it works
@@ -123,7 +124,7 @@ worker's model, that it reports, the whole is checked.
 
 ## What is checked
 
-`Videos/Check.lean`, run by `lake test`: two members, at most two videos and one per member, one
+`Videos/Check.lean`: two members, at most two videos and one per member, one
 pending upload per member, two comments and one per member on a video, three jobs, one attempt
 for each job or two where the scenario says. The site and its scheduler beside the browsers,
 which follow a script, and the worker's model with the object store's, which answers each
@@ -145,22 +146,49 @@ runs with no crash, every state with no successor (the script done, every messag
 every timer fired, the worker's reports spent) has no video transcoding: a confirmed upload ends
 ready or failed. The site's part of it is proved (`Videos.report_settles`).
 
-| Scenario | States | Result |
+Each scenario is checked at two sizes (`Videos.Check.Size`). `lake test` checks the small
+ones, exhaustively and exactly, in under a minute: each is a large one's script cut to the
+requests its witnesses need, and where its name says so with the store answering only `found`
+or `unknown`, or with no crash. Each still reaches every witness it names, or it fails, so it
+cannot pass by exploring nothing (rule 5.3). The large ones are the scenarios whole, checked
+nightly (`lake exe videosTest large`, `.github/workflows/large.yml`). The browsers' lists are
+kept sorted (`Check.ins`), since they are read only as sets or counted, so that one state is not
+stored once for each order its requests were answered in.
+
+| Small scenario, in `lake test` | States | Witnesses |
 | --- | --- | --- |
-| A public video: made, checked, transcoded, watched, liked three times, deleted, asked for after the delete | 1,838,171 | pass |
-| A private video: asked for by another member, a stranger and its owner; channels, the feed, a like and a comment by another | 33,850 | pass |
-| A video deleted while its check may be out (the site crashes) | 1,648,323 | pass |
-| A second check asked for while the first may be out (the site crashes) | 1,414,585 | pass |
-| A delete tried twice: deleted after its first attempt failed, or given up and reported | 61,578 | pass |
-| An upload never confirmed, checked a last time, twice: confirmed, transcoded and shown, or taken out | 359,757 | pass |
-| A session past its lifetime: a private video watched inside it, asked for and liked after it, then watched in a new session | 24,529 | pass |
-| The pipeline: a job not answered, refused or `unknown` (with no crash), a report late, failed or never, shown to the owner, tried again and shown (the site crashes) | 2,852,633 | pass |
-| Reports delivered twice, and one forged by someone else | 286,132 | pass |
-| With no crash, every run that cannot go on leaves each confirmed upload ready or failed | 2,812,148 | pass |
+| A public video watched by another member, who likes it twice, and its owner likes it | 18,253 | shown; two likes |
+| A video shown to its owner, deleted, and asked for again (no crash; `found` or `unknown`) | 158,493 | shown; deleted while its object may be in the store |
+| A private video: asked for by another member, a stranger and its owner; channels, the feed, a like and a comment by another | 33,850 | watched by its owner; asked for by another member and a stranger |
+| A video deleted while its check may be out (the site crashes; `found` or `unknown`) | 171,620 | deleted while its object may be in the store |
+| A second check asked for while the first may be out (no crash) | 110,472 | a check confirms an upload and its request is told |
+| A delete tried twice: deleted after its first attempt failed, or given up and reported | 54,278 | deleted while held; deleted after a failed first delete; given up and reported |
+| An upload never confirmed, checked a last time, twice, its owner asking for it | 194,312 | made ready by its last check and shown; taken out; a last check tried again |
+| A session past its lifetime: a private video watched inside it, asked for and liked after it, then watched in a new session | 24,529 | watched by its owner in two sessions |
+| The pipeline up to the owner asking for the video (the site crashes) | 6,758 | shown; shown being prepared; shown failed |
+| Reports delivered twice, and one forged, the owner asking for the video | 131,105 | shown; a forged report refused; a report delivered twice |
+| With no crash, every run that cannot go on leaves the upload ready or failed | 2,668 | shown; shown failed |
+| With no crash, a failed transcode tried again; every run that cannot go on leaves it ready or failed | 159,358 | ready after the retry |
 | Seeded: the browser's word taken for the upload (`trustBrowser`) | | found in 20 steps |
 | Seeded: a check the store did not answer in time taken as found (`readyOnTimeout`) | | found in 25 steps |
 | Seeded: sessions that never end (`lifetime := {}`) | | found in 20 steps |
 | Seeded: a report taken whatever its signature (`trustUnsigned`) | | found in 21 steps |
+
+| Large scenario, nightly | States |
+| --- | --- |
+| A public video: made, checked, transcoded, watched, liked three times, deleted, asked for after the delete | 1,670,057 |
+| A private video: asked for by another member, a stranger and its owner; channels, the feed, a like and a comment by another (two crashes) | 98,679 |
+| A video deleted while its check may be out (the site crashes) | 1,039,400 |
+| A second check asked for while the first may be out (the site crashes) | 742,505 |
+| A delete tried twice: deleted after its first attempt failed, or given up and reported (two crashes) | 119,578 |
+| An upload never confirmed, checked a last time, twice: confirmed, transcoded and shown, or taken out | 326,923 |
+| A session past its lifetime: a private video watched inside it, asked for and liked after it, then watched in a new session (two crashes) | 71,713 |
+| The pipeline: a job not answered, refused or `unknown` (with no crash), a report late, failed or never, shown to the owner, tried again and shown (the site crashes) | 2,620,912 |
+| Reports delivered twice, and one forged by someone else | 286,132 |
+| With no crash, every run that cannot go on leaves each confirmed upload ready or failed | 2,511,218 |
+
+Each passes with every witness it names reached: about 11 minutes of processor time in all,
+two at a time.
 
 Once a video's delete is answered, in every state its delete is under way, or the store said
 it deleted the object, or the site reported it given up; this is checked of runs with no crash.
