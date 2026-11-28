@@ -278,8 +278,8 @@ them by area.
 | `Check.Trace.last` | proved | `Check.fingerprint_deadlock`, `Check.fingerprint_violated`, `Check.fingerprint_witness` and others |
 | `Check.Trace.labels` | proved | `Check.systemFingerprinted_violated`, `Check.system_violated` |
 | `Check.Verdict.exitCode` | checked | `Tests/Testing.lean` |
-| `Check.Report.verdict` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Cache.lean` and others |
-| `Check.Report.ok` | checked | `Tests/Bank.lean`, `Tests/Batch.lean`, `Tests/Cache.lean` and others |
+| `Check.Report.verdict` | proved | through `Check.Report.ok`: `Check.Report.ok_iff` |
+| `Check.Report.ok` | proved | `Check.Report.ok_iff` |
 | `Check.Report.passed` | checked | `Tests/Election.lean`, `Tests/Engine.lean`, `Tests/Fronted.lean` and others |
 | `Check.Path.last` | proved | through `Check.Search.run`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
 | `Check.Path.toTraceAux` | proved | through `Check.Search.run`, `Check.Search.runBatches` and others: `Check.Search.explore_eq`, `Check.Search.runBatches_eq` and others |
@@ -512,6 +512,8 @@ them by area.
 | `Codec.int` | proved | its type, `Codec` |
 | `Codec.sum` | proved | its type, `Codec` |
 | `Codec.option` | proved | its type, `Codec` |
+| `Codec.padded` | proved | its type, `Codec` |
+| `Codec.hasAtLeast` | tested | `Tests/Codec.lean`, `Tests/Durable.lean`, `Tests/MonitorSpeed.lean` and others |
 | `Codec.readMany` | tested | `Tests/Codec.lean`, `Tests/Durable.lean`, `Tests/MonitorSpeed.lean` and others |
 | `Codec.list` | proved | its type, `Codec` |
 | `Codec.extTreeMap` | proved | its type, `Codec` |
@@ -1552,6 +1554,35 @@ them by area.
 | `Peers.Action.parcel?` | spec | used only in statements |
 | `Peers.Courier.leftover` | spec | used only in statements |
 
+## `Lanes/Net/Handshake.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Peers.Handshake.magic` | proved | through `Peers.Handshake.Hello.read`, `Peers.Handshake.Hello.write` and others: `Peers.Handshake.Hello.read_write_append`, `Peers.Handshake.Reachable.ready_proved` and others |
+| `Peers.Handshake.version` | proved | `Peers.Handshake.Hello.read_write_append` |
+| `Peers.Handshake.proofSize` | proved | `Peers.Handshake.Reachable.ready_proved` |
+| `Peers.Handshake.Hello.records` | proved | `Peers.Handshake.Hello.read_write_append` |
+| `Peers.Handshake.Hello.write` | proved | `Peers.Handshake.Hello.read_write_append` |
+| `Peers.Handshake.Hello.read` | proved | `Peers.Handshake.Hello.read_write_append`, `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.Role.other` | proved | `Peers.Handshake.Reachable.ready_proved` |
+| `Peers.Handshake.Role.label` | proved | through `Peers.Handshake.hear`, `Peers.Handshake.step`: `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.Refusal.message` | tested | `Tests/Fronted.lean`, `Tests/Peers.lean` |
+| `Peers.Handshake.Refusal.quiet` | tested | `Tests/Fronted.lean`, `Tests/Peers.lean` |
+| `Peers.Handshake.transcript` | proved | `Peers.Handshake.Reachable.ready_proved` |
+| `Peers.Handshake.proofOf` | proved | `Peers.Handshake.Reachable.ready_proved` |
+| `Peers.Handshake.differs` | proved | `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.refuse` | proved | through `Peers.Handshake.hear`, `Peers.Handshake.step`: `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.check` | proved | through `Peers.Handshake.hear`, `Peers.Handshake.step`: `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.hear` | proved | `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.start` | tested | `Tests/Peers.lean` |
+| `Peers.Handshake.step` | proved | `Peers.Handshake.Reachable.ready_proved` |
+
+## `Lanes/Net/HandshakeSound.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Peers.Handshake.Heard` | spec | a predicate |
+
 ## `Lanes/Net/IO/Node.lean`
 
 | Definition | Status | Evidence |
@@ -1562,6 +1593,7 @@ them by area.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
+| `Peers.Config.minKeyBytes` | trusted | TRUSTED.md: The transport between processes |
 | `Peers.start` | trusted | TRUSTED.md: The transport between processes |
 | `Peers.send` | trusted | TRUSTED.md: The transport between processes |
 | `Peers.stop` | trusted | TRUSTED.md: The transport between processes |
