@@ -32,7 +32,7 @@ abbrev sig (In Out : Type) [DecidableEq In] [DecidableEq Out] : Signature where
 
 variable {In Out S : Type} [DecidableEq In] [DecidableEq Out]
 
-/-- Its state is durable. -/
+/-- It keeps its state across a crash of the actor, not across a restart of the process. -/
 def actor (svc : Service In Out S) : (sig In Out).Actor () S where
   init := svc.init
   step s x := ((svc.step s x).1, (svc.step s x).2.map .emit)

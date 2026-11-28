@@ -160,7 +160,8 @@ def perform (lb : Loopback sys bridge gate) (x : Exchange) :
         | none => (lb, x)
       | .interim _ bytes | .write _ bytes | .part _ bytes =>
         (lb, { x with written := x.written ++ bytes })
-      | .close => (lb, { x with closed := true })
+      -- The loopback runs no protocol a connection switches to: the exchange ends there.
+      | .switch .. | .close => (lb, { x with closed := true })
     perform lb x rest
 
 /-- Tell the connection `e` and do what it asks. What it writes is sent at once, and it is told

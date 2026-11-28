@@ -15,7 +15,7 @@ deadline passes. What is left in IO is reading and writing sockets.
 The decisions are `Gate.step`, which does not know where the gate sits. `Lanes.Web.Http.Front` has
 the gate as a system of its own (`gateSystem`), `fronted sys` with it joined in front of `sys`,
 and `served sys`, the specification of `Http.serve`; `Lanes.Web.Http.Admit` has the gate before the
-shard, as `Http.serve` runs it.
+runtime, as `Http.serve` runs it.
 -/
 
 @[expose] public section
@@ -40,7 +40,8 @@ structure Bridge (σ : Signature) where
   /-- What the server makes of a request before it gives it an id, on the request's own task:
   the system and its theorems see only what this returns. A secret is turned here into what the
   system needs of it (a password into its digest, a cookie into the user it verifies), so it
-  never enters the system, and work too slow for the shard's one thread is done here, once. -/
+  never enters the system, and work too slow for a step is done here, once, off the runtime's
+  workers. -/
   prepare : Request → Request := id
 
 /-- The gate's bounds: how long a request waits for the system before it is answered `504`,

@@ -5,10 +5,13 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes
 import Tests.TutorialWeb.Files
 import Lanes.Services.S3
+import Lanes.Services.Postgres
 
 /-!
 The edge of the shelf: the sign-in, the session cookie, the pages, the forms for the store and
-the server. `arrive` is the only IO: the sign-in, the time, and asking the store for an upload.
+the server. `arrive` is the only IO of its own: the sign-in, the time, and asking the store for
+an upload. The calls of the front to the database are run by whatever `start` is given:
+PostgreSQL in `main`, the test kit's store in memory in the test.
 -/
 
 namespace Shelf
@@ -36,7 +39,7 @@ structure Settings where
 
 def Settings.secure (s : Settings) : Bool := s.origin.startsWith "https:"
 
-def Settings.objectKey (_ : Settings) (file : FileId) : String := s!"files/{file}"
+def Settings.objectKey (_ : Settings) (file : Int64) : String := s!"files/{file.toInt}"
 
 namespace Routes
 
@@ -84,12 +87,12 @@ def stored? (r : Http.Request) : Option Nat := (r.header? storedHeader).bind Str
 
 /-- The form a browser posts the file with: its key exact, its size in `length`, for `upload_s`
 from `at_s`. -/
-def uploadForm (s : Settings) (file : FileId) (at_s : Nat) : Option S3.Post.Form :=
+def uploadForm (s : Settings) (file : Int64) (at_s : Nat) : Option S3.Post.Form :=
   (S3.Key.of? (s.objectKey file)).map fun key =>
     S3.Post.form s.bucket s.creds (Civil.DateTime.ofUnix at_s)
       { key := .exact key, length := s.length, expiry := s.upload_s }
 
-def link (s : Settings) (file : FileId) (at_s : Nat) : String :=
+def link (s : Settings) (file : Int64) (at_s : Nat) : String :=
   match S3.Key.of? (s.objectKey file) with
   | some key => S3.presign s.bucket s.creds (Civil.DateTime.ofUnix at_s) .get key s.link_s
   | none => Html.blockedUrl
@@ -130,10 +133,10 @@ def ShelfPage (s : Settings) (who : Member) (files : List Upload) (at_s : Nat) :
     <ul>
       {files.map fun u =>
         <li>
-          <a href={link s u.id at_s}>{s!"File {u.id}"}</a>
-          {s!", {u.size.getD 0} bytes "}
+          <a href={link s u.id at_s}>{s!"File {u.id.toInt}"}</a>
+          {s!", {(u.size.getD 0).toInt} bytes "}
           {if u.owner == who then
-            <form method="post" action={Routes.delete.link (u.id, ())}>
+            <form method="post" action={Routes.delete.link (u.id.toInt.toNat, ())}>
               {csrf s who}
               <button type="submit">"Delete"</button>
             </form>
@@ -145,7 +148,7 @@ def ShelfPage (s : Settings) (who : Member) (files : List Upload) (at_s : Nat) :
       <button type="submit">"Upload a file"</button>
     </form>]
 
-def UploadPage (s : Settings) (who : Member) (file : FileId) (at_s : Nat) : Html :=
+def UploadPage (s : Settings) (who : Member) (file : Int64) (at_s : Nat) : Html :=
   Layout [
     match uploadForm s file at_s with
     | some form =>
@@ -156,7 +159,7 @@ def UploadPage (s : Settings) (who : Member) (file : FileId) (at_s : Nat) : Html
         <span id="status" role="status"></span>
       </form>
     | none => <p>"This file cannot be uploaded."</p>,
-    <form id="uploaded" method="post" action={Routes.uploaded.link (file, ())}>
+    <form id="uploaded" method="post" action={Routes.uploaded.link (file.toInt.toNat, ())}>
       {csrf s who}
     </form>]
 
@@ -180,20 +183,24 @@ def signed (s : Settings) (r : Http.Request) (f : Member → Request) : Except H
     if r.sameOrigin s.origin && (r.field? "csrf").any (Auth.checkForm s.keys who) then .ok (f who)
     else .error (.text "forbidden\n" 403)
 
-def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response Request :=
+def request (s : Settings) (r : Http.Request) : Except Http.Response Request :=
   (dispatch [
     Routes.home.handle fun () r => match member? r with
-      | some who => .ok (.list id who (arrived r))
+      | some who => .ok (.list who (arrived r))
       | none => .error (page (SignedOut s)),
     Routes.script.handle fun () _ => .error (Http.Response.ofText "text/javascript" script),
     Routes.callback.handle fun _ r => match OAuth.identity? r with
       | some who => .error (home.setCookie
           (cookie s (Auth.sign s.keys "session" (arrived r + s.session_s) (memberOf who))))
       | none => .error notFound,
-    Routes.begin.handle fun () r => signed s r fun who => .begin id who (arrived r),
-    Routes.uploaded.handle fun (file, ()) r => signed s r fun who => .seen id who file (stored? r),
-    Routes.delete.handle fun (file, ()) r => signed s r fun who => .delete id who file
+    Routes.begin.handle fun () r => signed s r fun who => .begin who (arrived r),
+    Routes.uploaded.handle fun (file, ()) r =>
+      signed s r fun who => .seen who (Int64.ofNat file) (stored? r),
+    Routes.delete.handle fun (file, ()) r => signed s r fun who => .delete who (Int64.ofNat file)
   ] r).getD (.error notFound)
+
+def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response In :=
+  (request s r).map (.request id)
 
 def encode (s : Settings) : Answer → Http.Response
   | .shelf who files at_s => page (ShelfPage s who files at_s)
@@ -205,7 +212,10 @@ def encode (s : Settings) : Answer → Http.Response
 
 def bridge (s : Settings) : Bridge sig where
   decode := decode s
-  encode r := some (r.req, encode s r.answer)
+  encode
+    | .answered id a => some (id, encode s a)
+    | .failed id => some (id, page (Message "Not now" "The shelf is not available; try again.") 503)
+    | .call _ => none
   prepare := prepare s
 
 /-! ## Where a request arrives -/
@@ -223,8 +233,8 @@ def withStored (size : Option Nat) (r : Http.Request) : Http.Request :=
 
 /-- What the store says of `file`: its size, or `none` when it has no such object or does not
 answer in time. -/
-def head (s : Settings) (file : FileId) : IO (Option Nat) := do
-  let some key := S3.Key.of? (s.objectKey file) | return none
+def head (s : Settings) (file : Nat) : IO (Option Nat) := do
+  let some key := S3.Key.of? (s.objectKey (Int64.ofNat file)) | return none
   let answer ← try (S3.exchange s.bucket s.creds (.head key) { timeout_ms := 5000 }).block
     catch _ => pure none
   match answer with
@@ -250,10 +260,12 @@ structure Deployment where
   server : Http.ServerConfig
   signIn : OAuth.SignIn.Config
 
-abbrev Site (d : Deployment) := Http.admitted (system d.config) (bridge d.settings)
+abbrev Site (d : Deployment) := Http.admittedFronted system (bridge d.settings)
 
-def start (d : Deployment) : Async (Http.Server (Site d)) := do
+/-- Serve the shelf, each call of the front to the database run by `call`. -/
+def start (d : Deployment) (call : Request → Async (Db.Result Answer)) : Async (Http.Server (Site d)) := do
   let signIn ← OAuth.SignIn.start d.signIn
-  Http.serve (system d.config) (bridge d.settings) d.server (arrive := some (arrive d.settings signIn))
+  Postgres.Typed.serveWith system (bridge d.settings) port call d.server
+    (arrive := some (arrive d.settings signIn))
 
 end Shelf

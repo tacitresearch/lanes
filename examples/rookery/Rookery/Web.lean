@@ -1,48 +1,36 @@
-import Rookery.System
+import Rookery.App
 
 /-!
 # The web front and the API
 
 Server-rendered pages with htmx for people, and JSON for bots. The bridge is where a request
-becomes an input, and its `prepare` the only place that sees a password, a cookie or a token.
-The server runs it on the request's own task before the request enters the system
-(`Http.Bridge.prepare`, D44):
+becomes an input. What a request holds that must not enter the system is taken out before it
+does, on the request's own task:
 
-- a password becomes its digest (`Auth.Password.digest`), so the system holds no password;
-- a session cookie is a signed token of the session's id and the account's name, and an API
-  token a signed token of its generation and the account's name (`Auth.sign`); `prepare` puts
-  what one that verifies carried in its place, so nothing in a request's body names an account,
-  and a header of the names `prepare` writes that a client sends is dropped;
-- a form that changes something carries a token bound to the session (`Auth.formToken`) and
+- `arrive` (`Web.arrive`, given by the server the time, 16 random bytes and, for a log-in, the
+  hash stored for the name) turns a sign-up's password into its hash
+  (`Auth.Password.hash`, a PHC string with a random salt) and checks a log-in's against the
+  stored hash with `Auth.Password.verify`, which reads the cost and the salt from it; a hash not
+  as the deployment makes one now is made again (`Checked.right`). The password is then dropped,
+  so no request that enters holds one. Argon2id is slow on purpose, and this work is done on the
+  request's own task, never on a worker of the system.
+- `prepare` puts in place of a session cookie, a signed token of the session's id and the
+  account's name, and of an API token, a signed token of its generation and the account's name
+  (`Auth.sign`), what one that verifies carried, so nothing in a request's body names an account.
+  A header of the names `arrive` or `prepare` writes that a client sends is dropped.
+- A form that changes something carries a token bound to the session (`Auth.formToken`) and
   comes from this origin.
 
-The system's answer says whether the request came through the API (`Response.json`), so the
-bridge answers in JSON or in HTML. Pages that need no records are answered by the bridge; the
-records come into them as fragments, through the system.
+The answer says whether the request came through the API (`Response.json`), so the bridge
+answers in JSON or in HTML, and names the account the request was made as (`Response.name`), the
+only one a cookie or a token is signed for. Pages that need no records are answered by the
+bridge; the records come into them as fragments, through the system.
 -/
 
 namespace Rookery.Web
 
 open Lanes Lanes.Http
 open scoped Lanes.Html
-
-/-- An account's name: one to twenty lowercase letters, digits and `_`, so that it is a path
-segment, a cookie payload and text all at once without escaping. -/
-def Name.valid (s : String) : Bool :=
-  0 < s.length && s.length ≤ 20 && s.toList.all fun c => c.isLower || c.isDigit || c == '_'
-
-abbrev Name := {s : String // Name.valid s}
-
-def Name.ofString? (s : String) : Option Name :=
-  if h : Name.valid s then some ⟨s, h⟩ else none
-
-def Body.ofString? (s : String) : Option Body :=
-  if h : Body.valid s then some ⟨s, h⟩ else none
-
-abbrev Digest := Auth.Digest
-abbrev Sys (config : Config) := system Name Digest config
-abbrev In := Request Name Digest
-abbrev Out := Response Name
 
 /-- What the bridge is built with. The key and the pepper are secrets of the deployment. -/
 structure Settings where
@@ -94,35 +82,39 @@ def posted : String := "posted"
 /-! ## Sessions and tokens -/
 
 /-- A session as its token's payload, and what its form tokens are bound to. -/
-def sessionOf (name : Name) (session : Sid) : String := s!"{session}.{name.val}"
+def sessionOf (name : Name) (session : Int64) : String := s!"{session.toInt}.{name.val}"
 
 /-- The token of a session's cookie, signed at `at_s`. -/
-def sessionToken (s : Settings) (name : Name) (session : Sid) (at_s : Nat) : String :=
+def sessionToken (s : Settings) (name : Name) (session : Int64) (at_s : Nat) : String :=
   Auth.sign s.keys "session" (at_s + s.session_s) (sessionOf name session)
 
-def apiToken (s : Settings) (name : Name) (generation at_s : Nat) : String :=
-  Auth.sign s.keys "api" (at_s + s.apiToken_s) s!"{generation}.{name.val}"
+def apiToken (s : Settings) (name : Name) (generation : Int64) (at_s : Nat) : String :=
+  Auth.sign s.keys "api" (at_s + s.apiToken_s) s!"{generation.toInt}.{name.val}"
 
-/-- The header `arrive` writes the time a request arrived in, which a client's is dropped. -/
+/-- The headers `arrive` writes: when the request arrived, a sign-up's hash, and what a
+log-in's password checked against the stored hash gave. One a client sends is dropped. -/
 def arrivedHeader : String := "rookery-arrived"
+def passwordHash : String := "rookery-password-hash"
+def passwordChecked : String := "rookery-password-checked"
 
 /-- When the request arrived, in seconds. -/
 def arrived (r : Http.Request) : Nat := ((r.header? arrivedHeader).bind String.toNat?).getD 0
 
-/-- What `arrive` does: the request with the time it arrived, and none a client wrote. -/
+/-- The request with the time it arrived, and none of the headers `arrive` writes that a client
+wrote. -/
 def stamp (now_s : Nat) (r : Http.Request) : Http.Request :=
-  { r with headers := r.headers.filter (·.1 != arrivedHeader) ++ [(arrivedHeader, toString now_s)] }
+  { r with headers := r.headers.filter (fun (n, _) =>
+      n != arrivedHeader && n != passwordHash && n != passwordChecked) ++ [(arrivedHeader, toString now_s)] }
 
 /-- A number and a name, as a session's and a token's payloads hold them. -/
-def numbered? (payload : String) : Option (Nat × Name) :=
+def numbered? (payload : String) : Option (Int64 × Name) :=
   match payload.splitOn "." with
-  | [k, name] => do return (← k.toNat?, ← Name.ofString? name)
+  | [k, name] => do return (Int64.ofInt (← k.toInt?), ← Name.ofString? name)
   | _ => none
 
 /-- The headers `prepare` writes. One a client sends is dropped. -/
 def verifiedSession : String := "rookery-verified-session"
 def verifiedToken : String := "rookery-verified-token"
-def passwordDigest : String := "rookery-password-digest"
 
 def bearer? (r : Http.Request) : Option String := do
   let value ← r.header? "authorization"
@@ -130,27 +122,18 @@ def bearer? (r : Http.Request) : Option String := do
   | ["Bearer", token] => some token
   | _ => none
 
-/-- A request with its cookie replaced by the session it verifies, its token by the account and
-generation it verifies, and its password by its digest, or by `short` when too short. -/
+/-- A request with its cookie replaced by the session it verifies, and its token by the account
+and generation it verifies. -/
 def prepare (s : Settings) (r : Http.Request) : Http.Request :=
   let kept := r.headers.filter fun (name, _) =>
-    name != "cookie" && name != "authorization" && name != verifiedSession
-      && name != verifiedToken && name != passwordDigest
+    name != "cookie" && name != "authorization" && name != verifiedSession && name != verifiedToken
   let session := (r.cookie? sessionCookie >>= Auth.verify s.keys "session" (arrived r)).map
     (verifiedSession, ·)
   let token := (bearer? r >>= Auth.verify s.keys "api" (arrived r)).map (verifiedToken, ·)
-  let digest := match r.field? "name" >>= Name.ofString?, r.field? "password" with
-    | some name, some password =>
-      [(passwordDigest, if password.length < s.minPassword then "short"
-        else (s.password.digest name.val password).hex)]
-    | _, _ => []
-  { r with
-    headers := kept ++ session.toList ++ token.toList ++ digest
-    body := if (r.field? "password").isSome
-      then (encodeForm (r.form.filter (·.1 != "password"))).toUTF8 else r.body }
+  { r with headers := kept ++ session.toList ++ token.toList }
 
 /-- The session `prepare` verified, as its form tokens are bound to, its name and its id. -/
-def verified? (r : Http.Request) : Option (String × Name × Sid) := do
+def verified? (r : Http.Request) : Option (String × Name × Int64) := do
   let (sid, name) ← numbered? (← r.header? verifiedSession)
   return (sessionOf name sid, name, sid)
 
@@ -203,13 +186,13 @@ def LoginPage (notice : Option Html := none) : Html :=
       </form>
     </main>]
 
-def profileLink (n : Name) : String :=
-  ((Slug.ofString? n.val).map Routes.profile.link).getD (Routes.home.link ())
+def profileLink (n : String) : String :=
+  ((Slug.ofString? n).map Routes.profile.link).getD (Routes.home.link ())
 
 def Nav (s : Settings) (session : String) (name : Name) : Html :=
   <nav>
     <a href={Routes.home.link ()}>"rookery"</a>
-    <a href={profileLink name}>{name.val}</a>
+    <a href={profileLink name.val}>{name.val}</a>
     <form method="post" action={Routes.logOut.link ()}>
       <input type="hidden" name="csrf" value={Auth.formToken s.keys session}/>
       <button type="submit">"Log out"</button>
@@ -266,14 +249,14 @@ def ProfilePage (whom : Slug) : Html :=
       <div {Hx.request Routes.profilePosts (whom, ())} {Hx.trigger [.load]}>"…"</div>
     </main>]
 
-def Feed (posts : List (Name × Post)) : Html :=
+def Feed (posts : List Post) : Html :=
   if posts.isEmpty then <p>"No posts yet."</p>
   else
     <div>
-      {posts.map fun (author, q) =>
+      {posts.map fun q =>
         <article>
-          <div class="meta"><a href={profileLink author}>{author.val}</a>{s!" · #{q.id}"}</div>
-          <p>{q.body.val}</p>
+          <div class="meta"><a href={profileLink q.author}>{q.author}</a>{s!" · #{q.id.toInt}"}</div>
+          <p>{q.body}</p>
         </article>}
     </div>
 
@@ -294,23 +277,68 @@ def forbidden : Http.Response :=
 def jsonError (text : String) (status : Nat) : Http.Response :=
   Http.Response.json (Json.mkObj [("error", toJson text)]).compress status
 
-/-- The name and the digest `prepare` made of the password. -/
-def credentials (s : Settings) (r : Http.Request) : Except Http.Response (Name × Digest) :=
+/-! ### Passwords, where the request arrives -/
+
+/-- What a log-in's password checked against the stored hash gives; with a hash not as the
+deployment makes one now, its new hash under `salt`. A name nobody has checks no hash, so it is
+answered sooner; a sign-up tells as much, as it says when a name is taken. -/
+def check (s : Settings) (salt : ByteArray) (h : salt.size = 16) (name password : String)
+    (stored : Option String) : Checked :=
+  match stored >>= Auth.Stored.read? with
+  | none => .wrong
+  | some st => match s.password.verify name password st with
+    | .wrong => .wrong
+    | .ok => .right none
+    | .rehash => .right (some (s.password.hash salt h password).encode)
+
+def _root_.Rookery.Checked.header : Checked → String
+  | .wrong => "wrong"
+  | .right none => "right"
+  | .right (some hash) => "rehash " ++ hash
+
+def _root_.Rookery.Checked.ofHeader? (v : String) : Option Checked :=
+  if v == "wrong" then some .wrong
+  else if v == "right" then some (.right none)
+  else if v.startsWith "rehash " then some (.right (some (v.drop 7).toString))
+  else none
+
+/-- What `arrive` does with a request, given the time, 16 random bytes and, for a log-in, the
+hash stored for its name: a sign-up's password becomes its hash, a log-in's what checking it
+gave, or `short`, and the password is dropped. -/
+def arrive (s : Settings) (now_s : Nat) (salt : ByteArray) (stored : Option String)
+    (r : Http.Request) : Http.Request :=
+  let r := stamp now_s r
+  match r.field? "name" >>= Name.ofString?, r.field? "password", decide (salt.size = 16) with
+  | some name, some password, true =>
+    let header :=
+      if password.length < s.minPassword then [(passwordHash, "short")]
+      else if (Routes.signUp.match? r).isSome then
+        if h : salt.size = 16 then [(passwordHash, (s.password.hash salt h password).encode)] else []
+      else if (Routes.logIn.match? r).isSome then
+        if h : salt.size = 16 then [(passwordChecked, (check s salt h name.val password stored).header)]
+        else []
+      else []
+    { r with
+      headers := r.headers ++ header
+      body := (encodeForm (r.form.filter (·.1 != "password"))).toUTF8 }
+  | _, _, _ => r
+
+/-- The name of a log-in or sign-up form, and what `arrive` wrote of its password. -/
+def credentials (s : Settings) (header : String) (r : Http.Request) :
+    Except Http.Response (Name × String) :=
   let badName := page (LoginPage (some (Error
     "A name is one to twenty lowercase letters, digits and underscores."))) 400
-  match r.field? "name" >>= Name.ofString?, r.header? passwordDigest with
-  | some _, some "short" =>
+  match r.field? "name" >>= Name.ofString?, r.header? passwordHash, r.header? header with
+  | some _, some "short", _ =>
     .error (page (LoginPage (some (Error
       s!"A password has at least {s.minPassword} characters."))) 400)
-  | some name, some digest =>
-    match Auth.Digest.ofHex? digest with
-    | some digest => .ok (name, digest)
-    | none => .error badName
-  | _, _ => .error badName
+  | some name, _, some value => .ok (name, value)
+  | some _, _, none => .error (Http.Response.text "the password was not read\n" 500)
+  | _, _, _ => .error badName
 
 /-- A request whose cookie names a session, as an input; or how the bridge answers it. -/
 def signedIn (s : Settings) (r : Http.Request) (changes : Bool)
-    (input : Name → Sid → Except Http.Response In) : Except Http.Response In :=
+    (input : Name → Int64 → Except Http.Response Request) : Except Http.Response Request :=
   match verified? r with
   | none => .error notLoggedIn
   | some (session, name, sid) =>
@@ -318,26 +346,26 @@ def signedIn (s : Settings) (r : Http.Request) (changes : Bool)
     then .error forbidden
     else input name sid
 
-def shell (s : Settings) (r : Http.Request) : Except Http.Response In :=
+def shell (s : Settings) (r : Http.Request) : Except Http.Response Request :=
   match verified? r with
   | some (session, name, _) => .error (page (HomePage s session name))
   | none => .error (page (LoginPage))
 
-def webOp (s : Settings) (id : ReqId) (r : Http.Request)
-    (op : Http.Request → Except Http.Response (Op Name)) : Except Http.Response In :=
-  signedIn s r true fun name session => (op r).map (.web id name session)
+def webOp (s : Settings) (r : Http.Request)
+    (op : Http.Request → Except Http.Response Action) : Except Http.Response Request :=
+  signedIn s r true fun name session => (op r).map (.web name session)
 
-def bodyOp (r : Http.Request) : Except Http.Response (Op Name) :=
+def bodyOp (r : Http.Request) : Except Http.Response Action :=
   match r.field? "body" >>= Body.ofString? with
   | some body => .ok (.post body)
   | none => .error (fragment (Error "A post is one to 280 characters."))
 
-def deleteOp (r : Http.Request) : Except Http.Response (Op Name) :=
+def deleteOp (r : Http.Request) : Except Http.Response Action :=
   match r.field? "id" >>= String.toNat? with
-  | some id => .ok (.delete id)
+  | some id => .ok (.delete (Int64.ofNat id))
   | none => .error (fragment (Error "A post's number is a whole number."))
 
-def nameOp (make : Name → Op Name) (r : Http.Request) : Except Http.Response (Op Name) :=
+def nameOp (make : Name → Action) (r : Http.Request) : Except Http.Response Action :=
   match r.field? "name" >>= Name.ofString? with
   | some whom => .ok (make whom)
   | none => .error (fragment (Error "No such account."))
@@ -349,7 +377,7 @@ what it needs. -/
 lanes_data structure Change where
   seq : Nat
   text : Option Body := none
-  id : Option PostId := none
+  id : Option Nat := none
   name : Option Name := none
   deriving ToJson, FromJson
 
@@ -357,30 +385,32 @@ def jsonBody? {α : Type} [FromJson α] (r : Http.Request) : Option α := do
   (fromJson? (← (Json.parse (← String.fromUTF8? r.body)).toOption)).toOption
 
 /-- The account and the token's generation of a request carrying a verified token. -/
-def apiAccount (r : Http.Request) : Except Http.Response (Nat × Name) :=
+def apiAccount (r : Http.Request) : Except Http.Response (Int64 × Name) :=
   match r.header? verifiedToken >>= numbered? with
   | some account => .ok account
   | none => .error (jsonError "a token is missing or does not verify" 401)
 
 /-- A read needs no body and no `seq`. -/
-def apiRead (id : ReqId) (r : Http.Request) : Except Http.Response In := do
+def apiRead (r : Http.Request) : Except Http.Response Request := do
   let (generation, name) ← apiAccount r
-  return .api id name generation 0 .timeline
+  return .api name generation 0 .timeline
 
-def apiChange (id : ReqId) (r : Http.Request) (op : Change → Option (Op Name)) :
-    Except Http.Response In := do
+/-- A `seq` past what 63 bits hold is refused, so that every `seq` taken is one the store keeps. -/
+def apiChange (r : Http.Request) (op : Change → Option Action) : Except Http.Response Request := do
   let (generation, name) ← apiAccount r
   match jsonBody? r >>= fun (c : Change) => (op c).map (c.seq, ·) with
-  | some (seq, op) => .ok (.api id name generation seq op)
+  | some (seq, op) =>
+    if seq < 2 ^ 63 then .ok (.api name generation (Int64.ofNat seq) op)
+    else .error (jsonError "seq is too large" 400)
   | none => .error (jsonError "the body is not what this call takes" 400)
 
-def profileInput (id : ReqId) (whom : Slug) (json : Bool) : Except Http.Response In :=
+def profileInput (whom : Slug) (json : Bool) : Except Http.Response Request :=
   match Name.ofString? whom.text with
-  | some name => .ok (.profile id name json)
+  | some name => .ok (.profile name json)
   | none => .error (if json then jsonError "no such account" 404
       else fragment <p>"No such account."</p>)
 
-def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response In :=
+def request (s : Settings) (r : Http.Request) : Except Http.Response Request :=
   if !r.bodyWithin s.maxBody_bytes then .error (Http.Response.text "too large\n" 413)
   else
     (dispatch [
@@ -389,48 +419,57 @@ def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response
       Routes.login.handle fun () _ => .error (page (LoginPage)),
       Routes.signUp.handle fun () r =>
         if r.sameOrigin s.origin then
-          (credentials s r).map fun (n, d) => .signUp id n d (r.field? "bot" == some "yes")
+          (credentials s passwordHash r).map fun (n, hash) => .signUp n hash (r.field? "bot" == some "yes")
         else .error forbidden,
       Routes.logIn.handle fun () r =>
-        if r.sameOrigin s.origin then (credentials s r).map fun (n, d) => .logIn id n d (arrived r)
+        if r.sameOrigin s.origin then
+          match credentials s passwordChecked r with
+          | .ok (n, v) => match Checked.ofHeader? v with
+            | some checked => .ok (.logIn n checked)
+            | none => .error (Http.Response.text "the password was not read\n" 500)
+          | .error e => .error e
         else .error forbidden,
       Routes.logOut.handle fun () r =>
-        signedIn s r true fun name session => .ok (.logOut id name session),
+        signedIn s r true fun name session => .ok (.logOut name session),
       Routes.token.handle fun () r =>
-        signedIn s r true fun name session => .ok (.newToken id name session (arrived r)),
+        signedIn s r true fun name session => .ok (.newToken name session),
       Routes.timeline.handle fun () r =>
-        signedIn s r false fun name session => .ok (.web id name session .timeline),
+        signedIn s r false fun name session => .ok (.web name session .timeline),
       Routes.timelineEvents.handle fun () r =>
         signedIn s r false fun name session =>
-          if (Stream.msg? r).isSome then .ok (.web id name session .timeline)
+          if (Stream.msg? r).isSome then .ok (.web name session .timeline)
           else .error Http.Response.events,
-      Routes.post.handle fun () r => webOp s id r bodyOp,
-      Routes.delete.handle fun () r => webOp s id r deleteOp,
-      Routes.follow.handle fun () r => webOp s id r (nameOp .follow),
-      Routes.unfollow.handle fun () r => webOp s id r (nameOp .unfollow),
+      Routes.post.handle fun () r => webOp s r bodyOp,
+      Routes.delete.handle fun () r => webOp s r deleteOp,
+      Routes.follow.handle fun () r => webOp s r (nameOp .follow),
+      Routes.unfollow.handle fun () r => webOp s r (nameOp .unfollow),
       Routes.profile.handle fun whom _ => .error (page (ProfilePage whom)),
-      Routes.profilePosts.handle fun (whom, ()) _ => profileInput id whom false,
-      Routes.apiTimeline.handle fun () r => apiRead id r,
-      Routes.apiPost.handle fun () r => apiChange id r fun c => c.text.map .post,
-      Routes.apiDelete.handle fun () r => apiChange id r fun c => c.id.map .delete,
-      Routes.apiFollow.handle fun () r => apiChange id r fun c => c.name.map .follow,
-      Routes.apiUnfollow.handle fun () r => apiChange id r fun c => c.name.map .unfollow,
-      Routes.apiProfile.handle fun whom _ => profileInput id whom true
+      Routes.profilePosts.handle fun (whom, ()) _ => profileInput whom false,
+      Routes.apiTimeline.handle fun () r => apiRead r,
+      Routes.apiPost.handle fun () r => apiChange r fun c => c.text.map .post,
+      Routes.apiDelete.handle fun () r => apiChange r fun c => c.id.map (.delete ∘ Int64.ofNat),
+      Routes.apiFollow.handle fun () r => apiChange r fun c => c.name.map .follow,
+      Routes.apiUnfollow.handle fun () r => apiChange r fun c => c.name.map .unfollow,
+      Routes.apiProfile.handle fun whom _ => profileInput whom true
     ] r).getD (.error (Http.Response.text "not found\n" 404))
 
-def postJson (author : Name) (q : Post) : Json :=
-  Json.mkObj [("id", toJson q.id), ("author", toJson author.val), ("body", toJson q.body.val)]
+/-- A request as the system takes it: its id, when it arrived, and what it asks. -/
+def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response In :=
+  (request s r).map fun q => .request id { at_s := Int64.ofNat (arrived r), request := q }
+
+def postJson (q : Post) : Json :=
+  Json.mkObj [("id", toJson q.id.toInt), ("author", toJson q.author), ("body", toJson q.body)]
 
 def jsonOk (fields : List (String × Json)) (status : Nat := 200) : Http.Response :=
   Http.Response.json (Json.mkObj fields).compress status
 
 /-- An answer to a bot. -/
-def encodeJson : Reply Name → Http.Response
-  | .posted id => jsonOk [("id", toJson id)] 201
+def encodeJson : Reply → Http.Response
+  | .posted id => jsonOk [("id", toJson id.toInt)] 201
   | .deleted => jsonOk [("deleted", toJson true)]
   | .followed => jsonOk [("following", toJson true)]
   | .unfollowed => jsonOk [("following", toJson false)]
-  | .feed posts => jsonOk [("posts", .arr (posts.map fun (a, q) => postJson a q).toArray)]
+  | .feed posts => jsonOk [("posts", .arr (posts.map postJson).toArray)]
   | .rateLimited => jsonError "too many posts in this window; wait and try again" 429
   | .tooManyPosts => jsonError "the account keeps as many posts as it may; delete one" 409
   | .tooManyFollows => jsonError "the account follows as many as it may" 409
@@ -442,25 +481,25 @@ def encodeJson : Reply Name → Http.Response
   | _ => jsonError "not an answer the API gives" 500
 
 /-- What a timeline shows, as the id of the event that shows it: the same posts, the same id. -/
-def feedId (posts : List (Name × Post)) : String :=
-  toString (hash (posts.map (·.2.id)))
+def feedId (posts : List Post) : String :=
+  toString (hash (posts.map (·.id)))
 
-/-- An answer to a browser. -/
-def encodeHtml (s : Settings) : Reply Name → Http.Response
+/-- An answer to a browser, for the account `name` the request was made as. -/
+def encodeHtml (s : Settings) (name : Name) : Reply → Http.Response
   | .signedUp => page (LoginPage (some <span>"Signed up. Log in."</span>))
   | .nameTaken => page (LoginPage (some (Error "That name is taken."))) 409
   | .full => page (LoginPage (some (Error "No more accounts can be made."))) 503
-  | .loggedIn name session at_s =>
+  | .loggedIn session at_s =>
     (Http.Response.redirect (Routes.home.link ())).setCookie
-      (cookie s (sessionToken s name session at_s))
+      (cookie s (sessionToken s name session at_s.toInt.toNat))
   | .refused => page (LoginPage (some (Error "Wrong name or password."))) 401
   | .locked => page (LoginPage (some (Error "Too many failed log-ins. Try again later."))) 429
   | .loggedOut =>
     (Http.Response.redirect (Routes.login.link ())).clearCookie (cookie s "")
   | .noSession => notLoggedIn.clearCookie (cookie s "")
-  | .token name generation at_s =>
-    fragment <span>{s!"Authorization: Bearer {apiToken s name generation at_s}"}</span>
-  | .posted id => (fragment <span>{s!"Posted #{id}."}</span>).trigger posted
+  | .token generation at_s =>
+    fragment <span>{s!"Authorization: Bearer {apiToken s name generation at_s.toInt.toNat}"}</span>
+  | .posted id => (fragment <span>{s!"Posted #{id.toInt}."}</span>).trigger posted
   | .rateLimited => fragment (Error "Too many posts for now. Wait a minute.")
   | .tooManyPosts => fragment (Error "You keep as many posts as you may. Delete one first.")
   | .deleted => (fragment <span>"Deleted."</span>).trigger posted
@@ -476,9 +515,12 @@ def encodeHtml (s : Settings) : Reply Name → Http.Response
 def streams (r : Http.Request) : Bool :=
   (Routes.timelineEvents.match? r).isSome
 
-def bridge (s : Settings) : Bridge (sig Name Digest) where
+def bridge (s : Settings) : Bridge sig where
   decode := decode s
-  encode out := some (out.req, if out.json then encodeJson out.reply else encodeHtml s out.reply)
+  encode
+    | .answered id r => some (id, if r.json then encodeJson r.reply else encodeHtml s r.name r.reply)
+    | .failed id => some (id, Http.Response.text "rookery is not available; try again.\n" 503)
+    | .call _ => none
   prepare := prepare s
 
 end Rookery.Web

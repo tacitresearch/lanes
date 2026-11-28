@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lanes.Semantics
 import Lanes.Web.Html.SanitizeSound
 import Lanes.Web.Http.WebSocketSound
+import Lanes.Web.Http.WebSocketSessionSound
 
 /-! The axiom gate (rule 5.5, see `Tests/Axioms.lean`) for the theorems of `Lanes/Web/`. -/
 
@@ -226,6 +227,9 @@ import Lanes.Web.Http.WebSocketSound
 /-- info: 'Lanes.Http.Gate.admit_refused' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Gate.admit_refused
 
+/-- info: 'Lanes.Http.Gate.receive_absent' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Gate.receive_absent
+
 -- Lanes.Web.Http.AdmitSound
 
 /-- info: 'Lanes.Http.Front.swap_inj' depends on axioms: [propext] -/
@@ -331,6 +335,12 @@ import Lanes.Web.Http.WebSocketSound
 
 /-- info: 'Lanes.Http.Conn.respond_ignored' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Conn.respond_ignored
+
+/-- info: 'Lanes.Http.Conn.respond_upgrading' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.respond_upgrading
+
+/-- info: 'Lanes.Http.Conn.flushSwitch_switch' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Http.Conn.flushSwitch_switch
 
 /-- info: 'Lanes.Http.Conn.pulled_part' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Conn.pulled_part
@@ -673,6 +683,26 @@ import Lanes.Web.Http.WebSocketSound
 
 /-- info: 'Lanes.Http.SharedCache.serve_of_leaks' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.SharedCache.serve_of_leaks
+
+-- Lanes.Web.Http.WebSocketSessionSound
+/-- info: 'Lanes.WebSocket.size_closePayload' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.WebSocket.size_closePayload
+
+/-- info: 'Lanes.WebSocket.Conn.receive_sends' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.WebSocket.Conn.receive_sends
+
+/-- info: 'Lanes.WebSocket.Session.step_writes' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.WebSocket.Session.step_writes
+
+/-- info: 'Lanes.WebSocket.Session.step_submits' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.WebSocket.Session.step_submits
+
+/-- info: 'Lanes.WebSocket.Session.step_withSystem' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.WebSocket.Session.step_withSystem
+
+-- Lanes.Web.Http.WebSocketSound
+/-- info: 'Lanes.WebSocket.decode_encode' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.WebSocket.decode_encode
 
 -- Lanes.Web.Http.Shutdown
 /-- info: 'Lanes.Http.Shutdown.step_stop' depends on axioms: [propext, Classical.choice] -/

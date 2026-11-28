@@ -36,7 +36,7 @@ def serve (svc : Service In Out S) (s : S) : List In → S × List Out
   | x :: xs =>
     ((serve svc (svc.step s x).1 xs).1, (svc.step s x).2 ++ (serve svc (svc.step s x).1 xs).2)
 
-/-- The value and the queue are durable. -/
+/-- The value and the queue are kept across a crash of the actor. -/
 def actor (svc : Service In Out S) : (sig In Out).Actor () (S × List In) where
   init := (svc.init, [])
   step s

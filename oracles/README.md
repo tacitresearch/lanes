@@ -120,9 +120,11 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Web/Http/SharedCache.lean` | | RFC 9111's rules for a shared cache, as decisions on a response, not a format; checked against a seeded bug in `Tests/SharedCache.lean`. A run through a real CDN or Varnish is owed |
 | `Lanes/Web/Http/Sse.lean` | | Proved to read what it writes against a model of the WHATWG reader (`Lanes/Web/Http/SseSound.lean`); a comparison with another reader, a browser's, is owed |
 | `Lanes/Web/Http/Stream.lean` | | Pieces and parts of a streamed body through the gate, not a format: the bytes are `Conn`'s and `Wire`'s |
+| `Lanes/Web/Http/Upgrade.lean` | | The interface of a protocol a connection switches to, not a format |
 | `Lanes/Web/Http/View.lean` | | Reads answered from the state, not a format |
 | `Lanes/Web/Http/Waiting.lean` | | Request ids, not a format |
 | `Lanes/Web/Http/WebSocket.lean` | `oracles/websockets` | Its frames proved to read back (`WebSocket.decode_encode`); RFC 6455's examples (`Tests/Oracle/WebSocket.lean`). Known: websockets' Sans-I/O layer leaves a text's UTF-8 to the layer above, fails a close inside a fragmented message, and counts a control frame against a fragmented message's limit |
+| `Lanes/Web/Http/WebSocketSession.lean` | `oracles/websockets` | A socket's decisions behind the gate; its frames are `WebSocket`'s, proved to be ones a client reads back (`WebSocket.Session.step_writes`). Live against websockets' client (`oracles/websockets/live.py`, run by `Tests/WebSocket.lean` when the oracle's environment is there) |
 | `Lanes/Web/Http/Wire.lean` | `oracles/go/requests` | The writer proved against the reader (`Lanes/Web/Http/WireSound.lean`); the responses it reads against `openssl s_server` (`Tests/Tls.lean`) and moto (`oracles/moto`) |
 | `Lanes/Web/Http/WireSpec.lean` | | The spec the wire format is proved against |
 

@@ -9,7 +9,7 @@ What a server does when it is told to stop, decided purely (rule 3.9); `Server.s
 (`Lanes/Web/IO/Server.lean`) performs it.
 
 At SIGTERM or SIGINT the server drains: readiness answers `503`, so that a load balancer sends
-it nothing new, while it goes on serving and the requests the shard has taken are answered. It
+it nothing new, while it goes on serving and the requests the runtime has taken are answered. It
 stops (`Server.stop`: the listener closes, the runtime stops, what still waits is answered `503`)
 once nothing is in flight or `drain_ms` has passed. The listener stays open while it drains: a
 load balancer may still send a request in the moments before it reads readiness, and a closed

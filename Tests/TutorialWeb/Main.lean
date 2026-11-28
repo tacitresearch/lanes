@@ -8,7 +8,9 @@ import Tests.TutorialWeb.Web
 /-!
 `shelf [port] [secrets]`: the site. `secrets` holds the key that signs session cookies
 and form tokens, 32 random bytes made at the first start. Everything else comes from the
-environment, read once here (rule 2.5); no key or secret is in the code.
+environment, read once here (rule 2.5); no key or secret is in the code. The shelf is in
+PostgreSQL, as libpq's variables say; at the start the migrations of `migrations/` not yet run
+are run, and the site refuses to start on tables other than the declared ones.
 -/
 
 open Lanes Shelf
@@ -42,7 +44,7 @@ def ms (name : String) (default : Nat) : IO Nat := do
   let some n := text.toNat? | throw (IO.userError s!"shelf: {name} is not a number: {text}")
   return n
 
-def main (args : List String) : IO Unit := do
+def main (args : List String) : IO UInt32 := do
   let port := (args[0]? >>= String.toNat?).getD 8080
   let key ← loadKey ((args[1]?.map System.FilePath.mk).getD "shelf.secrets")
   let origin := ((← IO.getEnv "LANES_URL").filter (!·.isEmpty)).getD s!"http://localhost:{port}"
@@ -53,13 +55,22 @@ def main (args : List String) : IO Unit := do
     | throw (IO.userError "shelf: AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are not set")
   let host := (← IO.getEnv "LANES_HOST").getD "127.0.0.1"
   let settings : Settings := { keys := .of (.of key), origin, bucket, creds, providers := ["oidc"] }
+  let postgres ← Postgres.Client.fromEnv
+  let problems ← (Postgres.Typed.prepare postgres schema
+    (← Postgres.Typed.readMigrations "migrations")).block
+  unless problems.isEmpty do
+    IO.eprintln s!"shelf: not started: {problems}"
+    return 1
+  let store : Postgres.Typed.Store Request Answer :=
+    { pool := ← Postgres.Pool.new postgres, handler := handler {} }
   let server ← (start {
     settings
     server := { host, port := port.toUInt16
                 idle_ms := ← ms "LANES_IDLE_MS" 10000
                 ops := { readinessPath := some "/readyz", livenessPath := some "/healthz"
                          metricsPath := some "/metrics", accessLog := .stderr } }
-    signIn := { providers := [← provider origin], secure := settings.secure } }).block
+    signIn := { providers := [← provider origin], secure := settings.secure } } store.call).block
   IO.println s!"shelf listening on http://{host}:{server.port.getD 0}"
   (← IO.getStdout).flush
   Lanes.block (server.stopOnSignal (← ms "LANES_DRAIN_MS" 10000))
+  return 0
