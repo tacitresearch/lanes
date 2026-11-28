@@ -15,7 +15,7 @@ of 64-bit integers, bytes, text and booleans, each nullable or not; its primary 
 database (`Db`) the rows of each table, sorted by primary key.
 
 The order of values is the one PostgreSQL gives the column types the driver creates
-(`Lanes/Lib/Postgres/Db.lean`): integers by value, bytes and text byte by byte (text is created
+(`Lanes/Services/Postgres/Db.lean`): integers by value, bytes and text byte by byte (text is created
 `COLLATE "C"`), `false` before `true`. Key and index columns are never `NULL` (`Table.valid`),
 so that `NULL`'s place in an order and its equality never matter. PostgreSQL's text cannot hold
 the character `NUL`, so a text value that does is not admitted.

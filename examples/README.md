@@ -52,7 +52,7 @@ adapter, as `todo-db` keeps its to-dos in PostgreSQL.
 | --- | --- |
 | A spec as a `Service`, run by `Server` | `counter` |
 | A spec as a `Service`, implemented by actors | `kv-cache`, `rookery` |
-| `lanes_data` and codecs | `counter`, `bank`, `rookery` |
+| `lanes_data`, with JSON (`ToJson, FromJson`) and a table (`table`) | `rookery`, `todo-db` |
 | Per-actor invariants (`actor_invariant`, `System.invariant_of_actor`) | `counter`, `bank`, `rookery` |
 | Refinement to a spec (`System.Implements`, `System.Refines`) | `counter`, `kv-cache`, `rookery` |
 | A request takes effect once (`Once.actor`, `Service.once`) | `kv-cache` |
@@ -84,7 +84,7 @@ lake exe rookeryLive  # a person and a bot over HTTP
 ```
 
 and in each small one, `lake build` and `lake test` (`bank-web` needs `bank` beside it, which it
-requires by path, and `sign-in` the presets in `integrations/`;
+requires by path;
 `upload`'s test drives its front end with no socket, and `lake exe upload 8080` serves it:
 `curl -T file http://127.0.0.1:8080/upload`).
 

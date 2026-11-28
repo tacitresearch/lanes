@@ -34,12 +34,12 @@ lanes_data structure Upload where
   owner : Member
   /-- The size the store gave when it was asked; `none` until it held the file. -/
   size : Option Nat
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data structure State where
   next : FileId := 0
   uploads : List Upload := []
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Request where
   | list (req : ReqId) (who : Member) (at_s : Nat)
@@ -48,7 +48,7 @@ lanes_data inductive Request where
   /-- The browser says it posted the file; `size` is what the store answered when asked. -/
   | seen (req : ReqId) (who : Member) (file : FileId) (size : Option Nat)
   | delete (req : ReqId) (who : Member) (file : FileId)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 ```
 
 What each request does, one at a time. The shelf holds at most `maxFiles` uploads (rule 2.6), so
@@ -110,8 +110,8 @@ system. It answers `/sign-in/<provider>` with the redirect to the provider, take
 provider's callback, exchanges the code, checks the ID token, and lets the callback in with the
 identity it verified in its headers. No code, token or client secret reaches the system.
 
-A provider is OpenID Connect or OAuth 2.0 with a user API. For GitHub, require
-`integrations/github` in the lakefile and use `GitHub.provider`. Any
+A provider is OpenID Connect or OAuth 2.0 with a user API. For GitHub, import
+`Lanes.Services.Oidc.GitHub` and use `GitHub.provider`. Any
 OpenID Connect provider (Google, Okta, Keycloak) is read from its discovery document, kept with
 the deployment so that nothing is fetched at start. In `Main.lean`:
 
@@ -207,7 +207,7 @@ within the 5 GiB S3 takes in one `POST`:
   length : S3.Post.Length := ⟨1, 10 * 1024 * 1024, by decide, by decide⟩
 ```
 
-**What is proved** (`Lanes/Web/S3/PostSound.lean`). `S3.Post.form_policy`: the policy a form
+**What is proved** (`Lanes/Services/S3/PostSound.lean`). `S3.Post.form_policy`: the policy a form
 carries reads back, as S3 reads it, as exactly the conditions written, the size range among
 them, and the expiry given. `S3.Post.admitted_bounded`: a file that S3 admits under the policy
 of a form has a size within its range and was posted before it expired. What is trusted is that

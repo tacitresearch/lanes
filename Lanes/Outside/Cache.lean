@@ -27,6 +27,9 @@ time: a time to live is an eviction at some moment.
 
 Proved: a get is answered only with a value a write sent under its key (`Cache.read_sent`), and
 a fill sent when its token was not the key's lease is never stored (`Cache.fill_unleased`).
+
+Not yet checked against a real service: no run recorded from Redis or memcached
+(`oracles/README.md`).
 -/
 
 @[expose] public section

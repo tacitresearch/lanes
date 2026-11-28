@@ -26,6 +26,7 @@ public import Lanes.Core.Step
 public import Lanes.Core.System
 public import Lanes.Core.World
 public import Lanes.Db.Basic
+public import Lanes.Db.Columns
 public import Lanes.Db.Jobs
 public import Lanes.Db.Model
 public import Lanes.Db.Once
@@ -33,7 +34,6 @@ public import Lanes.Db.Query
 public import Lanes.Db.Retry
 public import Lanes.Db.Txn
 public import Lanes.Db.Worker
-public import Lanes.Data.Codec
 public import Lanes.Data.Declare
 public import Lanes.Data.Enum
 public import Lanes.Data.Fifo
@@ -56,18 +56,6 @@ public import Lanes.Lib.Mime.MediaType
 public import Lanes.Lib.Net.Ip
 public import Lanes.Lib.Net.Percent
 public import Lanes.Lib.Net.Url
-public import Lanes.Lib.Postgres.Bytes
-public import Lanes.Lib.Postgres.Conn
-public import Lanes.Lib.Postgres.IO.Client
-public import Lanes.Lib.Postgres.IO.Db
-public import Lanes.Lib.Postgres.IO.Worker
-public import Lanes.Lib.Postgres.IO.Pool
-public import Lanes.Lib.Postgres.Message
-public import Lanes.Lib.Postgres.Pool
-public import Lanes.Lib.Postgres.Scram
-public import Lanes.Lib.Postgres.Settings
-public import Lanes.Lib.Postgres.Sql
-public import Lanes.Lib.Postgres.Table
 public import Lanes.Lib.RateLimit
 public import Lanes.Lib.Time.Civil
 public import Lanes.Lib.Time.Format
@@ -76,10 +64,8 @@ public import Lanes.Outside.Cache
 public import Lanes.Outside.Clock
 public import Lanes.Outside.Effects.Basic
 public import Lanes.Outside.Effects.Email
-public import Lanes.Outside.Effects.Payments
 public import Lanes.Outside.Events
 public import Lanes.Outside.Idempotent
-public import Lanes.Outside.Multipart
 public import Lanes.Outside.ObjectStore
 public import Lanes.Outside.Queue
 public import Lanes.Outside.IO.Clock
@@ -130,20 +116,16 @@ public import Lanes.Web.Http.View
 public import Lanes.Web.Http.Waiting
 public import Lanes.Web.Http.Wire
 public import Lanes.Web.Http.WireSpec
-public import Lanes.Web.S3.Basic
-public import Lanes.Web.S3.Multipart
-public import Lanes.Web.S3.Post
-public import Lanes.Web.S3.Xml
 public import Lanes.Web.IO.Client
 public import Lanes.Web.IO.Jobs
 public import Lanes.Web.IO.Ops
-public import Lanes.Web.IO.S3
 public import Lanes.Web.IO.SignIn
 public import Lanes.Web.IO.Server
 public import Lanes.Web.IO.Tls
 
 /-!
 The Lanes API: everything an application's executable code needs, and the tools its proofs use.
-It imports only `Std`, so binaries stay small. The framework's own soundness theorems are
-`Lanes.Proofs`, and the proof layer is `Lanes.Semantics`.
+It imports only `Std`, so binaries stay small. It leaves out the services (`Lanes.Services`):
+an application imports the ones it calls, such as `Lanes.Services.Postgres`. The framework's own
+soundness theorems are `Lanes.Proofs`, and the proof layer is `Lanes.Semantics`.
 -/

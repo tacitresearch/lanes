@@ -22,7 +22,7 @@ import Tests.Signature
 import Tests.Sign
 import Tests.OAuth
 import Tests.ReadRequest
-import Tests.Codec
+import Tests.Derive
 import Tests.HttpConn
 import Tests.Loopback
 import Tests.Mailbox
@@ -64,6 +64,9 @@ import Tests.S3
 import Tests.Multipart
 import Tests.S3Upload
 import Tests.Testing
+import Tests.Aws
+import Tests.Oidc.Google
+import Tests.Oidc.GitHub
 
 /-!
 The test driver behind `lake test`: the pure tests and the live runtime tests, well under a
@@ -107,13 +110,14 @@ def live : IO (List (String × Bool)) := do
     ++ (← safely "reads" Tests.Reads.live)
     ++ (← safely "test kit" Tests.Testing.live)
     ++ (← safely "tutorial web" Tests.TutorialWeb.live)
+    ++ (← Checks.live)
 
 def main (args : List String) : IO UInt32 := do
   let pure := Tests.Engine.tests ++ Tests.Bank.tests ++ Tests.Json.tests ++ Tests.Html.tests
     ++ Tests.KV.tests ++ Tests.Gate.tests ++ Tests.Fronted.tests ++ Tests.Join.tests
     ++ Tests.Kernel.tests ++ Tests.Clock.tests ++ Tests.HttpClient.tests ++ Tests.Tls.tests
     ++ Tests.Signature.tests ++ Tests.Sign.tests ++ Tests.OAuth.tests
-    ++ Tests.Fair.tests ++ Tests.Codec.tests
+    ++ Tests.Fair.tests ++ Tests.Derive.tests
     ++ Tests.Mailbox.tests ++ Tests.Batch.tests
     ++ Tests.Pace.tests ++ Tests.Reads.tests
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests
@@ -127,6 +131,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.Testing.tests
     ++ Tests.Queue.tests ++ Tests.Reduce.tests ++ Tests.Cache.tests ++ Tests.WallClock.tests ++ Tests.Throttle.tests
     ++ Tests.SharedCache.tests
+    ++ Checks.tests ++ Checks.Google.tests ++ Checks.GitHub.tests
     ++ Tests.Restart.tests
   let json := Lanes.Testing.wantsJson args
   match args.filter (· != "--json") with

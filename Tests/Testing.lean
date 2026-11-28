@@ -4,6 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
 import Lanes.Testing
+import Lanes.Services.S3
+import Lanes.Services.S3.Testing
 
 /-!
 The test kit itself (`Lanes/Testing/`): what its fakes refuse, a form beyond its policy
