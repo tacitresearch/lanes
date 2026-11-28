@@ -22,7 +22,7 @@ import Tests.Signature
 import Tests.Sign
 import Tests.OAuth
 import Tests.ReadRequest
-import Tests.Codec
+import Tests.Derive
 import Tests.HttpConn
 import Tests.Loopback
 import Tests.Mailbox
@@ -118,7 +118,7 @@ def main (args : List String) : IO UInt32 := do
     ++ Tests.KV.tests ++ Tests.Gate.tests ++ Tests.Fronted.tests ++ Tests.Join.tests
     ++ Tests.Kernel.tests ++ Tests.Clock.tests ++ Tests.HttpClient.tests ++ Tests.Tls.tests
     ++ Tests.Signature.tests ++ Tests.Sign.tests ++ Tests.OAuth.tests
-    ++ Tests.Fair.tests ++ Tests.Codec.tests
+    ++ Tests.Fair.tests ++ Tests.Derive.tests
     ++ Tests.Mailbox.tests ++ Tests.Batch.tests
     ++ Tests.Pace.tests ++ Tests.Reads.tests
     ++ Tests.Crypto.tests ++ Tests.Auth.tests ++ Tests.Clients.tests ++ Tests.Lease.tests

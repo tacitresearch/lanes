@@ -38,13 +38,13 @@ lanes_data inductive Answer (A : Type) where
   | ok (a : A)
   /-- The request was not executed: call again in `retryAfter` ticks. -/
   | throttled (retryAfter : Nat)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Event (E : Type) where
   /-- A tick of time passed. -/
   | tick
   | inner (e : E)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 structure Config where
   /-- The longest `Retry-After` the service gives, at least one tick. -/

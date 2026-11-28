@@ -344,39 +344,35 @@ def nameOp (make : Name → Op Name) (r : Http.Request) : Except Http.Response (
 
 /-! ### The API -/
 
-def jsonBody? (r : Http.Request) : Option Json :=
-  (String.fromUTF8? r.body).bind fun text => (Json.parse text).toOption
+/-- What an API change carries: its `seq`, and what the call is about, of which each call reads
+what it needs. -/
+lanes_data structure Change where
+  seq : Nat
+  text : Option Body := none
+  id : Option PostId := none
+  name : Option Name := none
+  deriving ToJson, FromJson
 
-def jsonField? (j : Json) (key : String) : Option Json :=
-  (j.getObjVal? key).toOption
+def jsonBody? {α : Type} [FromJson α] (r : Http.Request) : Option α := do
+  (fromJson? (← (Json.parse (← String.fromUTF8? r.body)).toOption)).toOption
 
-def jsonNat? (j : Json) (key : String) : Option Nat :=
-  jsonField? j key >>= fun v => v.getNat?.toOption
-
-def jsonStr? (j : Json) (key : String) : Option String :=
-  jsonField? j key >>= fun v => v.getStr?.toOption
-
-/-- An API request carrying a verified token, as an input. A change carries its `seq`; a read
-needs none. -/
-def apiInput (id : ReqId) (r : Http.Request) (op : Json → Option (Op Name)) :
-    Except Http.Response In :=
+/-- The account and the token's generation of a request carrying a verified token. -/
+def apiAccount (r : Http.Request) : Except Http.Response (Nat × Name) :=
   match r.header? verifiedToken >>= numbered? with
+  | some account => .ok account
   | none => .error (jsonError "a token is missing or does not verify" 401)
-  | some (generation, name) =>
-    let j := (jsonBody? r).getD .null
-    match op j, jsonNat? j "seq" with
-    | some .timeline, _ => .ok (.api id name generation 0 .timeline)
-    | some op, some seq => .ok (.api id name generation seq op)
-    | _, _ => .error (jsonError "the body is not what this call takes" 400)
 
-def apiPostOp (j : Json) : Option (Op Name) := do
-  return .post (← jsonStr? j "text" >>= Body.ofString?)
+/-- A read needs no body and no `seq`. -/
+def apiRead (id : ReqId) (r : Http.Request) : Except Http.Response In := do
+  let (generation, name) ← apiAccount r
+  return .api id name generation 0 .timeline
 
-def apiDeleteOp (j : Json) : Option (Op Name) := do
-  return .delete (← jsonNat? j "id")
-
-def apiNameOp (make : Name → Op Name) (j : Json) : Option (Op Name) := do
-  return make (← jsonStr? j "name" >>= Name.ofString?)
+def apiChange (id : ReqId) (r : Http.Request) (op : Change → Option (Op Name)) :
+    Except Http.Response In := do
+  let (generation, name) ← apiAccount r
+  match jsonBody? r >>= fun (c : Change) => (op c).map (c.seq, ·) with
+  | some (seq, op) => .ok (.api id name generation seq op)
+  | none => .error (jsonError "the body is not what this call takes" 400)
 
 def profileInput (id : ReqId) (whom : Slug) (json : Bool) : Except Http.Response In :=
   match Name.ofString? whom.text with
@@ -414,11 +410,11 @@ def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response
       Routes.unfollow.handle fun () r => webOp s id r (nameOp .unfollow),
       Routes.profile.handle fun whom _ => .error (page (ProfilePage whom)),
       Routes.profilePosts.handle fun (whom, ()) _ => profileInput id whom false,
-      Routes.apiTimeline.handle fun () r => apiInput id r fun _ => some .timeline,
-      Routes.apiPost.handle fun () r => apiInput id r apiPostOp,
-      Routes.apiDelete.handle fun () r => apiInput id r apiDeleteOp,
-      Routes.apiFollow.handle fun () r => apiInput id r (apiNameOp .follow),
-      Routes.apiUnfollow.handle fun () r => apiInput id r (apiNameOp .unfollow),
+      Routes.apiTimeline.handle fun () r => apiRead id r,
+      Routes.apiPost.handle fun () r => apiChange id r fun c => c.text.map .post,
+      Routes.apiDelete.handle fun () r => apiChange id r fun c => c.id.map .delete,
+      Routes.apiFollow.handle fun () r => apiChange id r fun c => c.name.map .follow,
+      Routes.apiUnfollow.handle fun () r => apiChange id r fun c => c.name.map .unfollow,
       Routes.apiProfile.handle fun whom _ => profileInput id whom true
     ] r).getD (.error (Http.Response.text "not found\n" 404))
 

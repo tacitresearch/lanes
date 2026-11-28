@@ -51,7 +51,7 @@ larger id is a newer post. -/
 lanes_data structure Post where
   id : PostId
   body : {s : String // Body.valid s}
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- What an account that is signed in, by a session or a token, may ask. -/
 lanes_data inductive Op (N : Type) where
@@ -60,7 +60,7 @@ lanes_data inductive Op (N : Type) where
   | follow (whom : N)
   | unfollow (whom : N)
   | timeline
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- `name` is never read from a request's body: the bridge takes it from a session cookie or an
 API token it has verified, or from the form of a sign-up or a log-in. -/
@@ -76,7 +76,7 @@ lanes_data inductive Request (N C : Type) where
   | api (req : ReqId) (name : N) (token : Nat) (seq : Nat) (op : Op N)
   /-- An account's posts, newest first, which anyone may read; `json` if asked through the API. -/
   | profile (req : ReqId) (name : N) (json : Bool)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- No reply carries a credential, and none can: `Reply` does not mention its type. -/
 lanes_data inductive Reply (N : Type) where
@@ -107,14 +107,14 @@ lanes_data inductive Reply (N : Type) where
   | noSuchAccount
   | tooManyFollows
   | feed (posts : List (N × Post))
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data structure Response (N : Type) where
   req : ReqId
   reply : Reply N
   /-- Whether the request came through the API, so the bridge answers in JSON. -/
   json : Bool := false
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- An account. Its posts are kept in it, newest first, so a post's author is the account that
 holds it, and nothing else can delete it. -/
@@ -129,14 +129,11 @@ lanes_data structure Profile (N C : Type) where
   posts : List Post := []
   /-- Posts accepted in the current window. -/
   window : Nat := 0
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 instance {C E : Type} [DecidableEq C] [DecidableEq E] : DecidableEq (Once.Memo C E) := fun a b =>
   if h : a.entries = b.entries then isTrue (by cases a; cases b; simp_all)
   else isFalse fun heq => h (by rw [heq])
-
-instance {C E : Type} [Codable C] [Codable E] : Codable (Once.Memo C E) :=
-  ⟨(Codec.of (List (C × Nat × List E))).map Once.Memo.entries (fun l => some ⟨l⟩) fun _ => rfl⟩
 
 lanes_data structure Board (N C : Type) where
   accounts : List (N × Profile N C) := []
@@ -144,7 +141,7 @@ lanes_data structure Board (N C : Type) where
   next : PostId := 0
   /-- The last API change acted on for each account, and its reply. -/
   memo : Once.Memo N (Op N × Reply N) := {}
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- The settings the spec and the system are built with. Every bound is here (rule 2.6). -/
 structure Config where
@@ -174,7 +171,7 @@ lanes_data inductive Deadline (N : Type) where
   | window (name : N)
   | expire (name : N) (session : Sid)
   | unlock (name : N)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 namespace Request
 

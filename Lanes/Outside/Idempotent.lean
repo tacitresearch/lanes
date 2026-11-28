@@ -34,7 +34,7 @@ namespace Lanes.Idempotent
 lanes_data structure Keyed (K Q : Type) where
   key : Option K
   request : Q
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- An effect the service may have had. -/
 lanes_data structure Slot (K Q A : Type) where
@@ -42,7 +42,7 @@ lanes_data structure Slot (K Q A : Type) where
   request : Q
   /-- The first answer given about it, which every repeat that is answered gets. -/
   result : Option A
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- How a call is answered: from slot `slot`, as the call that made it (`first`) or as a
 repeat, with the same request as the first (`same`) or another, which only a refusal answers. -/
@@ -51,7 +51,7 @@ lanes_data structure Route where
   slot : Nat
   first : Bool
   same : Bool
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 structure State (K Q A S : Type) where
   slots : List (Slot K Q A)

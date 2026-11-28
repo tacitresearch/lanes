@@ -30,7 +30,7 @@ abbrev IntentId := Nat
 lanes_data structure Charge where
   order : Nat
   amount : Nat
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- A key that is the order, and nothing else, is the same after a crash. -/
 abbrev Request := Idempotent.Keyed Nat Charge
@@ -43,7 +43,7 @@ lanes_data inductive In where
   | order (order amount : Nat)
   | reply (call : Nat) (reply : Rpc.Reply Answer)
   | webhook (e : Webhook)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Out where
   | charge (call : Rpc.Call Request)
@@ -51,7 +51,7 @@ lanes_data inductive Out where
   | declined (order : Nat)
   /-- The shop holds `maxOrders` orders and took no more. -/
   | full (order : Nat)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Msg where
   | order (order amount : Nat)
@@ -59,7 +59,7 @@ lanes_data inductive Msg where
   | webhook (e : Webhook)
   /-- The shop's own deadline for a call: the answer may never come. -/
   | expire (call : Nat)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Status where
   | charging (call attempt : Nat)
@@ -67,13 +67,13 @@ lanes_data inductive Status where
   | waiting
   | paid
   | declined
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data structure Order where
   order : Nat
   amount : Nat
   status : Status
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- Durable: a restart that forgot an order would charge it again under a key it no longer
 knew, or never tell its customer. -/
@@ -82,7 +82,7 @@ lanes_data structure State where
   /-- Every call made, with its order. -/
   calls : List (Nat × Nat)
   nextCall : Nat
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 structure Config where
   maxOrders : Nat := 100

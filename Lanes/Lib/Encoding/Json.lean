@@ -9,11 +9,13 @@ public import Lanes.Lib.Encoding.Json.Parser
 public import Lanes.Lib.Encoding.Json.Printer
 public import Lanes.Lib.Encoding.Json.Classes
 public import Lanes.Lib.Encoding.Json.Grammar
+public import Lanes.Lib.Encoding.Json.Derive
 
 /-!
 # JSON
 
 A JSON library that imports only `Std`, for runtime modules and adapters: the value type
 (`Lanes.Json`), a parser (`Json.parse`), printers (`Json.compress`, `Json.pretty`) and the
-`ToJson` and `FromJson` classes. It is a port of `Lean.Data.Json`, with total functions throughout.
+`ToJson` and `FromJson` classes, and what `lanes_data` derives them from (`Json.Codec`). It is a
+port of `Lean.Data.Json`, with total functions throughout.
 -/

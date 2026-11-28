@@ -130,6 +130,22 @@ import Lanes.Semantics
 /-- info: 'Lanes.fromJson?_toJson_some' depends on axioms: [propext, Classical.choice] -/
 #guard_msgs in #print axioms Lanes.fromJson?_toJson_some
 
+/-- info: 'Lanes.fromJson?_toJson_int64' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.fromJson?_toJson_int64
+
+/-- info: 'Lanes.fromJson?_toJson_subtype' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.fromJson?_toJson_subtype
+
+/-- info: 'Lanes.fromJson?_toJson_option' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.fromJson?_toJson_option
+
+-- Lanes.Lib.Encoding.Json.Derive
+/-- info: 'Lanes.Json.Fields.readObject_object' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Json.Fields.readObject_object
+
+/-- info: 'Lanes.Json.Codec.ofAlts' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Json.Codec.ofAlts
+
 -- Lanes.Lib.Encoding.Json.ParserSound
 /-- info: 'Lanes.Json.Parser.rest_next' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Json.Parser.rest_next
