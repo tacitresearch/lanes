@@ -2,7 +2,7 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Videos
+import SignIn
 import Lanes.Services.Oidc
 
 /-!
@@ -14,7 +14,7 @@ environment: `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_ID` a
 with the process.
 -/
 
-open Lanes Lanes.OAuth Videos
+open Lanes Lanes.OAuth SignIn
 
 structure Setup where
   origin : String
@@ -41,7 +41,7 @@ def setup (port : Nat) : Environment.Reader Setup := do
 def main (args : List String) : IO Unit := do
   let port := (args.head? >>= String.toNat?).getD 8080
   let { origin, providers } ← Environment.load (setup port) "signIn"
-  let settings : Videos.Settings :=
+  let settings : SignIn.Settings :=
     { keys := .of (.of (← randomBytes 32)), secure := origin.startsWith "https:" }
   let signIn ← SignIn.start { providers, secure := settings.secure }
   let server ← (Http.serve (Server.system (service settings)) (bridge settings origin)
@@ -49,7 +49,7 @@ def main (args : List String) : IO Unit := do
       match ← signIn.arrive r with
       | .ok r => return .ok (stamp ((← Log.wallMs) / 1000) r)
       | .error answer => return .error answer)).block
-  IO.println s!"Videos listening on http://127.0.0.1:{server.port.getD 0}, signing in with \
+  IO.println s!"signIn listening on http://127.0.0.1:{server.port.getD 0}, signing in with \
     {", ".intercalate (providers.map (·.1.name))}"
   (← IO.getStdout).flush
   Lanes.block server.wait

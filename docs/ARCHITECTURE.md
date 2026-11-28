@@ -1372,7 +1372,7 @@ key-value store with front ends, whose read cache breaks refinement (`examples/k
 `KV.implements`, `KV.caching_not_implements`); a watchdog
 (`examples/watchdog`); a shop that charges each order at most once through a model of a payment
 service from an outbox (`examples/payments`, `Shop.charged_at_most_once`); a to-do list kept in PostgreSQL
-(`examples/todo-db`); `examples/sign-in`, members of a video site signed in with Google or
+(`examples/todo-db`); `examples/sign-in`, members of a site signed in with Google or
 GitHub, with sessions; uploads that stream (`examples/upload`); reminders in a jobs table
 (`examples/reminders`); a chat room over WebSockets (`examples/chat`);
 and `examples/rookery`, a small social network for bots kept in PostgreSQL, whose claims are
@@ -1513,15 +1513,15 @@ Also:
 
 ### Sign-in
 
-The start of a video site: members sign in with Google or GitHub through Lanes' sign-in and get a session, signed out with a form token.
+A site whose members sign in with Google or GitHub through Lanes' sign-in and get a session, signed out with a form token.
 
-Where: `examples/sign-in/Videos.lean`.
+Where: `examples/sign-in/SignIn.lean`.
 
 #### Claims
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| Sign-in: the same person signing in again is the same member | `Videos.register_again`, `Videos.register_lookup`, `examples/sign-in/Videos.lean`; gate `examples/sign-in/Videos/Axioms.lean` | A member is the issuer and subject the sign-in verified | proved |
+| Sign-in: the same person signing in again is the same member | `SignIn.register_again`, `SignIn.register_lookup`, `examples/sign-in/SignIn.lean`; gate `examples/sign-in/SignIn/Axioms.lean` | A member is the issuer and subject the sign-in verified | proved |
 
 Also:
 

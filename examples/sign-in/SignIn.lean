@@ -14,7 +14,7 @@ of the member's `Auth.Sessions`, which keeps the newest few. Members and session
 system's state, so a restart signs everyone out; `examples/rookery` keeps them as rows.
 -/
 
-namespace Videos
+namespace SignIn
 
 open Lanes Lanes.Http Lanes.OAuth
 open scoped Lanes.Html
@@ -72,16 +72,16 @@ def token (s : Settings) (member session at_s : Nat) : String :=
   Auth.sign s.keys "session" (at_s + s.session_s) (sessionOf member session)
 
 def cookie (s : Settings) (value : String) : Cookie :=
-  { name := "videos-session", value, secure := s.secure, sameSite := .lax }
+  { name := "sign-in-session", value, secure := s.secure, sameSite := .lax }
 
 def Page (body : List Html) : Html :=
   <html lang="en">
     <head>
       <meta charset="utf-8"/>
-      <title>"Videos"</title>
+      <title>"Sign-in"</title>
     </head>
     <body>
-      <h1>"Videos"</h1>
+      <h1>"Sign-in"</h1>
       {body}
     </body>
   </html>
@@ -126,10 +126,10 @@ def service (s : Settings) : Service (ReqId × Command) (ReqId × Response) Stat
 
 /-- The header `prepare` writes with the member and session a cookie it verified names. One a
 client sends is dropped, and so are the cookies, which never enter the system. -/
-def sessionHeader : String := "videos-session"
+def sessionHeader : String := "sign-in-session"
 
 /-- The header `stamp` writes the time a request arrived in, which a client's is dropped. -/
-def arrivedHeader : String := "videos-arrived"
+def arrivedHeader : String := "sign-in-arrived"
 
 /-- When the request arrived, in seconds. -/
 def arrived (r : Request) : Nat := ((r.header? arrivedHeader).bind String.toNat?).getD 0
@@ -140,7 +140,7 @@ def stamp (now_s : Nat) (r : Request) : Request :=
 
 def prepare (s : Settings) (r : Request) : Request :=
   let kept := r.headers.filter fun (name, _) => name != "cookie" && name != sessionHeader
-  let session := (r.cookie? "videos-session").bind (Auth.verify s.keys "session" (arrived r))
+  let session := (r.cookie? "sign-in-session").bind (Auth.verify s.keys "session" (arrived r))
   { r with headers := kept ++ (session.map ((sessionHeader, ·))).toList }
 
 def session? (r : Request) : Option (Nat × Nat) := do
@@ -168,4 +168,4 @@ def bridge (s : Settings) (origin : String) : Bridge (Server.sig (ReqId × Comma
   encode out := some out
   prepare := prepare s
 
-end Videos
+end SignIn

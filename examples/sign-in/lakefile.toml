@@ -1,6 +1,6 @@
 name = "signIn"
 version = "0.1.0"
-defaultTargets = ["Videos", "signIn", "check"]
+defaultTargets = ["SignIn", "signIn", "check"]
 testDriver = "check"
 # Lake's artifact cache: each output is stored once per toolchain, by its content, shared by
 # every project on this machine, and hard-linked into `.lake/build`.
@@ -12,8 +12,8 @@ name = "lanes"
 path = "../.."
 
 [[lean_lib]]
-name = "Videos"
-roots = ["Videos", "Videos.Axioms"]
+name = "SignIn"
+roots = ["SignIn", "SignIn.Axioms"]
 
 # The site: `signIn [port]`, with its providers' clients in the environment.
 [[lean_exe]]
