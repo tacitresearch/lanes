@@ -190,7 +190,12 @@ result back (`Slot.put`); the messages it sent are pushed to their receivers' ma
 order. Timers are on an agenda kept by a thread of its own, which pushes each to its actor when
 it is due; one cancelled or armed again is dropped when its actor takes it. Inputs go straight
 to their actor's mailbox; at most `inboxCapacity` wait for their actor (`Sched.Ledger`), and
-`tryInput` refuses beyond (rule 3.8).
+`tryInput` refuses beyond (rule 3.8). The messages between actors are bounded together
+(`docs/decisions/D123-runtime-limits.md`): while `Runtime.Config.mailHighWater` of them wait, no
+input is taken, and a step that leaves more than `mailCapacity` waiting is handed to `onOverflow`,
+which by default reports it and ends the process with status 75, the semantics' restart. A step's
+sends, outputs and timers are gathered newest first and turned round once, so a step costs time
+linear in its effects (`Sched.Slot.put_eq`, `Kernel.performAll_eq`).
 
 Each step is told the moment: the wall clock read at the start plus the monotonic time since, and
 a seed from its worker's generator, seeded from the operating system. With `record` on, the trace
@@ -244,6 +249,8 @@ Where: `Lanes/Runtime/`, `Lanes/Proof/Lossy.lean`.
 | Recorded runs replay through the semantics, on one worker and on several, with actors that stop and timers | `Tests/Runtime.lean` | | tested |
 | The kernel stays in a state the semantics reaches, and its events are a run reaching it, for any sequence of operations, inputs and clock readings | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Lanes/Runtime/KernelSound.lean`; gate `Tests/Axioms/Runtime.lean` | | proved |
 | A message costs the same at 1,000 and 100,000 actors | The scale benchmark in `lake exe lanesCheck` (`Tests/Scale.lean`) | A four-core machine | tested |
+| A step's write-back is the fold the soundness proofs are about, and costs time linear in the step's effects | `Sched.Slot.put_eq`, `Kernel.performAll_eq`; the time at 10^3, 10^4 and 10^5 outputs and sends in `lake exe lanesCheck` (`Tests/Scale.lean`) | | proved; the time tested |
+| An input is taken only while the inbox has room and the mail between actors is below its high-water mark, and one refused leaves no trace | `Sched.Ledger.offer_taken`, `offer_refused`, `offer_of_mail`, `done_wakes`, `Lanes/Runtime/SchedSound.lean`; `Tests/Runtime.lean` under a fan-out | The shell asks the ledger as written (TRUSTED, the first row) | proved of the ledger; tested |
 
 Also:
 
@@ -261,6 +268,12 @@ Also:
   write-back walks it. The steps of one turn update it in place. A write to a state of a million
   numbers costs about two copies when each message is a turn of its own (`Tests/Scale.lean`).
 - A peek of several actors is not a consistent cut (above).
+- The mail between actors is bounded as a whole: an actor far behind holds up every input, not
+  only those to it. Past `mailCapacity` the process restarts, losing every actor's state; an
+  application whose proofs assume no restarts has no guarantee there
+  (`docs/decisions/D123-runtime-limits.md`).
+- Arming a timer looks through the actor's pending timers, so a step that arms `n` different
+  timers takes time quadratic in `n`: messages have only `DecidableEq`.
 - Every turn updates one shared ledger (inputs waiting, items in mailboxes) and every push may
   look up a shared table of slots; on many cores these are points of contention.
 - That a queued actor is eventually stepped and a due timer pushed rests on the workers and the

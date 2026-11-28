@@ -83,6 +83,7 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D44. A request is prepared before it is journalled](D44-request-prepared-before-journal.md): partly superseded by D110-volatile-actors.md (the journal that preparing kept secrets out of)
 - [D22. Routes are values with a proof; htmx attributes come from them](D22-routes-are-values-with-a-proof.md)
 - [D96. One model with proofs, and runtimes proved against it](D96-runtime-contract.md): partly superseded by D110-volatile-actors.md (the default runtime, and the contract's clauses that rest on a journal: one order, output ids, no acknowledged input lost across a restart)
+- [D123. A step's effects in linear time, and a bound on the mail between actors](D123-runtime-limits.md)
 - [D71. S3 and Signature Version 4, in Lanes as the protocol of a class of object stores](D71-s3-and-signature-version-4.md)
 - [D115. `lanes_data` derives JSON and rows, each with its round trip; the binary codec goes](D115-serialization.md)
 - [D113. A vendor service gets a model only when a proof depends on it](D113-service-models.md)
