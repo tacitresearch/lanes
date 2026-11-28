@@ -305,7 +305,7 @@ private def ending (rt : Runtime sys) : BaseIO Bool := do
 private def highWater (rt : Runtime sys) : Nat :=
   max 1 rt.config.mailHighWater
 
-/-- What the steps of a turn did to the ledger's counts, given to it once at the turn's end: the
+/-- What the steps of a turn did to the ledger's counts, given to it at the turn's end: the
 items taken off or dropped, and the pending timers before and after. -/
 private structure Tally where
   gone : Nat := 0
@@ -385,6 +385,10 @@ private def serve (rt : Runtime sys) (w : Nat) (onOutput : σ.Out → Async Unit
     if n % 8 == 0 then
       if ← rt.ending then break
   let keep := rt.config.record
+  -- Once the actor is let go of, another worker may step it and take the timers this turn
+  -- armed, and tell the ledger first: they are counted before (`Sched.Ledger.done_armed`).
+  if tally.after > tally.before then
+    rt.ledgerDo fun l => ((), l.armed (tally.after - tally.before))
   let (again, retired, readers, state) ← b.modifyGet fun bx =>
     let s := match held with
       | some state => { bx.slot with cell := { bx.slot.cell with state } }
@@ -397,9 +401,9 @@ private def serve (rt : Runtime sys) (w : Nat) (onOutput : σ.Out → Async Unit
   answer readers state
   if retired then (rt.stripeOf i).modify (·.erase i)
   if again then rt.enqueue w i
-  if tally.gone != 0 || tally.before != tally.after then
+  if tally.gone != 0 || tally.before > tally.after then
     let (room, idle) ← rt.ledgerDo
-      (Sched.Ledger.done rt.highWater tally.gone tally.before tally.after)
+      (Sched.Ledger.done rt.highWater tally.gone (tally.before - tally.after) 0)
     for p in room do p.resolve ()
     for p in idle do p.resolve true
 

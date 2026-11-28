@@ -668,6 +668,49 @@ def runawayTest : Async (List (String × Bool)) := do
     ("mail: actors that send each other more than they take are reported past the capacity, and "
       ++ "take no input", reported && refused) ]
 
+/-! Timers counted across workers. Each round, every actor arms a timer due at once; the tick
+often reaches the actor while its worker still holds it, after its last step, so another worker
+steps the tick while the first is letting go. `idle (timers := true)` must neither wait for a
+timer already handled nor return while one is pending. -/
+
+inductive TickMsg where
+  | arm
+  | tick
+  deriving DecidableEq, Repr, Hashable
+
+abbrev tickSig : Signature where
+  Id := Fin 8
+  Msg _ := TickMsg
+  In := Fin 8
+
+/-- The state counts the ticks. -/
+abbrev tickers : System tickSig where
+  State _ := Nat
+  actor _ := {
+    init := 0
+    step := fun s m => match m with
+      | .arm => (s, [.after 0 .tick])
+      | .tick => (s + 1, []) }
+  accept i := ⟨i, .arm⟩
+
+def timerCountTest : Async (List (String × Bool)) := do
+  let rt ← Runtime.start tickers { workers := 4 }
+  let mut ended := true
+  let mut counted := true
+  for round in [1:1001] do
+    for i in List.finRange 8 do rt.input i
+    if (← soon 5000 (rt.idle (timers := true))).isNone then
+      ended := false
+      break
+    unless (← (List.finRange 8).mapM fun i => rt.state i).all (· == round) do
+      counted := false
+      break
+  rt.stop
+  return [
+    ("timers: on four workers, waiting for the timers ends once each has gone off", ended),
+    ("timers: on four workers, waiting for the timers does not end before each has gone off",
+      counted) ]
+
 /-- A parker: an `unpark` before the `park` is kept, a timed park ends, a task and an `Async`
 are waited for on one. -/
 def parkerTest : IO (List (String × Bool)) := do
@@ -712,5 +755,6 @@ def tests : IO (List (String × Bool)) := do
     ++ (← restingTest.block) ++ (← fanTest.block) ++ (← contextTest.block)
     ++ (← watchdogTest.block) ++ (← watchdogStopTest.block) ++ (← parkerTest)
     ++ (← highWaterTest.block) ++ (← overflowTest.block) ++ (← runawayTest.block)
+    ++ (← timerCountTest.block)
 
 end Tests.Runtime

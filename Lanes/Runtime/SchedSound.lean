@@ -1562,6 +1562,16 @@ theorem done_wakes {highWater gone before after : Nat} {l : Ledger W I}
   have : (l.items - gone) - l.inputs < highWater ∧ highWater ≤ l.items - l.inputs := ⟨hnow, hwas⟩
   simp [this]
 
+/-- Counting a turn's new timers before the rest of it gives the ledger `done` gives: the shell
+splits the turn so that whoever takes those timers next finds them counted. -/
+theorem done_armed (highWater gone before after : Nat) (l : Ledger W I) :
+    (l.armed (after - before)).done highWater gone (before - after) 0
+      = l.done highWater gone before after := by
+  have h : l.timers + (after - before) + 0 - (before - after) = l.timers + after - before := by
+    omega
+  simp only [done, armed, mail, h]
+  rfl
+
 end Ledger
 
 end Lanes.Sched
