@@ -95,6 +95,9 @@ structure ServerConfig where
   /-- The journal is a copy restored from elsewhere, production into staging: the first start
   of the copy hands over nothing the journal owes (`Journal.Store.restored`). -/
   restored : Bool := false
+  /-- Where to ship the journal's segments and snapshots (`Journal.Store.ship`), such as
+  `S3.backup`; `restoreJournal` restores from them. -/
+  ship : Option Journal.Ship.Target := none
   /-- The application's name for the system and the version of its step functions. A journal
   written under another name is refused: replayed through other step functions it would give
   another state. -/
@@ -647,7 +650,7 @@ def serve (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : Serv
     let store : Journal.Store (admitted sys bridge) :=
       { path, input := Codec.pair Codec.nat Request.codec, system := config.journalName
         actors := saving.map fun s => admittedActors s.actors bridge
-        restored := config.restored }
+        restored := config.restored, ship := config.ship }
     try store.open
     catch e =>
       if name.any (· != config.journalName) then
@@ -659,6 +662,18 @@ def serve (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : Serv
   catch e =>
     if let some log := log then discard log.close.toBaseIO
     throw e
+
+/-- Write the journal of a server with `config` from what `target` holds, at `point`, as
+`Journal.Store.restore` does: its first start hands nothing over and takes a new id. Run it
+before `serve`, with no journal at `config.journal`. -/
+def restoreJournal (sys : System σ) [Hashable σ.Id] (bridge : Bridge σ) (config : ServerConfig)
+    (target : Journal.Ship.Target) (point : Journal.Restore.Point := .latest)
+    (journal : Option String := none) : IO Journal.Restored := do
+  let some path := config.journal
+    | throw (IO.userError "lanes: a restore needs `ServerConfig.journal`")
+  let store : Journal.Store (admitted sys bridge) :=
+    { path, input := Codec.pair Codec.nat Request.codec, system := config.journalName }
+  store.restore target point journal
 
 namespace Server
 

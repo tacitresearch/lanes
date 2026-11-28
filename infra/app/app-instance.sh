@@ -51,7 +51,7 @@ die() { say "$*"; exit 1; }
 # The keys the configuration may set, and nothing else.
 CONF_KEYS=(APP BINARY SITE_URL ARGS PORT READY_PATH METRICS_PATH DRAIN_SECONDS RELEASES LOG_GROUP
   METRICS_LOG_GROUP METRICS_NAMESPACE SCRIPT_URL SCRIPT_SHA256 DB_HOST DB_PORT DB_NAME DB_SECRET
-  DB_CA_URL DB_CA_SHA256 MAIL_IDENTITY MEDIA_BUCKET)
+  DB_CA_URL DB_CA_SHA256 MAIL_IDENTITY MEDIA_BUCKET BACKUP_BUCKET)
 
 load_conf() {
   # shellcheck source=/dev/null
@@ -80,6 +80,7 @@ load_conf() {
   DB_CA_SHA256=${DB_CA_SHA256:-}
   MAIL_IDENTITY=${MAIL_IDENTITY:-}
   MEDIA_BUCKET=${MEDIA_BUCKET:-}
+  BACKUP_BUCKET=${BACKUP_BUCKET:-}
   CONFIG_PARAMETER=${CONFIG_PARAMETER:-}
   AWS_REGION=${AWS_REGION:-}
 }
@@ -98,6 +99,8 @@ check_conf() {
     || die "MAIL_IDENTITY '$MAIL_IDENTITY' is not an address or a domain"
   [[ $MEDIA_BUCKET =~ ^([a-z0-9][a-z0-9.-]{1,61}[a-z0-9])?$ ]] \
     || die "MEDIA_BUCKET '$MEDIA_BUCKET' is not a bucket name"
+  [[ $BACKUP_BUCKET =~ ^([a-z0-9][a-z0-9.-]{1,61}[a-z0-9])?$ ]] \
+    || die "BACKUP_BUCKET '$BACKUP_BUCKET' is not a bucket name"
 }
 
 # The arguments the application is started with.
@@ -311,12 +314,14 @@ write_units() {
 EOF
   # The site's origin, from which sign-in redirects and same-origin checks are made; the
   # region, for the role's credentials (which the application fetches from the metadata
-  # service itself), S3 and SES; the media bucket, and the database and the mail identity when
-  # there are. secrets.env, read after, may set any of it again.
+  # service itself), S3 and SES; the media bucket, the bucket the journal is shipped to, and the
+  # database and the mail identity when there are. secrets.env, read after, may set any of it
+  # again.
   {
     if [ -n "$SITE_URL" ]; then printf '%s=%s\n' LANES_URL "$SITE_URL"; fi
     printf '%s=%s\n' AWS_REGION "$(region)"
     if [ -n "$MEDIA_BUCKET" ]; then printf '%s=%s\n' LANES_MEDIA_BUCKET "$MEDIA_BUCKET"; fi
+    if [ -n "$BACKUP_BUCKET" ]; then printf '%s=%s\n' LANES_BACKUP_BUCKET "$BACKUP_BUCKET"; fi
     if [ -n "$DB_HOST" ]; then
       printf '%s=%s\n' LANES_DB_HOST "$DB_HOST" LANES_DB_PORT "$DB_PORT" LANES_DB_NAME "$DB_NAME" \
         LANES_DB_USER lanes LANES_DB_PASSWORD_FILE /run/lanes-app/db-password

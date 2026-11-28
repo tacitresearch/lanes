@@ -1,4 +1,4 @@
-# D?. The gate before the shard
+# D106. The gate before the shard
 
 Status: Accepted
 

@@ -7,11 +7,11 @@ module
 public import Lanes.Web.Http.Front
 
 /-!
-The gate off the shard's hot path (`docs/decisions/D96-runtime-contract.md`). The gate's
-decisions are `Gate.step`, and they need not be made by an actor: the server makes them where a
-request arrives, with the waiting list in its own memory, and hands the shard only what the gate
-admitted. The shard then runs `admitted sys bridge`: `sys` itself, with no actor that every
-request goes through.
+The gate off the shard's hot path (`docs/decisions/D96-runtime-contract.md`,
+`docs/decisions/D106-gate-before-shard.md`). The gate's decisions are `Gate.step`, and they need
+not be made by an actor: the server makes them where a request arrives, with the waiting list in
+its own memory, and hands the shard only what the gate admitted. The shard then runs
+`admitted sys bridge`: `sys` itself, with no actor that every request goes through.
 
 `Gate.Act` is what the gate does, as data, so the server and `Loopback` perform the same
 decisions. `Gate.admit` and `Gate.receive` are `Gate.step` on an arrival and on an answer with
