@@ -949,7 +949,7 @@ Also:
 
 What every layer uses is in `Lanes/Data/`: `Enum`, `lanes_data`, and the queue. A type has two
 mappings out of the process, both derived by `lanes_data` from its declaration with their laws
-(`docs/decisions/new-serialization.md`): JSON for HTTP (`deriving ToJson, FromJson`, through
+(`docs/decisions/D115-serialization.md`): JSON for HTTP (`deriving ToJson, FromJson`, through
 `Lanes/Lib/Encoding/Json/Derive.lean`) and rows for the typed store (a `table` line, through
 `Lanes/Db/Columns.lean`). There is no binary format: nothing writes values to a file or a peer.
 The standard library is in `Lanes/Lib/`: encodings, addresses and URLs, time, media types,
