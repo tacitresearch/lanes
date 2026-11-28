@@ -75,8 +75,6 @@ holds every field of the configuration, and the number stands for the step funct
 def journalName (n : Nat) (self : Fin n) (config : Config) : String :=
   s!"raft-kv 2, node {self} of {n}, {repr config}"
 
-/-- Start node `self`. Commands go in with `Runtime.input (.inl request)`, and the answers to
-those this node took come to `onAnswer`. -/
 /-- The system the nodes' handshake names. -/
 def peerSystem (n : Nat) : String := s!"raft-kv of {n} nodes"
 
@@ -84,6 +82,8 @@ def peerSystem (n : Nat) : String := s!"raft-kv of {n} nodes"
 `Command` and their codecs. -/
 def peerSchema (n : Nat) : String := s!"RaftKV.Msg (Fin {n}) RaftKV.Command by lanes_data, 1"
 
+/-- Start node `self`. Commands go in with `Runtime.input (.inl request)`, and the answers to
+those this node took come to `onAnswer`. -/
 def startNode {n : Nat} (config : NodeConfig n) (runtime : Runtime.Config := {})
     (onAnswer : Response Answer → Async Unit := fun _ => pure ()) :
     Async (Runtime (TextShard n config.raft config.self) × Peers (sig (Fin n) Command Answer)) := do
