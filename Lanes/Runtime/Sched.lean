@@ -82,6 +82,10 @@ structure Commit (σ : Signature) (i : σ.Id) where
   /-- How many of those were inputs. -/
   droppedInputs : Nat := 0
 
+/-- The commit with its lists the other way round. -/
+def Commit.reverse {i : σ.Id} (c : Commit σ i) : Commit σ i :=
+  { c with sends := c.sends.reverse, outputs := c.outputs.reverse, armed := c.armed.reverse }
+
 namespace Work
 
 def event {i : σ.Id} : Work σ i → Event σ
@@ -172,6 +176,19 @@ def perform (now_ms : Nat) : Slot sys i × Commit σ i → Effect σ i → Slot 
     ({ s with cell := { s.cell with timers := s.cell.timers.eraseP (·.1 = msg) } }, c)
   | (s, c), .stop => (s, c)
 
+/-- `perform` with the commit's lists newest first, so that an effect costs the same however many
+came before it. `put` turns them round once, at the end (`Sched.Slot.put_eq`). -/
+def performRev (now_ms : Nat) : Slot sys i × Commit σ i → Effect σ i → Slot sys i × Commit σ i
+  | (s, c), .send to msg => (s, { c with sends := ⟨some i, to, msg⟩ :: c.sends })
+  | (s, c), .emit out => (s, { c with outputs := out :: c.outputs })
+  | (s, c), .after delay_ms msg =>
+    let due : Kernel.Due := ⟨now_ms + delay_ms, s.nextToken⟩
+    ({ s with nextToken := s.nextToken + 1, cell := { s.cell with timers := arm s.cell.timers msg due } },
+      { c with armed := (msg, due) :: c.armed })
+  | (s, c), .cancel msg =>
+    ({ s with cell := { s.cell with timers := s.cell.timers.eraseP (·.1 = msg) } }, c)
+  | (s, c), .stop => (s, c)
+
 /-- Take the actor down: it loses its timers and its mailbox, and what it sent itself. -/
 def down (s : Slot sys i) (c : Commit σ i) : Slot sys i × Commit σ i :=
   ({ s with mail := {}, cell := { s.cell with up := false, timers := [] } },
@@ -181,7 +198,8 @@ def down (s : Slot sys i) (c : Commit σ i) : Slot sys i × Commit σ i :=
 /-- Write back the result of a step taken at `now_ms` and perform its effects on the actor. -/
 def put (now_ms : Nat) (r : sys.State i × List (Effect σ i)) (s : Slot sys i) :
     Slot sys i × Commit σ i :=
-  let (s, c) := r.2.foldl (perform now_ms) ({ s with cell := { s.cell with state := r.1 } }, {})
+  let (s, c) := r.2.foldl (performRev now_ms) ({ s with cell := { s.cell with state := r.1 } }, {})
+  let c := c.reverse
   if r.2.any Effect.isStop then down s c else (s, c)
 
 /-- The state of an actor that no worker holds: its state between two steps. -/

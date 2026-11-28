@@ -223,6 +223,34 @@ namespace Slot
 
 variable {i : σ.Id}
 
+@[simp] theorem Commit.reverse_reverse (c : Commit σ i) : c.reverse.reverse = c := by
+  simp [Commit.reverse]
+
+theorem performRev_eq (now_ms : Nat) (eff : Effect σ i) (s : Slot sys i) (c : Commit σ i) :
+    performRev now_ms (s, c) eff
+      = ((perform now_ms (s, c.reverse) eff).1, (perform now_ms (s, c.reverse) eff).2.reverse) := by
+  cases eff <;> simp [performRev, perform, Commit.reverse]
+
+theorem foldl_performRev (now_ms : Nat) (effs : List (Effect σ i)) :
+    ∀ (s : Slot sys i) (c : Commit σ i), effs.foldl (performRev now_ms) (s, c)
+      = ((effs.foldl (perform now_ms) (s, c.reverse)).1,
+          (effs.foldl (perform now_ms) (s, c.reverse)).2.reverse) := by
+  induction effs with
+  | nil => intro s c; simp
+  | cons eff effs ih => intro s c; simp only [List.foldl_cons, performRev_eq, ih, Commit.reverse_reverse]
+
+/-- `put` gathers the step's sends, outputs and timers newest first and turns them round once:
+it is the fold of `perform`, which appends each, and costs time linear in the effects. -/
+theorem put_eq (now_ms : Nat) (r : sys.State i × List (Effect σ i)) (s : Slot sys i) :
+    s.put now_ms r =
+      match r.2.foldl (perform now_ms) ({ s with cell := { s.cell with state := r.1 } }, {}) with
+      | (s, c) => if r.2.any Effect.isStop then down s c else (s, c) := by
+  unfold put
+  rw [foldl_performRev, show ({} : Commit σ i).reverse = {} from rfl]
+  generalize r.2.foldl (perform now_ms) _ = f
+  rcases f with ⟨s', c'⟩
+  simp
+
 theorem perform_fold (now_ms : Nat) (effs : List (Effect σ i)) :
     ∀ (s : Slot sys i) (cm : Commit σ i) (c : SysState sys),
       c.timers i = s.cell.timers.map (·.1) →
@@ -322,7 +350,8 @@ theorem put_settle (now_ms : Nat) (r : sys.State i × List (Effect σ i)) (s : S
   simp only [List.append_nil] at h1
   have hc0 : ({ c0 with net := c0.net, outbox := c0.outbox } : SysState sys) = c0 := rfl
   rw [hc0] at h1
-  unfold SysState.settle put
+  unfold SysState.settle
+  rw [put_eq]
   rcases hf : r.2.foldl (perform now_ms) (s0, {}) with ⟨s', cm⟩
   rw [hf] at h1 h2 h3 h4 h5 h6
   simp only at h1 h2 h3 h4 h5 h6
@@ -1451,8 +1480,7 @@ theorem put_push (now_ms : Nat) (r : sys.State i × List (Effect σ i)) {s : Slo
     (x : Item σ i) (hst : s.status ≠ .idle) :
     ((s.push x).2.put now_ms r).1
       = if r.2.any Effect.isStop then (s.put now_ms r).1 else ((s.put now_ms r).1.push x).2 := by
-  rw [push_of_ne_idle x hst]
-  unfold put
+  rw [push_of_ne_idle x hst, put_eq, put_eq]
   let s0 : Slot sys i := { s with cell := { s.cell with state := r.1 } }
   have h := perform_fold_mail now_ms r.2 s0 {} (s.mail.push x)
   let t0 := update (SysState.blank sys).timers i (s0.cell.timers.map (·.1))
