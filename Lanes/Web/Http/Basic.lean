@@ -49,7 +49,7 @@ structure Request where
 def Method.codec : Codec Method :=
   Codec.sum% Method { get, post, put, patch, delete }
 
-/-- How a request is written to a journal. -/
+/-- How a request is written as records. -/
 def Request.codec : Codec Request :=
   let fields := Codec.list (Codec.pair Codec.string Codec.string)
   Codec.struct% Request { method := Method.codec, path := Codec.list Codec.string,

@@ -11,9 +11,9 @@ public import Lanes.Web.Http.Admit
 Reads answered from the state (`docs/decisions/new-reads-from-state.md`). A request that changes
 nothing is declared by a `View` beside the bridge: the actors it reads, and its response from
 their states. The server answers it from a peek at the end of a batch (`Runtime.tryPeek`): it
-never enters the system, so it takes no entry in the journal and no step, and it reads the states
-of every actor it names at one boundary between entries (`Batch.run_peeks`). Leaving the reads
-out of the journal changes nothing else the shard does (`Batch.run_erase_peeks`).
+never enters the system, so it takes no step, and it reads the states of every actor it names at
+one boundary between batches (`Batch.run_peeks`). Leaving the reads out changes nothing else the
+shard does (`Batch.run_erase_peeks`).
 
 A read waits for its peek behind a gate of its own, with its own bounds (`ServerConfig.reads`):
 the gate's decisions (`Gate.step`) over `readSig`, where a read enters as its id and the peek's
