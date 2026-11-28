@@ -1,4 +1,4 @@
-# D?. Peers open every connection with a versioned handshake and a shared key
+# D102. Peers open every connection with a versioned handshake and a shared key
 
 Status: Accepted
 

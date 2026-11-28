@@ -70,6 +70,7 @@ different lines. The numbers give the order in which they were taken.
 - [D43. One gate: `serve` runs the gate joined in front](D43-one-gate.md)
 - [D70. An application is deployed as one instance with its journal on a volume of its own, behind a load balancer](D70-one-instance-one-volume.md)
 - [D80. Every parser has an oracle and every model a recorded run, in one place, and lint keeps the list](D80-oracles.md)
+- [D102. Peers open every connection with a versioned handshake and a shared key](D102-peer-handshake.md)
 - [D83. PostgreSQL over TLS, with channel binding, and a pool of connections](D83-postgres-over-tls.md)
 - [D68. PostgreSQL is spoken in Lean, and a transactional store is a model](D68-postgres-protocol-in-lean.md)
 - [D14. Proofs of system invariants go through per-event lemmas](D14-proofs-of-system-invariants-go-through.md)
