@@ -1,6 +1,6 @@
 # D18. The runtime is a proved kernel inside a thin shell
 
-Status: Accepted
+Status: Partly superseded by D110-volatile-actors.md (parallelism from several shards: one process's scheduler runs actors in parallel)
 
 *Supersedes D13 and D16.*
 

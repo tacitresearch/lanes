@@ -1,9 +1,9 @@
 # Lean on Lanes
 
-Lanes is a framework for writing distributed and web software in Lean 4 and proving it
-against a spec: each actor is a pure step function, actors share no state, and IO happens only
-at the edges. The step function that runs in production is the one the model checker explores
-and the proofs are about.
+Lanes is a runtime and library for building software in Lean 4. Programs are actors whose
+logic is a pure step function. The runtime runs them, and the same step functions are
+model-checked and proved against a spec. The library has what applications need: encodings,
+cryptography, time, HTTP, PostgreSQL, storage, and models of outside services.
 
 > Status: early beta. What is missing is under [Status](#status).
 
@@ -51,9 +51,8 @@ Every claim, with its theorem, check or test, its premises and its status, is in
 `docs/ARCHITECTURE.md`, area by area, with the limits of each. In short:
 
 - **Proved** (Lean theorems, each with an axiom gate in `Tests/Axioms/`): the runtime kernel
-  follows the semantics whatever the shell asks of it; a journal cut at any byte recovers the
-  state it describes; a complete PASS of the model checker means the property holds in every
-  reachable state of the instance; any number of shards behave as one system; the HTTP gate
+  follows the semantics whatever the shell asks of it; a complete PASS of the model checker
+  means the property holds in every reachable state of the instance; the HTTP gate
   answers no request more often than it arrived and, in a fair run in which it does not crash,
   answers every request it admits; a sign-in accepts no state more often than it was issued, and
   an ID token only when signed for an allowed algorithm with every claim passing; and the
@@ -61,9 +60,8 @@ Every claim, with its theorem, check or test, its premises and its status, is in
   `docs/ARCHITECTURE.md`. Each has premises, which it gives.
 - **Checked**: model checks of the examples on small instances, and of what the proofs do not
   yet cover, such as that a request reaches the gate.
-- **Tested**: processes killed with SIGKILL and started again, the parsers and encoders against
-  reference implementations (Go's standard library, `expfmt`, botocore, jwcrypto), the models of
-  S3, its multipart uploads, SES, SQS and PostgreSQL against runs recorded from moto and
+- **Tested**: the parsers and encoders against reference implementations (Go's standard
+  library, `expfmt`, botocore, jwcrypto), the models of S3, its multipart uploads, SES, SQS and PostgreSQL against runs recorded from moto and
   PostgreSQL (`oracles/README.md`), the bound C against its Lean references.
 - **Trusted**: the trusted code, listed with each file's size in `TRUSTED.md`: the
   IO shells, the HTTP wire format where its proof does not reach, the C that binds OpenSSL's
@@ -84,10 +82,6 @@ lake build && lake test
 lake exe rookery 8080 rookery.journal rookery.secrets   # serves http://127.0.0.1:8080
 ```
 
-`examples/raft-kv` is a replicated key-value store proved to be one map to its clients where
-the link from a client does not repeat a request, and `examples/ledger` a multi-user web ledger
-with its safety proved.
-
 ## Performance
 
 Hello world over HTTP/1.1 with keep-alive, requests a second, on a c7a.16xlarge, at commit
@@ -97,11 +91,10 @@ Hello world over HTTP/1.1 with keep-alive, requests a second, on a c7a.16xlarge,
 | --- | ---: | ---: | ---: | --- |
 | Go `net/http` | 29,870 | 125,809 | 137,938 | up to 12.8 cores |
 | Lanes | 11,395 | 34,516 | 37,098 | 3.2 cores, 85–101 µs a request |
-| Lanes, journal synced before every answer | 344 | 2,393 | 8,632 | |
 
-Lanes is about 4× behind Go at 64 connections today. The benchmark's application is one actor
-on one shard, and a shard runs on one thread, so its logic uses one core. The IO path and running
-actors in parallel are the next steps. The method and settings are in `bench/README.md`.
+Lanes is about 4× behind Go at 64 connections at that commit. The benchmark's application is one
+actor, and the runtime ran its steps on one thread, so its logic used one core. The IO path and
+running actors in parallel are the next steps. The method and settings are in `bench/README.md`.
 
 ## Quick start
 
@@ -130,9 +123,6 @@ minutes.
 `docs/TUTORIAL-WEB.md` then builds a web app on it: sign-in with an OpenID Connect provider,
 uploads to S3 under a size limit, a test of the whole site against the test kit's fakes, a
 property checked and proved, and what a deploy needs.
-`docs/DEPLOY.md` then puts it on AWS behind HTTPS: one instance with its journal on a disk of its
-own, backed up, deployed from GitHub. That path is written and checked, and has not yet run on
-AWS.
 
 The app gets Lanes from GitHub, not from the clone, which it does not need once the app is
 made. Its `lakefile.toml` requires the release tag the clone is at, or else the clone's commit

@@ -1,6 +1,6 @@
 # D37. No router between shards in one process
 
-Status: Accepted
+Status: Superseded by D110-volatile-actors.md
 
 `Lanes/Actors/Cluster.lean` (removed) is deleted. It started a runtime per shard in one process and
 carried parcels between them on a lane of the inbox that was never full. It came before the
