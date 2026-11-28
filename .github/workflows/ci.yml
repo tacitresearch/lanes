@@ -183,7 +183,7 @@ jobs:
           - group: web
             packages: >-
               examples/payments examples/todo-db examples/sign-in examples/upload
-              examples/reminders
+              examples/reminders examples/chat
     name: examples (${{ matrix.group }})
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

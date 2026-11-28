@@ -1,0 +1,26 @@
+name = "chat"
+version = "0.1.0"
+defaultTargets = ["Chat", "chat", "check"]
+testDriver = "check"
+# Lake's artifact cache: each output is stored once per toolchain, by its content, shared by
+# every project on this machine, and hard-linked into `.lake/build`.
+enableArtifactCache = true
+restoreAllArtifacts = true
+
+[[require]]
+name = "lanes"
+path = "../.."
+
+[[lean_lib]]
+name = "Chat"
+globs = ["Chat.+"]
+
+# The web application: `chat [port]`.
+[[lean_exe]]
+name = "chat"
+root = "Main"
+
+# Model checks of the room, and what the front makes of requests, run by `lake test`.
+[[lean_exe]]
+name = "check"
+root = "Check"
