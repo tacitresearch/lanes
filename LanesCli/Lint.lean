@@ -25,9 +25,10 @@ Source-level checks of the rules in `AGENTS.md` that can be decided from the tex
   `Lanes/` imports modules of Lanes only from its own package and the packages it requires
   (`LanesCli/Layers.lean`), so each layer builds without the ones above it, and the core never
   imports a service (`Lanes/Services/`).
-- `links`: every repository path that a Markdown file at the root or under `docs/` writes in
-  backquotes exists (`a/{b,c}.lean` names two). `docs/decisions/` and `CHANGELOG.md` record the
-  past and are not checked.
+- `links`: every repository path written in backquotes exists (`a/{b,c}.lean` names two), in a
+  Markdown file at the root or under `docs/`, in every `README.md`, and in the comments of every
+  Lean file. A file in a package of its own (an example) may also name paths from that package's
+  directory. `docs/decisions/` and `CHANGELOG.md` record the past and are not checked.
 - `oracles`, where there is an `oracles/README.md`: its tables name a reference for each folder
   of `oracles/`, and an oracle, or why there is none, for each module of `Lanes/Lib/` and
   `Lanes/Web/`, each model of `Lanes/Outside/` and each module of `Lanes/Services/` that is not a
@@ -45,10 +46,11 @@ structure Finding where
   rule : String
   message : String
 
-/-- Replace comments and string literals by spaces, keeping line breaks, so that later checks
-see only code. -/
-def stripCommentsAndStrings (src : String) : String := Id.run do
-  let mut out : Array Char := #[]
+/-- The text of `src` as its code and its comments, each with line breaks kept and spaces where
+the other is. String literals, and the delimiters of comments, are in neither. -/
+def splitComments (src : String) : String × String := Id.run do
+  let mut code : Array Char := #[]
+  let mut notes : Array Char := #[]
   let mut depth := 0          -- nesting depth of block comments
   let mut inLine := false     -- inside a line comment
   let mut inString := false
@@ -58,12 +60,13 @@ def stripCommentsAndStrings (src : String) : String := Id.run do
     let c := chars[k]
     let next := chars[k + 1]?
     let blank := if c == '\n' then '\n' else ' '
+    let mut isCode := false
+    let mut isNote := false
     if skip > 0 then
       skip := skip - 1
-      out := out.push blank
     else if inLine then
       if c == '\n' then inLine := false
-      out := out.push blank
+      isNote := true
     else if depth > 0 then
       if c == '/' && next == some '-' then
         depth := depth + 1
@@ -71,28 +74,31 @@ def stripCommentsAndStrings (src : String) : String := Id.run do
       else if c == '-' && next == some '/' then
         depth := depth - 1
         skip := 1
-      out := out.push blank
+      else isNote := true
     else if inString then
       if c == '\\' then skip := 1
       else if c == '"' then inString := false
-      out := out.push blank
     else if c == '-' && next == some '-' then
       inLine := true
-      out := out.push blank
+      skip := 1
     else if c == '/' && next == some '-' then
       depth := 1
       skip := 1
-      out := out.push blank
     else if c == '"' then
       inString := true
-      out := out.push blank
     else if c == '\'' && chars[k + 2]? == some '\'' then
       -- A character literal such as '"' must not open a string.
       skip := 2
-      out := out.push blank
     else
-      out := out.push c
-  return String.ofList out.toList
+      isCode := true
+    code := code.push (if isCode then c else blank)
+    notes := notes.push (if isNote then c else blank)
+  return (String.ofList code.toList, String.ofList notes.toList)
+
+/-- Replace comments and string literals by spaces, keeping line breaks, so that later checks
+see only code. -/
+def stripCommentsAndStrings (src : String) : String :=
+  (splitComments src).1
 
 def isWordChar (c : Char) : Bool :=
   c.isAlphanum || c == '_' || c == '.' || c == '!' || c == '?' || c == '\''
@@ -262,11 +268,11 @@ def expandBraces (path : String) : List String := Id.run do
     todo := next
   return done ++ todo
 
-/-- A code span that is written as a path in the repository: it has a `/`, no blanks and no
-placeholder (`<area>`, `*`, `…`), and its first part is at the root of the project. Module
+/-- A code span that is written as a path: it has a `/`, no blanks and no placeholder (`<area>`,
+`*`, `…`), and its first part is in one of `bases`, the directories it may be read from. Module
 names (`Lanes.Http`), Go packages (`net/http`) and URLs are not, nor what a build writes under a
 `.lake` at any depth, which a fresh checkout has not. -/
-def citedPaths (root : System.FilePath) (span : String) : IO (List String) := do
+def citedPaths (bases : List System.FilePath) (span : String) : IO (List String) := do
   let bad := [' ', '\t', '<', '>', '*', '?', '$', '|', '…', '"', '\'', '(', ')', '#', ':', '=']
   if !span.contains '/' || span.any (bad.contains ·) || span.startsWith "/"
       || span.startsWith "~" || span.startsWith "-" || span.contains '\\' then
@@ -274,35 +280,58 @@ def citedPaths (root : System.FilePath) (span : String) : IO (List String) := do
   let paths := expandBraces span
   let first := (span.splitOn "/").headD ""
   if first.isEmpty || first == "." || first == ".." || first == ".git"
-      || (span.splitOn "/").contains ".lake"
-      || first.contains '{' || !(← (root / first).pathExists) then
+      || (span.splitOn "/").contains ".lake" || first.contains '{'
+      || !(← bases.anyM fun base => (base / first).pathExists) then
     return []
   return paths
 
-/-- The Markdown files whose citations are checked: those at the root and under `docs/`, but
-not the record of the past, `docs/decisions/`, nor what a package under `docs/` keeps in its
-`.lake/`. -/
+/-- `file` relative to `root`. -/
+def relativeTo (root file : System.FilePath) : String :=
+  (file.toString.dropPrefix (root.toString ++ "/")).toString
+
+/-- The Markdown files whose citations are checked: those at the root and under `docs/`, and
+every `README.md`; but not the record of the past, `docs/decisions/` and `CHANGELOG.md`, nor
+what a build keeps under a `.lake/`. -/
 def citingDocs (root : System.FilePath) : IO (List String) := do
   let top := (← Generated.markdownIn root).filter (· != "CHANGELOG.md")
-  let docs := root / "docs"
-  let nested ← if ← docs.isDir then
-      docs.walkDir fun dir =>
-        let name := dir.fileName.getD ""
-        return !(name == "decisions" || name.startsWith ".")
-    else pure #[]
+  let nested ← root.walkDir fun dir =>
+    let name := dir.fileName.getD ""
+    return !(name.startsWith "." || relativeTo root dir == "docs/decisions")
   let below := nested.toList.filterMap fun file =>
-    let relative := (file.toString.dropPrefix (root.toString ++ "/")).toString
-    if file.extension == some "md" then some relative else none
+    let relative := relativeTo root file
+    if file.extension == some "md" && relative.contains '/'
+        && (relative.startsWith "docs/" || file.fileName == some "README.md") then
+      some relative
+    else none
   return top ++ Generated.sortStrings below
 
-/-- `links`: every repository path a doc cites in backquotes exists. -/
-def checkLinks (root : System.FilePath) : IO (List Finding) := do
-  let mut findings : List Finding := []
+/-- The directories a path that `file` cites may be read from: the root; and, for a file in a
+package of its own (an example), the package's directory, where the nearest lakefile above
+`file` is, so that an example's README and comments may name its files as its package does. -/
+def citationBases (root : System.FilePath) (file : String) : IO (List System.FilePath) := do
+  let mut dir := (root / file).parent.getD root
+  for _ in [0:(file.splitOn "/").length] do
+    if dir.toString.length ≤ root.toString.length then break
+    if (← (dir / "lakefile.lean").pathExists) || (← (dir / "lakefile.toml").pathExists) then
+      return [root, dir]
+    dir := dir.parent.getD root
+  return [root]
+
+/-- `links`: every repository path cited in backquotes exists, in a doc of `citingDocs` or in a
+comment of a Lean file of `files`. -/
+def checkLinks (root : System.FilePath) (files : Array System.FilePath) : IO (List Finding) := do
+  let mut texts : Array (String × String) := #[]
   for doc in ← citingDocs root do
-    for (line, span) in codeSpans (← IO.FS.readFile (root / doc)) do
-      for path in ← citedPaths root span do
-        if !(← (root / path).pathExists) then
-          findings := ⟨doc, line, "links", s!"`{path}` does not exist"⟩ :: findings
+    texts := texts.push (doc, ← IO.FS.readFile (root / doc))
+  for file in files do
+    texts := texts.push (relativeTo root file, (splitComments (← IO.FS.readFile file)).2)
+  let mut findings : List Finding := []
+  for (file, text) in texts do
+    let bases ← citationBases root file
+    for (line, span) in codeSpans text do
+      for path in ← citedPaths bases span do
+        unless ← bases.anyM fun base => (base / path).pathExists do
+          findings := ⟨file, line, "links", s!"`{path}` does not exist"⟩ :: findings
   return findings.reverse
 
 /-! ## The oracles' manifest -/
@@ -358,8 +387,8 @@ def checkOracles (root : System.FilePath) : IO (List Finding) := do
     for (line, row) in rows do
       match row with
       | first :: oracle :: rest =>
-        let oracles ← (spans oracle).flatMapM (citedPaths root)
-        let cited ← (rest.flatMap spans).flatMapM (citedPaths root)
+        let oracles ← (spans oracle).flatMapM (citedPaths [root])
+        let cited ← (rest.flatMap spans).flatMapM (citedPaths [root])
         for path in spans first ++ oracles ++ cited do
           unless ← (root / path).pathExists do
             findings := findings ++ [⟨doc, line, "oracles", s!"`{path}` does not exist"⟩]
@@ -401,7 +430,7 @@ def lint (root : System.FilePath) (options : Options := {}) : IO Report := do
   for file in files do
     findings := findings ++ (← checkFile root file trusted)
   findings := findings ++ (← checkLayers root files)
-  findings := findings ++ (← checkLinks root)
+  findings := findings ++ (← checkLinks root files)
   findings := findings ++ (← checkOracles root)
   return ⟨findings, fixed, files.size⟩
 

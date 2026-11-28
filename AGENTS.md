@@ -73,8 +73,8 @@ lake exe lanes stats       # the totals no file holds: trusted lines, decisions
   (`partial`, `unsafe`, `axiom`, `panic!`, `implemented_by`, `extern` and C only in files
   `TRUSTED.md` names), `trusted-size` (each trusted file has the line count `TRUSTED.md` gives),
   `layering` (rule 1.6), `decisions` (the index agrees with the decisions, and each has its
-  number and status line), `links` (every repository path in backquotes in
-  `*.md` and `docs/*.md` exists) and `oracles` (`oracles/README.md` names an oracle, or why there
+  number and status line), `links` (every repository path in backquotes exists, in
+  `*.md`, `docs/**/*.md`, every `README.md` and the comments of every Lean file) and `oracles` (`oracles/README.md` names an oracle, or why there
   is none, for every protocol module and model, and every path it names exists). It does not
   check `no-io-in-step`, `bounded`, `field-leak` or `fn-length`: those need the elaborator. Lint
   reads only text.

@@ -28,9 +28,10 @@
 # for the next, and a machine kept warm is the point.
 #
 # Warming (WARM=1, the default, and `warm`) clones REPO into /opt/lanes/shared/src, installs the
-# toolchain of its lean-toolchain, and builds Lanes and what the mutation gate runs of
-# examples/raft-kv into /opt/lanes/shared/<key>, where <key> is a hash of lean-toolchain and
-# lake-manifest.json. Jobs start from that build (.github/actions/lean).
+# toolchain of its lean-toolchain, and builds Lanes (its default targets, which hold what the
+# mutation gate runs) and examples/rookery, the example CI builds as a `system` of its own, into
+# /opt/lanes/shared/<key>, where <key> is a hash of lean-toolchain and lake-manifest.json. Jobs
+# start from that build (.github/actions/lean).
 # A private REPO is cloned with CLONE_TOKEN, or with the token of TOKEN_SECRET; neither is
 # stored.
 #
@@ -336,13 +337,13 @@ warm_as_runner() {
   dir=$SHARED/$key
   exec 9>"$SHARED/lock"
   lake build
-  (cd examples/raft-kv && lake build raftNode raftProcs raftLive)
+  (cd examples/rookery && lake build)
   flock 9
   mkdir -p "$dir"
   rm -rf "$dir/build.new" "$dir/systems.new"
   cp -a .lake/build "$dir/build.new"
-  mkdir -p "$dir/systems.new/raft-kv"
-  cp -a examples/raft-kv/.lake/build "$dir/systems.new/raft-kv/build"
+  mkdir -p "$dir/systems.new/rookery"
+  cp -a examples/rookery/.lake/build "$dir/systems.new/rookery/build"
   rm -rf "$dir/build" "$dir/systems"
   mv "$dir/build.new" "$dir/build"
   mv "$dir/systems.new" "$dir/systems"

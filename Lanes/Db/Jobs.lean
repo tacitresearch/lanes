@@ -13,7 +13,7 @@ A job is a row of a table (`Queue`): its work, the time it is due, a key its req
 and how far it has got. Everything that must outlive the process is in the row, so a restart
 loses nothing (`docs/decisions/D110-volatile-actors.md`). The outbox is a jobs table whose jobs
 are effects (an HTTP call, an email, a payment), written in the transaction that causes them and
-due at once (`Lanes/Db/Outbox.lean`); a schedule is a job that runs again `every_ms` after each
+due at once (`docs/decisions/D114-outbox-jobs.md`); a schedule is a job that runs again `every_ms` after each
 success.
 
 The transactions:

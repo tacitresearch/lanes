@@ -21,6 +21,9 @@ Status: **checked: model plus oracle**.
   against sessions recorded from PostgreSQL 16 and psql 16 (`Tests/Postgres.lean`). The
   connection strings and service files are compared with libpq 18 on generated ones
   (`oracles/libpq`, `Tests/Oracle/Libpq.lean`).
+  The client, its TLS, its pool and the jobs worker are tested live against a PostgreSQL 16
+  with TLS that `scripts/with-postgres --tls` makes (`Tests/PostgresLive.lean`,
+  `Tests/PostgresTls.lean`, `Tests/Worker.lean`), nightly in `.github/workflows/services.yml`.
 
 ## Connecting
 

@@ -21,7 +21,8 @@ address and to `localhost` by name; a user
 the server takes over TLS only is refused without it; through a relay that holds another
 certificate from the same authority, a bound client is refused and an unbound one is not, as
 libpq's `psql` is; and a pool of two to `localhost` serves six clients on at most two connections and
-replaces one handed back broken with one that resolves the name again. CI runs no such server.
+replaces one handed back broken with one that resolves the name again. `scripts/with-postgres --tls`
+makes such a server, and CI runs these against it nightly (`.github/workflows/services.yml`).
 -/
 
 namespace Tests.PostgresTls

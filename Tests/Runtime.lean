@@ -337,6 +337,31 @@ def outputsTest : Async (List (String × Bool)) := do
   return [("outputs: every output is handed over once, in order, boot's included",
     (← outputs.get) == #[99, 10, 11, 12, 20, 21, 22])]
 
+/-! A link is first in, first out: what a step sends to one actor arrives in the order sent. -/
+
+abbrev orderSig : Signature where
+  Id := Bool
+  Msg _ := Nat
+  In := Nat
+
+abbrev order : System orderSig where
+  State _ := List Nat
+  actor
+    | false => { init := [], recover := fun s => (s, []),
+                 step := fun s n => (s, [.send true n, .send true (n + 1), .send true (n + 2)]) }
+    | true => { init := [], step := fun s n => (s ++ [n], []), recover := fun s => (s, []) }
+  accept x := ⟨false, x⟩
+
+def linkOrderTest : Async (List (String × Bool)) := do
+  let rt ← Runtime.start order
+  rt.input 10
+  rt.input 20
+  rt.idle
+  let got ← rt.state true
+  rt.stop
+  return [("link: what a step sends to one actor arrives in the order it was sent",
+    got == [10, 11, 12, 20, 21, 22])]
+
 /-! A runtime that always has work must still stop. -/
 
 abbrev pingSig : Signature where
@@ -361,13 +386,14 @@ def busyStopTest : Async (List (String × Bool)) := do
 def soon {α : Type} (ms : Nat) (action : Async α) : Async (Option α) :=
   Async.race (some <$> action) (do Async.sleep (.ofNat ms); return none)
 
-/-- Commands handed over before `stop` are finished by it, an inbox configured with no room
-still takes one input at a time, and a handler that throws does not end the runtime. -/
+/-- Commands handed over before `stop` are finished by it, even by a worker that lets go of the
+actor after each (a budget of one), an inbox configured with no room still takes one input at a
+time, and a handler that throws does not end the runtime. -/
 def dutiesTest : Async (List (String × Bool)) := do
   let entered ← IO.Promise.new
   let release ← IO.Promise.new
   let outputs ← IO.mkRef #[]
-  let rt ← Runtime.start clockSystem {} fun out => do
+  let rt ← Runtime.start clockSystem { budget := 1 } fun out => do
     outputs.modify (·.push out)
     if out == 0 then
       entered.resolve ()
@@ -402,6 +428,34 @@ def dutiesTest : Async (List (String × Bool)) := do
     ("inbox: a capacity of zero still takes an input", taken.isSome),
     ("outputs: a handler that throws does not end the runtime, and is not called again for that "
       ++ "output", alive == some true && (← seen.get) == #[1, 3]) ]
+
+/-! An actor at rest leaves the table (D51), but not while a timer of its is pending: started
+again from `init`, it would drop the timer as one it never armed. -/
+
+def resting : clockSig.Actor () Nat where
+  init := 0
+  step s
+    | .arm delay_ms => (s, [.after delay_ms .tick])
+    | .tick => (s + 1, [.emit tickOutput])
+    | _ => (s, [])
+  recover s := (s, [])
+  fresh s := s == 0
+  fresh_recover _ h := by simp_all
+
+abbrev restingSystem : System clockSig where
+  State _ := Nat
+  actor _ := resting
+  accept x := ⟨(), x⟩
+
+def restingTest : Async (List (String × Bool)) := do
+  let outputs ← IO.mkRef #[]
+  let rt ← Runtime.start restingSystem {} fun out => outputs.modify (·.push out)
+  rt.input (.arm 30)
+  let fired ← soon 2000 (rt.idle (timers := true))
+  let ticks ← soon 2000 (rt.state ())
+  rt.stop
+  return [("release: an actor at rest with a timer pending is kept, and the timer fires",
+    fired.isSome && ticks == some 1 && (← outputs.get) == #[tickOutput])]
 
 /-! A hub fans each input out to some of 16 actors, whose steps cost a number of rounds of
 hashing. On four workers the actors step at once; each actor's outputs are those of one worker,
@@ -516,7 +570,7 @@ def watchdogStopTest : Async (List (String × Bool)) := do
   let elapsed := (← IO.monoMsNow) - t0
   return [("watchdog: stop returns within 200 ms, the watchdog ended", elapsed < 200)]
 
-/-! The mail between actors (`docs/decisions/new-runtime-limits.md`). A hub fans each input out
+/-! The mail between actors (`docs/decisions/D123-runtime-limits.md`). A hub fans each input out
 to a sink, whose first output the handler holds until released: while it is held, the sink's
 mail cannot drain, so what the runtime does at the high-water mark is not a matter of timing. -/
 
@@ -647,14 +701,16 @@ def tests : IO (List (String × Bool)) := do
   let h ← budgetTest.block
   let i ← outputsTest.block
   let j ← busyStopTest.block
+  let k ← linkOrderTest.block
   let shaped := fun (label : String) (shape : Runtime.Config) => do
     let results := (← (flakyTest shape).block) ++ (← (bankTest shape).block)
       ++ (← (floodTest shape).block)
     return results.map fun (name, ok) => (s!"{name} ({label})", ok)
   let w ← shaped "on 4 workers" { workers := 4 }
   let u ← shaped "on 2 workers, a budget of 1" { workers := 2, budget := 1 }
-  return a ++ b ++ c ++ d ++ e ++ f ++ g ++ h ++ i ++ j ++ w ++ u ++ (← dutiesTest.block)
-    ++ (← fanTest.block) ++ (← contextTest.block) ++ (← watchdogTest.block) ++ (← watchdogStopTest.block) ++ (← parkerTest)
+  return a ++ b ++ c ++ d ++ e ++ f ++ g ++ h ++ i ++ j ++ k ++ w ++ u ++ (← dutiesTest.block)
+    ++ (← restingTest.block) ++ (← fanTest.block) ++ (← contextTest.block)
+    ++ (← watchdogTest.block) ++ (← watchdogStopTest.block) ++ (← parkerTest)
     ++ (← highWaterTest.block) ++ (← overflowTest.block) ++ (← runawayTest.block)
 
 end Tests.Runtime

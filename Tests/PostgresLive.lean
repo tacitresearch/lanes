@@ -9,7 +9,8 @@ The client against a real PostgreSQL server, when one is there: `LANES_POSTGRES=
 names it, set up as `scripts/postgres-test-server` sets one up (a database `lanes_test`, and
 users `lanes_trust`, `lanes_md5` with password `md5-pw` stored as MD5, `lanes_scram` with
 `scram-pw` stored as SCRAM, `lanes_clear` with `clear-pw` asked in cleartext). Without it the
-tests say they are skipped and pass; CI does not run a server.
+tests say they are skipped and pass. `scripts/with-postgres` makes such a server and runs a command
+against it; CI runs them so nightly (`.github/workflows/services.yml`).
 
 Authentication by each method, and a wrong password refused; `localhost` by name, and the
 settings of libpq's variables and password file, which `psql` reads too; rows, `NULL`, UTF-8 and errors; a

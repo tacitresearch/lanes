@@ -221,12 +221,19 @@ def live : IO (List (String × Bool)) := do
     let refused ← (File.replace path "fourth").toBaseIO
     return text == "third" && !left && refused matches .error _
       && (← IO.FS.readFile path) == "third"
+  let synced ← IO.FS.withTempDir fun root => do
+    IO.FS.writeFile (root / "f") "x"
+    File.fsync (root / "f").toString
+    File.fsync root.toString
+    return (← (File.fsync (root / "missing").toString).toBaseIO) matches .error _
   let mismatches := (script.zip (got.zip want)).filter fun (_, g, w) => g != w
   return [
     (s!"file system binding: answers as the model, call for call{
         if mismatches.isEmpty then "" else s!" (differs: {repr (mismatches.take 3)})"}",
       mismatches.isEmpty && got.length == want.length),
     ("File.replace: over nothing, over a file and over a temporary file left behind; refused, \
-        and the file kept, when a directory is in the way", replaced) ]
+        and the file kept, when a directory is in the way", replaced),
+    ("File.fsync: a file and its directory are synced, and a path that is not there is an error",
+      synced) ]
 
 end Tests.FileSystem

@@ -10,6 +10,7 @@ takes a minute or two per mutant, so it is run by hand and nightly, not on every
     python3 scripts/mutants.py --all      # also those checked by something slower
     python3 scripts/mutants.py tls        # those whose name contains "tls"
     python3 scripts/mutants.py --list     # print every mutant and run nothing
+    python3 scripts/mutants.py --help     # print this and run nothing
 
 CI runs the list in pieces on several machines and then puts the verdicts together:
 
@@ -41,36 +42,68 @@ import sys
 import tempfile
 
 MUTANTS = [
+    # The runtime shell. The sites are its duties that TRUSTED.md names and that a change to how a
+    # step runs should leave alone (booting, the ledger, release, stop, the timers' thread, the
+    # record's lock); a mutant whose text moves is reported STALE, and is refreshed here.
     ("runtime: what booting puts out is not handed over", "Lanes/Runtime/IO/Shell.lean",
-     "  handOver outputs\n  rt.recovered.set true", "  rt.recovered.set true"),
-    ("runtime: commands left in the inbox when the shard ends", "Lanes/Runtime/IO/Shell.lean",
-     "  discard <| rt.inbox.modifyGet Mailbox.take\n", ""),
-    ("runtime release: an actor is never released", "Lanes/Runtime/Kernel.lean",
-     "    { k with cells := k.cells.erase i }\n  else k", "    k\n  else k"),
-    ("runtime release: an actor with a timer pending is released", "Lanes/Runtime/Kernel.lean",
-     "if (sys.actor i).fresh c.state && c.up && c.timers.isEmpty then",
-     "if (sys.actor i).fresh c.state && c.up then"),
-    ("runtime release: an actor is released whatever its state", "Lanes/Runtime/Kernel.lean",
-     "if (sys.actor i).fresh c.state && c.up && c.timers.isEmpty then",
-     "if c.up && c.timers.isEmpty then"),
-    ("mailbox: no limit", "Lanes/Runtime/Mailbox.lean",
-     "  else if m.count < capacity then", "  else if m.count < capacity + 1000000 then"),
-    ("mailbox: senders that wait for room are never woken", "Lanes/Runtime/Mailbox.lean",
-     "wake := m.waiting, closed := m.closed }", "wake := [], closed := m.closed }"),
-    ("mailbox: the shard is not woken", "Lanes/Runtime/Mailbox.lean",
-     "    (.taken m.sleeper, { m with items := x :: m.items, count := m.count + 1, sleeper := none })",
-     "    (.taken none, { m with items := x :: m.items, count := m.count + 1, sleeper := none })"),
-    ("runtime: stop drops the commands already handed over", "Lanes/Runtime/IO/Shell.lean",
-     "    if batch.isEmpty && closed then break", "    if closed then break"),
-    ("runtime: the clock starts from zero after a restart", "Lanes/Runtime/IO/Shell.lean",
-     "return since + ((← IO.monoMsNow) - epoch)", "return (← IO.monoMsNow) - epoch"),
-    ("runtime: a handler that throws ends the shard", "Lanes/Runtime/IO/Shell.lean",
-     "    try onOutput out\n    catch e => IO.eprintln s!\"lanes: output handler failed: {e}\"",
-     "    onOutput out"),
-    ("runtime: the shard sleeps past its next timer", "Lanes/Runtime/IO/Shell.lean",
-     "    | .for_ms ms => rt.parker.parkAtMost ms", "    | .for_ms ms => rt.parker.parkAtMost (ms + 3000)"),
+     "    handOver rt.config.log onOutput c.outputs\n    rt.ledgerDo fun l => ((), { l with timers",
+     "    rt.ledgerDo fun l => ((), { l with timers"),
+    ("runtime: tryInput takes an input past the inbox's capacity", "Lanes/Runtime/IO/Shell.lean",
+     "(Sched.Ledger.offer rt.capacity rt.highWater)",
+     "(Sched.Ledger.offer (rt.capacity + 1) rt.highWater)"),
     ("runtime: an inbox of no capacity takes nothing", "Lanes/Runtime/IO/Shell.lean",
      "  max 1 rt.config.inboxCapacity", "  rt.config.inboxCapacity"),
+    ("runtime: stop ends the workers before every input taken has reached its actor",
+     "Lanes/Runtime/IO/Shell.lean",
+     "if ← rt.stopping.get then return (← rt.ledger.get).inputs == 0",
+     "if ← rt.stopping.get then return true"),
+    ("runtime: stop tells a caller waiting for idle that the system is idle",
+     "Lanes/Runtime/IO/Shell.lean",
+     "  for p in idle do p.resolve false\n  rt.stopping.set true",
+     "  for p in idle do p.resolve true\n  rt.stopping.set true"),
+    ("runtime release: an actor at rest is never released", "Lanes/Runtime/IO/Shell.lean",
+     "let rest := !keep && !q", "let rest := false && !q"),
+    ("runtime release: an actor is released whatever its state", "Lanes/Runtime/IO/Shell.lean",
+     "s.cell.timers.isEmpty\n        && (sys.actor i).fresh s.cell.state", "s.cell.timers.isEmpty"),
+    ("runtime release: an actor with a timer pending is released", "Lanes/Runtime/IO/Shell.lean",
+     "&& s.cell.up && s.cell.timers.isEmpty\n", "&& s.cell.up\n"),
+    ("runtime: the messages a step sends are pushed last first", "Lanes/Runtime/IO/Shell.lean",
+     "for e in c.sends do rt.pushTo w e.dst", "for e in c.sends.reverse do rt.pushTo w e.dst"),
+    ("runtime: the timers' thread sleeps three seconds past the next timer",
+     "Lanes/Runtime/IO/Shell.lean",
+     "rt.timer.parkAtMost (first.deadline_ms - now)",
+     "rt.timer.parkAtMost (first.deadline_ms - now + 3000)"),
+    ("runtime: a timer due before the others does not wake the timers' thread",
+     "Lanes/Runtime/IO/Shell.lean",
+     "(a.minKey?.all (fun k => compare key k == .lt), a.insert key ⟨i, msg, due⟩)",
+     "(a.minKey?.isNone, a.insert key ⟨i, msg, due⟩)"),
+    ("runtime: an input is recorded after it is pushed, outside the record's lock",
+     "Lanes/Runtime/IO/Shell.lean",
+     "      rt.recording.lock\n      rt.record [.input x]\n      rt.pushTo w i (.msg none msg)\n"
+     "      rt.recording.unlock",
+     "      rt.pushTo w i (.msg none msg)\n      rt.recording.lock\n      rt.record [.input x]\n"
+     "      rt.recording.unlock"),
+    ("kernel release: an actor is never released", "Lanes/Runtime/Kernel.lean",
+     "    { k with cells := k.cells.erase i }\n  else k", "    k\n  else k"),
+    ("kernel release: an actor with a timer pending is released", "Lanes/Runtime/Kernel.lean",
+     "if (sys.actor i).fresh c.state && c.up && c.timers.isEmpty then",
+     "if (sys.actor i).fresh c.state && c.up then"),
+    ("kernel release: an actor is released whatever its state", "Lanes/Runtime/Kernel.lean",
+     "if (sys.actor i).fresh c.state && c.up && c.timers.isEmpty then",
+     "if c.up && c.timers.isEmpty then"),
+    ("parker: a timed park sleeps three seconds past its time", "Lanes/Runtime/IO/Park.lean",
+     "Parker.parkFor p true (min ms 3600000).toUInt32",
+     "Parker.parkFor p true (min (ms + 3000) 3600000).toUInt32"),
+    ("parker: a timed park waits three seconds more in C", "native/lanes.c",
+     "            t.tv_sec += ms / 1000;\n", "            t.tv_sec += ms / 1000 + 3;\n"),
+    ("clock: a time before one given, or before the floor, is handed out",
+     "Lanes/Outside/IO/Clock.lean",
+     "(max last wall, max last wall)", "(max last wall, wall)"),
+    ("file system: a write at an offset is appended", "Lanes/Outside/IO/FileSystem.lean",
+     "writeAt (pathOf root p).toString false offset.toUInt64 bytes",
+     "writeAt (pathOf root p).toString true 0 bytes"),
+    ("file system: a path through a file is read as a directory", "Lanes/Outside/IO/FileSystem.lean",
+     "  | .inappropriateType _ 20 _ => .notDir", "  | .inappropriateType _ 20 _ => .isDir"),
     ("http: a shard that ends on an error is not noticed", "Lanes/Web/IO/Server.lean",
      "    if (← runtime.ended).isSome then", "    if false then"),
     ("http: the runtime is left running when the port is taken", "Lanes/Web/IO/Server.lean",
@@ -78,7 +111,7 @@ MUTANTS = [
     ("http: a connection's deadline is never acted on", "Lanes/Web/IO/Server.lean",
      "        if t ≤ now then c.tell .alarm", "        if t ≤ now && false then c.tell .alarm"),
     ("http: every answer goes to the first request of its connection", "Lanes/Web/IO/Server.lean",
-     "tell ctx line false (.conn (.answered seq r))", "tell ctx line false (.conn (.answered 0 r))"),
+     "react ctx line loop (.answered seq (match", "react ctx line loop (.answered 0 (match"),
     ("http: no bound on connections", "Lanes/Web/IO/Server.lean",
      "c.count.admit config.connections_max", "c.count.admit (config.connections_max + 1)"),
     ("http: a connection is closed at once, with what the client still sends unread",
@@ -88,7 +121,8 @@ MUTANTS = [
     ("http: stop does not tell the open connections", "Lanes/Web/IO/Server.lean",
      "  for (_, c) in alive do c.tell (.conn .stop)", "  for (_, _) in alive do pure ()"),
     ("http: what the connection asks for is done last first", "Lanes/Web/IO/Server.lean",
-     "  let mut todo := actions\n", "  let mut todo := actions.reverse\n"),
+     "  let mut loop := { loop with conn }\n  let mut todo := actions\n",
+     "  let mut loop := { loop with conn }\n  let mut todo := actions.reverse\n"),
     ("http stream: the head of a request that streams is not kept, so its pieces are refused",
      "Lanes/Web/IO/Server.lean", "          | some id => (seq, id) :: heads", "          | some _ => heads"),
     ("http stream: a piece is not tagged with its head", "Lanes/Web/IO/Server.lean",
@@ -103,10 +137,13 @@ MUTANTS = [
     ("http stream: a pull's answer goes to the next pull", "Lanes/Web/IO/Server.lean",
      "(.conn (.pulled seq index r))", "(.conn (.pulled seq (index + 1) r))"),
     ("http stream: the connection is never told that what it wrote was sent",
-     "Lanes/Web/IO/Server.lean", "  | .sent => react ctx line { loop with sentSet := false } .sent",
-     "  | .sent => return { loop with sentSet := false }"),
+     "Lanes/Web/IO/Server.lean",
+     "if loop.switched then reactProto ctx line loop .sent else react ctx line loop .sent",
+     "if loop.switched then reactProto ctx line loop .sent else return loop"),
     ("http stream: a time to look again that is no deadline is not acted on",
-     "Lanes/Web/IO/Server.lean", "    (conn.wakeAt config.conn)", "    none"),
+     "Lanes/Web/IO/Server.lean",
+     "(Conn.earlier (conn.wakeAt ctx.conn) (loop.proto.bind up.wakeAt))",
+     "(loop.proto.bind up.wakeAt)"),
     ("http client: a stream of events is read past its deadline", "Lanes/Web/IO/Client.lean",
      "(Async.race (try read catch _ => pure ()) (Async.sleep (.ofNat timeout_ms)))",
      "(try read catch _ => pure ())"),
@@ -178,8 +215,8 @@ MUTANTS = [
      "    if !same t.state state then .error .otherBrowser",
      "    if false then .error .otherBrowser"),
     ("oauth: a ticket is read without its tag", "Lanes/Web/Auth/OAuth.lean",
-     "  (Auth.verify key \"sign-in\" cookie).bind read",
-     "  read (\".\".intercalate ((cookie.splitOn \".\").drop 1))"),
+     "(Auth.verify (.of key) \"sign-in\" (now_ms / 1000) cookie).bind read",
+     "((Auth.fields cookie).map (·.2.2)).bind read"),
     ("oauth: a state accepted is not used up", "Lanes/Web/Auth/OAuth.lean",
      "    else (⟨raised, (t.state, t.expires_ms) :: kept⟩, .ok ())",
      "    else (⟨raised, kept⟩, .ok ())"),
@@ -199,8 +236,8 @@ MUTANTS = [
      "          let (u, claimed) := u.claim limit later t\n          (claimed, u)",
      "          let (_, claimed) := u.claim limit later t\n          (claimed, u)"),
     ("server: the work a request needs before it enters is not done", "Lanes/Web/IO/Server.lean",
-     "        | .ok (.ok request) => discard <| hand request answer",
-     "        | .ok (.ok _) => discard <| hand request answer"),
+     "        | .ok (.ok request) => discard <| hand request fun _ => answer",
+     "        | .ok (.ok _) => discard <| hand request fun _ => answer"),
     ("crypto: the comparison reads only the first byte", "native/lanes.c",
      "CRYPTO_memcmp(lean_sarray_cptr(a), lean_sarray_cptr(b), size) == 0",
      "CRYPTO_memcmp(lean_sarray_cptr(a), lean_sarray_cptr(b), size != 0) == 0"),
@@ -216,9 +253,12 @@ MUTANTS = [
 ]
 
 
+# `limit_s` is when a run that has not ended counts as hung: well above how long the check takes
+# on the code as it is (`lanesTest` takes about two minutes on a busy machine), since a mutant
+# that delays timers makes every run that waits for one slower.
 CHECKS = {
     "lanesTest": dict(cwd=".", build="lake build lanesTest",
-                      run="./.lake/build/bin/lanesTest", limit_s=120),
+                      run="./.lake/build/bin/lanesTest", limit_s=360),
 }
 
 WORDS = {
@@ -323,6 +363,9 @@ def collect(files, entries):
 
 def main():
     args = sys.argv[1:]
+    if {"--help", "-h"} & set(args):
+        print(__doc__.strip())
+        return
     entries = [(m[0], m[1], m[2], m[3], m[4] if len(m) > 4 else "lanesTest") for m in MUTANTS]
     if "--collect" in args:
         collect(args[args.index("--collect") + 1:], entries)
@@ -333,6 +376,10 @@ def main():
             if k + 1 == len(args):
                 sys.exit(f"{flag} needs a value")
             value[flag] = args.pop(k + 1)
+    known = ("--all", "--list", "--baseline", "--shard", "--json")
+    unknown = [a for a in args if a.startswith("-") and a not in known]
+    if unknown:
+        sys.exit(f"unknown option {unknown[0]}: see --help")
     wanted = [a for a in args if not a.startswith("--")]
     if wanted:
         chosen = [m for m in entries if any(w in m[0] for w in wanted)]

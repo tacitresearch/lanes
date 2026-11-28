@@ -1,15 +1,21 @@
 #!/usr/bin/env bash
 # Run a command beside a PostgreSQL made for it, with LANES_POSTGRES naming it:
 #
-#   scripts/with-postgres lake test     # in examples/rookery: its tests on a real PostgreSQL
+#   scripts/with-postgres lake test         # in examples/rookery: its tests on a real PostgreSQL
+#   scripts/with-postgres --tls lake test   # the server also takes TLS
 #
 # It makes a cluster with scripts/postgres-test-server in a new directory, on a free port, runs
-# the command with LANES_POSTGRES=127.0.0.1:<port>, then stops the cluster and removes it.
+# the command with LANES_POSTGRES=127.0.0.1:<port>, then stops the cluster and removes it. With
+# --tls the command also gets LANES_POSTGRES_TLS (the same address) and LANES_POSTGRES_CERTS (the
+# directory with the authority, `ca.pem`), which `Tests/PostgresTls.lean` reads.
 # PostgreSQL's binaries must be on PATH or in /usr/lib/postgresql/<version>/bin; run as root, the
 # cluster is made and run by the user postgres. Without PostgreSQL it runs the command without
 # LANES_POSTGRES, so the tests that need one say they are skipped.
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
+tls=
+if [ "${1:-}" = --tls ]; then tls=tls; shift; fi
+if [ $# = 0 ]; then echo "usage: scripts/with-postgres [--tls] COMMAND..." >&2; exit 2; fi
 if ! command -v initdb >/dev/null; then
   for bin in /usr/lib/postgresql/*/bin; do
     if [ -x "$bin/initdb" ]; then PATH="$bin:$PATH"; fi
@@ -31,5 +37,10 @@ stop() {
   rm -rf "$dir"
 }
 trap stop EXIT
-"${as[@]}" env PATH="$PATH" bash "$root/scripts/postgres-test-server" "$dir" "$port" >/dev/null
-LANES_POSTGRES="127.0.0.1:$port" "$@"
+"${as[@]}" env PATH="$PATH" bash "$root/scripts/postgres-test-server" "$dir" "$port" $tls >/dev/null
+echo "with-postgres: $(initdb --version) on 127.0.0.1:$port${tls:+, with TLS}"
+export LANES_POSTGRES="127.0.0.1:$port"
+if [ -n "$tls" ]; then
+  export LANES_POSTGRES_TLS="127.0.0.1:$port" LANES_POSTGRES_CERTS="$dir"
+fi
+"$@"
