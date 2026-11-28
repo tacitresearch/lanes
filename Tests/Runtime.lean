@@ -361,13 +361,14 @@ def busyStopTest : Async (List (String × Bool)) := do
 def soon {α : Type} (ms : Nat) (action : Async α) : Async (Option α) :=
   Async.race (some <$> action) (do Async.sleep (.ofNat ms); return none)
 
-/-- Commands handed over before `stop` are finished by it, an inbox configured with no room
+/-- Commands handed over before `stop` are finished by it, even by a worker that lets go of the
+actor after each one (a budget of one), an inbox configured with no room
 still takes one input at a time, and a handler that throws does not end the shard. -/
 def dutiesTest : Async (List (String × Bool)) := do
   let entered ← IO.Promise.new
   let release ← IO.Promise.new
   let outputs ← IO.mkRef #[]
-  let rt ← Runtime.start clockSystem {} fun out => do
+  let rt ← Runtime.start clockSystem { budget := 1 } fun out => do
     outputs.modify (·.push out)
     if out == 0 then
       entered.resolve ()
