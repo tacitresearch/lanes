@@ -429,7 +429,8 @@ came. So the same inputs enter the system with all of it on as off, which is tru
 (`Tests/Ops.lean`). `Server.stopOnSignal`
 is a stop that drops nothing in flight: at SIGTERM or SIGINT readiness answers `503`, the
 requests the runtime has taken are answered until none is left or a deadline passes, and then the
-server stops; trusted and tested with a child process.
+server stops, as `Http.Shutdown.step` decides (the platform's signals, below); performed by
+trusted IO and tested with a child process.
 
 Where: `Lanes/Web/` (`Http/`, `IO/Server.lean`), `Lanes/Semantics/Front.lean`.
 
@@ -667,10 +668,12 @@ are clients only, with tests, and SQS's calls are paired with the queue shape wh
 application needs it.
 
 The platform models in the core are the clock, monotonic (`Clock.outside`) and the wall clock
-(`Clock.wall`) in `Lanes/Outside/Clock.lean`, and the file system with crash semantics
-(`Lanes/Outside/FileSystem/`, below). Randomness, environment variables and configuration, the
-network and DNS, signals and shutdown, and standard input and output have no model yet, only
-bindings (`Lanes/Lib/Crypto/Native.lean`) or none: each is a checklist line of issue #245.
+(`Clock.wall`) in `Lanes/Outside/Clock.lean`, the file system with crash semantics
+(`Lanes/Outside/FileSystem/`), the environment a process starts with, and the stop a signal
+starts (both below). Randomness needs no model of its own: a step is told a seed, and every
+theorem about a step holds for every seed (below). The network and DNS, and standard input and
+output, have no model: the decision "The environment, signals and randomness, as platform
+models" says what one would give and cost.
 
 ## The platform: the file system
 
@@ -719,6 +722,62 @@ Where: `Lanes/Outside/FileSystem/`, `Lanes/Outside/FileSystem.lean`,
   sees a failed `fsync` should stop and recover from what is on the disk.
 - A loss of power cannot be tested: the crash rules are trusted, and only their consequences are
   checked against the model.
+
+## The platform: the environment and signals
+
+The environment a process starts with is a value (`Environment.Vars`, any list of variables, an
+empty value as unset), and an application's configuration is read from it once by a reader
+(`Environment.Reader`, `Lanes/Outside/Environment.lean`): data that names each variable it asks
+for, with its parser, default and text. A reader written with `do` goes on past a variable it
+cannot read, so `Environment.read` and `Environment.load` list every problem at once; a variable
+read as a `Secret` (`Lanes/Data/Secret.lean`, the one type of secret in Lanes) never has its
+value in a problem or in a `Repr`. A test or the checker runs an application under several
+configurations by giving each its `Vars`; `describe` lists the variables, for a deploy's
+documentation. `Environment.load` (`Lanes/Outside/IO/Environment.lean`) runs the model's own
+interpreter, `Reader.runM`, with `IO.getEnv`.
+
+SIGTERM and SIGINT start a stop that loses nothing taken; SIGKILL and a loss of power are the
+semantics' restart. A server drains as `Http.Shutdown.step` decides (`Lanes/Web/Http/Shutdown.lean`):
+readiness answers `503` while it goes on serving, and it stops when nothing is in flight or
+`drain_ms` has passed. The listener stays open while it drains, so that a request a load balancer
+sends before it reads readiness is served; `Server.stop` then closes it, stops the runtime and
+answers `503` to whatever still waits. A process without a server stops with
+`Runtime.stopOnSignal`, and `Runtime.stop` returns once every input taken has reached its actor
+(D116). Both wait through `awaitStopSignal` (`Lanes/Runtime/IO/Signal.lean`), over `Std.Async`'s
+signal waiters, with no C of Lanes; it lets the waiters go after the first signal, so a second
+ends the process at once.
+
+Randomness: a step is told a `seed` (D121), and every theorem about a step quantifies over its
+context, so the seed's model is any `UInt64`; the checker explores the seeds a scenario's
+moments list. Pure code that needs more draws from `mkStdGen ctx.seed.toNat`, Lean's generator.
+A key, token or nonce is never made from the seed (64 bits, recorded in a trace, from a generator
+that is not cryptographic): it comes from `IO.getRandomBytes` (`Crypto.randomBytes`) in an
+adapter or at start.
+
+Where: `Lanes/Outside/Environment.lean`, `Lanes/Outside/IO/Environment.lean`,
+`Lanes/Data/Secret.lean`, `Lanes/Web/Http/Shutdown.lean`, `Lanes/Runtime/IO/Signal.lean`,
+`Lanes/Web/IO/Server.lean`.
+
+### Claims
+
+| Claim | Evidence | Premises | Status |
+| --- | --- | --- | --- |
+| A reader lists every problem it finds: those of each part, in order, whatever an earlier part found | `Environment.Reader.run_bind`, `Lanes/Outside/Environment.lean`; gate `Tests/Axioms/Outside.lean`; `Tests/Environment.lean` | A part read only because of an earlier value may be asked, or not, because of that value's stand-in | proved |
+| A reader reads only the variables it asks for | `Environment.Reader.run_congr`; gate `Tests/Axioms/Outside.lean` | None | proved |
+| A secret's value, and what its parser said of it, never reach a problem; a `Secret` prints as `<secret>` | `Environment.secret_problems`, `Environment.field_secret_problems`, `Secret.toString_eq`; gate `Tests/Axioms/Outside.lean` | What the application does with `reveal` | proved |
+| `Environment.load` reads the process's environment as the model reads `Vars` | `Lanes/Outside/IO/Environment.lean` runs `Reader.runM`, the model's interpreter; `Tests/Environment.lean` | `IO.getEnv` gives the value the process started with | trusted, tested |
+| A draining server stops only when nothing is in flight or its deadline has passed, at the first look past the deadline, and once | `Http.Shutdown.step_stop`, `step_deadline`, `step_signal`, `step_stopping`, `Lanes/Web/Http/Shutdown.lean`; `Tests/Signal.lean` | `Server.stopOnSignal` performs what `step` says and looks every ten milliseconds | proved; the IO trusted |
+| At SIGTERM a server answers the request in flight, or `503` at the deadline, and exits 0; a runtime alone stops with every input it took taken | `Tests/Ops.lean` (a child process), `Tests/Signal.lean` (the test process sends itself SIGTERM) | `Std.Async`'s signal waiters | tested |
+
+### Limits
+
+- Lean cannot list the environment, so a reader names its variables; one that a reader builds
+  from another's value (`{NAME}_CLIENT_ID`) is asked as it is built, and `describe` lists it only
+  under the values it was given.
+- The model of the environment allows every list of variables: it says nothing a real one could
+  break, so there is nothing to record against it.
+- Signals other than SIGTERM and SIGINT keep their default actions; SIGHUP does not reload the
+  configuration, which is read once.
 
 ## S3 and Signature Version 4
 

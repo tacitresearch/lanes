@@ -738,3 +738,9 @@ import Lanes.Web.Http.WebSocketSessionSound
 
 /-- info: 'Lanes.MediaType.quoted_esc' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.MediaType.quoted_esc
+-- Lanes.Web.Http.Shutdown
+/-- info: 'Lanes.Http.Shutdown.step_stop' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.Http.Shutdown.step_stop
+
+/-- info: 'Lanes.Http.Shutdown.step_deadline' depends on axioms: [propext, Classical.choice] -/
+#guard_msgs in #print axioms Lanes.Http.Shutdown.step_deadline
