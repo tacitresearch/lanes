@@ -25,12 +25,12 @@ def total : Route Unit := .get (.seg "total")
 /-- A balance, as the bridge answers a journalled `balance`. -/
 def balanceView (a : Acct) : View bankSys where
   reads := [a]
-  answer get := Response.html (OutcomeView (.balance (get a List.mem_cons_self).balance)).render
+  answer get _ := Response.html (OutcomeView (.balance (get a List.mem_cons_self).balance)).render
 
 /-- The total of every account, read together at one boundary. -/
 def totalView : View bankSys where
   reads := List.finRange 3
-  answer get := .text s!"{((List.finRange 3).attach.map fun ⟨a, h⟩ => (get a h).balance).sum}"
+  answer get _ := .text s!"{((List.finRange 3).attach.map fun ⟨a, h⟩ => (get a h).balance).sum}"
 
 /-- The balances and the total are reads; the routes are the bridge's. -/
 def view (r : Request) : Option (View bankSys) :=
@@ -41,7 +41,7 @@ def view (r : Request) : Option (View bankSys) :=
 which the query leaves as it was. -/
 theorem balanceView_answers (id : Http.ReqId) (a : Acct) (s : Account) :
     (bankSys.actor a).step s (.query id) = (s, [.emit ⟨id, .balance s.balance⟩])
-      ∧ bridge.encode ⟨id, .balance s.balance⟩ = some (id, (balanceView a).answer fun _ _ => s) :=
+      ∧ bridge.encode ⟨id, .balance s.balance⟩ = some (id, (balanceView a).answer (fun _ _ => s) []) :=
   ⟨rfl, rfl⟩
 
 /-! A batch's peeks. -/
@@ -55,7 +55,8 @@ def batchTests : List (String × Bool) :=
   let config : Batch.Config := { now_ms := 0, fuel := 64, snapshotEvery := none }
   let k := (Kernel.boot bankSys).1
   let commands : List Cmd :=
-    [.peek [0] (), .input (transfer 0 0 1 30), .peek (List.finRange 3) (), .input (transfer 1 1 2 50)]
+    [.peek [0] (fun _ => false) (), .input (transfer 0 0 1 30),
+      .peek (List.finRange 3) (fun _ => false) (), .input (transfer 1 1 2 50)]
   let r := Batch.run config k 0 #[] commands
   let alone := Batch.run config k 0 #[] (commands.filter (!·.isPeek))
   let answered := r.acts.toList.filterMap fun
@@ -70,7 +71,14 @@ def batchTests : List (String × Bool) :=
       alone.acts.size + 2 == r.acts.size
         && (Batch.journal alone.acts.toList).length == (Batch.journal r.acts.toList).length
         && (Batch.history alone.acts.toList).length == (Batch.history r.acts.toList).length
-        && Batch.handed alone.acts.toList == Batch.handed r.acts.toList) ]
+        && Batch.handed alone.acts.toList == Batch.handed r.acts.toList),
+    ("reads: a peek of every actor started reads each once, at the batch's end",
+      let every := Batch.run config k 0 #[] (commands ++ [.peek [] (fun a => a != 2) ()])
+      match every.acts.toList.getLast? with
+      | some (.answer _ _ peek) =>
+        let got := (peek.others.map fun e => (e.1.val, e.2.balance)).mergeSort (·.1 ≤ ·.1)
+        got == [(0, 70), (1, 80)]
+      | _ => false) ]
 
 /-! Through `Loopback`. -/
 
@@ -169,7 +177,7 @@ def counterBridge : Bridge (Server.sig Ask Told) where
     | .stalled => none
 
 def countView (r : Request) : Option (View counterSys) :=
-  if r.path == ["count"] then some { reads := [()], answer := fun get => .text s!"{get () List.mem_cons_self}" }
+  if r.path == ["count"] then some { reads := [()], answer := fun get _ => .text s!"{get () List.mem_cons_self}" }
   else none
 
 def deadlineTest : Async (List (String × Bool)) := do

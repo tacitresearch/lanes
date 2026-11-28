@@ -123,6 +123,7 @@ two new decisions land at different lines. The numbers give the order in which t
 - [D17. URL attributes are rendered through `Html.safeUrl`](D17-url-attributes-are-rendered-through-html.md)
 - [D58. URLs, media types and rate limits against Go, and where they depart from it](D58-urls-media-types-rate-limits-against-go.md)
 - [D87. The video site's calls to the store are jobs of the scheduler, named by what they are for](D87-videos-on-the-scheduler.md)
+- [D109. The video site split into an actor per member, and a scheduler per entity](D109-videos-per-member.md)
 - [D88. Steps worked out on the pool update their states in place](D88-waves-in-place.md)
 - [D107. The waves' premise, measured on the video site: the work spreads once reads leave the journal](D107-waves-premise.md)
 - [D36. What a durable system has to say for itself: a map with a codec, a journal begun on purpose, a name that covers the replay](D36-what-a-durable-system-has-to.md): partly superseded by D66 (a changed system refusing its old files)

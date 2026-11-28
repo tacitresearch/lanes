@@ -7,40 +7,42 @@ import Videos.System
 /-!
 # Model checks
 
-The site and its scheduler beside two members' browsers, which follow a script, and beside the
-model of a transcode worker and the object store it writes to (`Lanes.Transcode`, over
-`Lanes.ObjectStore`), which answers each attempt the scheduler makes at most once, late, never,
-refused or `unknown`, and whose writes that were not answered may take effect at any moment or
-never. The browser's upload is a write the site grants and never hears the answer to (the upload
-form, the model's `granted`): the model may let it land before the site asks, after, or never. A
-check is the model's head, a delete the model's delete of the upload, and a transcode's attempt
-the job of its round, given to the worker. The worker, honest, writes the rendition and the
-thumbnail at any moment after it is given a job, and reports the job done (once its source may
-be held, its writes landed) or failed, late, again or never; anyone else may post a report with
-a signature that is not the worker's. An answer comes only to an attempt out (as
-`Schedule.callee` has it): one to an attempt abandoned, which the scheduler would not take, is
-not given, but the write it answers may still land. Every timer of the scheduler may fire at any
-moment, and the site's actor or the scheduler may crash and start again anywhere.
+The site's two members, `a` and `b`, each with its actor and its scheduler, beside their
+browsers, which follow a script, and beside the model of a transcode worker and the object
+store it writes to (`Lanes.Transcode`, over `Lanes.ObjectStore`), which answers each attempt a
+scheduler makes at most once, late, never, refused or `unknown`, and whose writes that were not
+answered may take effect at any moment or never. The browser's upload is a write the site grants
+and never hears the answer to (the upload form, the model's `granted`): the model may let it
+land before the site asks, after, or never. A check is the model's head, a delete the model's
+delete of the upload, and a transcode's attempt the job of its round, given to the worker. The
+worker, honest, writes the rendition and the thumbnail at any moment after it is given a job,
+and reports the job done (once its source may be held, its writes landed) or failed, late, again
+or never; anyone else may post a report with a signature that is not the worker's. An answer
+comes only to an attempt out (as `Schedule.callee` has it): one to an attempt abandoned, which
+the scheduler would not take, is not given, but the write it answers may still land. Every timer
+of a scheduler may fire at any moment, and an actor may crash and start again anywhere.
 
-What the browsers see is judged as they see it: no private video shown to anyone but its owner;
-nothing shown to a request made after its delete was answered; nothing shown that the store did
-not first say it holds, that the worker did not first report done with its signature, or whose
-rendition and thumbnail the store may not hold. The state is judged too: each like counted
-once, every bound, and, in runs with no crash, every deleted video's object deleted in the store
-or reported once its job is over. A crash in the semantics loses the actor's mail
-(`SysState.down`), so a scheduling or an end on its way is lost with it; on one shard an actor
-crashes only by stopping itself, which neither does, and the death of the process returns to
-the journal, mail included (`TRUSTED.md`, "Environment model"). Every `always` has `sometimes`
-beside it (rule 5.3).
+The system checked is the one that runs, with its actors named by the two members only
+(`checked`): the checker enumerates the actors, and a member is any identity. Each of the four
+actors runs the system's own actor, and a message to a member the check does not have is not
+sent; none is, since the scripts name only `a` and `b`.
+
+The writes are judged as they are answered, and the reads, which change nothing and are
+answered from the members' sites, at every state: a read may come at any boundary. No private
+video is shown to anyone but its owner; nothing is shown after its delete was answered; nothing
+is shown that the store did not first say it holds, that the worker did not first report done
+with its signature, or whose rendition and thumbnail the store may not hold; no session past its
+lifetime lets a request in. The state is judged too: each like counted once, every bound, and,
+in runs with no crash, every deleted video's object deleted in the store or reported once its
+job is over. A crash in the semantics loses the actor's mail (`SysState.down`), so a scheduling
+or an end on its way is lost with it; on one shard an actor crashes only by stopping itself,
+which none does, and the death of the process returns to the journal, mail included
+(`TRUSTED.md`, "Environment model"). Every `always` has `sometimes` beside it (rule 5.3).
 
 The worker's faults multiply every interleaving, so each scenario explores those it is about
-(`Worker`): the scenarios about the site and the store have a worker that reports each job done
-once (`quiet`), or never answers (`silent`); the pipeline and the forgery explore its faults.
-
-Of runs with no crash, every run that cannot go on, every message delivered, every timer fired
-and the worker done reporting, leaves no video transcoding: a confirmed upload ends ready or
-failed (`pipeline`, the checker's deadlocks). The site's part of it is proved from the worker's
-report (`Videos.report_settles`); that the worker reports is its model's, checked here.
+(`Worker`). Of runs with no crash, every run that cannot go on leaves no video transcoding: a
+confirmed upload ends ready or failed (`pipeline`, the checker's deadlocks). The site's part of
+it is proved from the worker's report (`Videos.report_settles`).
 
 Four seeded bugs, each found: a video made ready because the browser says so, a check the
 store did not answer in time taken as found, sessions that never end, and a report taken
@@ -51,13 +53,85 @@ namespace Videos.Check
 
 open Lanes
 
-instance : (Schedule.sig Key Unit Answer).Inspect := {}
-instance : sig.Inspect := {}
-instance : fullSig.Inspect := .join
-instance (config : Config) : (alone config).Inspect := {}
-instance (config : Config) : (Schedule.system (K := Key) (P := Unit) (A := Answer)
-  config.scheduler).Inspect := {}
-instance (config : Config) : (system config).Inspect := .join
+/-! ## The members checked -/
+
+def name (s : String) (h : Name.valid s = true := by simp [Name.valid]) : {s : String // Name.valid s} :=
+  ⟨s, h⟩
+
+def a : Who := ⟨name "id", name "a"⟩
+def b : Who := ⟨name "id", name "b"⟩
+
+def who : Fin 2 → Who
+  | 0 => a
+  | 1 => b
+
+def idx (w : Who) : Fin 2 := if w = b then 1 else 0
+
+/-- Video `n` of member `m`. -/
+def vid (m : Who) (n : Nat) : VideoId := ⟨m, n⟩
+
+/-- A number for each video the checks make: two members, at most two videos each. -/
+def vcode (v : VideoId) : Nat := 2 * (idx v.owner).val + v.n
+
+abbrev Idx := Fin 2 ⊕ Fin 2
+
+def lift : Idx → fullSig.Id := Sum.map who who
+
+/-- An actor of the system, as one of the check's, if the check has it. -/
+def lower : (i : fullSig.Id) → Option {j : Idx // lift j = i}
+  | .inl w => if h : who (idx w) = w then some ⟨.inl (idx w), by simp [lift, h]⟩ else none
+  | .inr w => if h : who (idx w) = w then some ⟨.inr (idx w), by simp [lift, h]⟩ else none
+
+abbrev csig : Signature where
+  Id := Idx
+  Msg i := fullSig.Msg (lift i)
+  In := fullSig.In
+  Out := fullSig.Out
+  decEqMsg i := fullSig.decEqMsg (lift i)
+
+def conv {i : Idx} : Effect fullSig (lift i) → List (Effect csig i)
+  | .send to msg =>
+    match lower to with
+    | some ⟨j, h⟩ => [.send j (cast (congrArg fullSig.Msg h.symm) msg)]
+    | none => []
+  | .emit out => [.emit out]
+  | .after delay_ms msg => [.after delay_ms msg]
+  | .cancel msg => [.cancel msg]
+  | .stop => [.stop]
+
+/-- The system with its actors named by the check's two members. They are started when the
+system starts, not on their first message as they are where it runs: a start of an empty site or
+scheduler does nothing, and starting them together keeps the interleavings of the starts out of
+the states explored. -/
+abbrev checked (config : Config) : System csig where
+  State i := (system config).State (lift i)
+  actor i := ((system config).actor (lift i)).mapEff conv
+  accept x :=
+    match lower ((system config).accept x).1, ((system config).accept x).2 with
+    | some ⟨j, h⟩, msg => ⟨j, cast (congrArg fullSig.Msg h.symm) msg⟩
+    | none, _ => ⟨.inr 0, Input.noticed (.delete (vid a 9))⟩
+  boot := [.inl 0, .inr 0, .inl 1, .inr 1]
+
+instance : csig.Inspect where
+  reprMsg
+    | .inl _ => inferInstanceAs (Repr (Schedule.Msg Key Unit Answer))
+    | .inr _ => inferInstanceAs (Repr Input)
+  hashMsg
+    | .inl _ => inferInstanceAs (Hashable (Schedule.Msg Key Unit Answer))
+    | .inr _ => inferInstanceAs (Hashable Input)
+
+instance (config : Config) : (checked config).Inspect where
+  beqState
+    | .inl _ => inferInstanceAs (BEq (Schedule.State Key Unit))
+    | .inr _ => inferInstanceAs (BEq Site)
+  reprState
+    | .inl _ => inferInstanceAs (Repr (Schedule.State Key Unit))
+    | .inr _ => inferInstanceAs (Repr Site)
+  hashState
+    | .inl _ => inferInstanceAs (Hashable (Schedule.State Key Unit))
+    | .inr _ => inferInstanceAs (Hashable Site)
+
+/-! ## The store and the worker -/
 
 /-- The objects of a video in the store. -/
 inductive Object where
@@ -76,17 +150,20 @@ def workerKey : Hmac.Key := .of "the worker's key".toUTF8
 
 /-- The browser's put of video `v`'s object, granted by the link the site handed out, as the
 model's call: a call of its own, which the site never sees answered. -/
-def uploadCall (v : VideoId) : Nat := 1000 + v
+def uploadCall (v : VideoId) : Nat := 1000 + vcode v
 
 /-- The model's call of an attempt: above every upload's, and one for each key and attempt,
-for the small bounds checked (attempts below 8, requests below 64, rounds below 8). -/
+for the small bounds checked (attempts below 8, requests below 64, rounds below 8, videos
+below 4). -/
 def callOf (key : Key) (attempt : Nat) : Nat :=
   let code := match key with
-    | .check v req => 4 * (v * 64 + req)
-    | .expire v => 4 * v + 1
-    | .delete v => 4 * v + 2
-    | .transcode r => 4 * (r.video * 8 + r.n) + 3
+    | .check v req => 4 * (vcode v * 64 + req)
+    | .expire v => 4 * vcode v + 1
+    | .delete v => 4 * vcode v + 2
+    | .transcode r => 4 * (vcode r.video * 8 + r.n) + 3
   2000 + code * 8 + attempt
+
+def videoOf (code : Nat) : VideoId := ⟨who (if code / 2 % 2 = 1 then 1 else 0), code % 2⟩
 
 /-- The key and attempt of a model's call, the inverse of `callOf`. -/
 def attemptOf (call : Nat) : Option (Key × Nat) :=
@@ -96,10 +173,10 @@ def attemptOf (call : Nat) : Option (Key × Nat) :=
     let code := n / 8
     let x := code / 4
     let key : Key := match code % 4 with
-      | 0 => .check (x / 64) (x % 64)
-      | 1 => .expire x
-      | 2 => .delete x
-      | _ => .transcode ⟨x / 8, x % 8⟩
+      | 0 => .check (videoOf (x / 64)) (x % 64)
+      | 1 => .expire (videoOf x)
+      | 2 => .delete (videoOf x)
+      | _ => .transcode ⟨videoOf (x / 8), x % 8⟩
     some (key, n % 8)
 
 /-- The worker's job of a round, as the site's bridge writes it (`Settings.job`). -/
@@ -123,7 +200,7 @@ def Report.ofWorker : Report → WorkerReport
   | .done r => .done r (jobOf r).targets
   | .failed r => .failed r
 
-def port : Rpc.Port fullSig (Transcode.Request Round Object Unit) (Transcode.Answer Unit) WorkerReport where
+def port : Rpc.Port csig (Transcode.Request Round Object Unit) (Transcode.Answer Unit) WorkerReport where
   called
     | .inr (.reply _ _ (.created v _ _)) => some ⟨uploadCall v, 0, .store (.granted (.upload v) ())⟩
     | .inl (.call a) => some ⟨callOf a.key a.attempt, a.deadline_ms, request a.key.op⟩
@@ -156,14 +233,24 @@ structure Worker where
 and never failed: the one path to a retry, for its scenario at small bounds. -/
   firstFails : Bool := false
 
-def store (worker : Worker) : Outside fullSig Store :=
+def store (worker : Worker) : Outside csig Store :=
   Rpc.outside port (Transcode.service worker.deliveries () true)
+
+/-! ## The browsers -/
 
 /-- A request, the time it arrives, and the requests whose answers it waits for. -/
 abbrev Script := List (Command × Nat × List ReqId)
 
 /-- Requests that all arrive at time 0. -/
 def Script.of (l : List (Command × List ReqId)) : Script := l.map fun (c, deps) => (c, 0, deps)
+
+/-- A read a browser may make, by its name in the scenario, at a time, once the requests it
+names are answered. -/
+structure Ask where
+  name : Nat
+  read : Read
+  at_s : Nat := 0
+  deps : List ReqId := []
 
 /-- The browsers: what they have still to send, what they were answered, and what they saw go
 wrong; and what the store did with the deletes. -/
@@ -172,12 +259,9 @@ structure Browsers where
   answered : List ReqId := []
   /-- Videos whose delete was answered. -/
   deleted : List VideoId := []
-  /-- For each request sent, the videos whose delete was answered before it was sent. -/
-  sent : List (ReqId × List VideoId) := []
   /-- When each request sent arrived. -/
   times : List (ReqId × Nat) := []
   broken : List String := []
-  watched : List (VideoId × Option Member) := []
   /-- Videos whose object the store said it deleted, to some attempt. -/
   gone : List VideoId := []
   /-- Videos whose object the site reported given up. -/
@@ -197,8 +281,6 @@ structure Browsers where
   forged : List ReqId := []
   /-- The forged reports the site refused. -/
   refused : List ReqId := []
-  /-- What a video not ready was shown waiting for, to its owner. -/
-  stages : List Stage := []
   /-- The videos whose upload a waiting request was told is confirmed. -/
   confirmed : List VideoId := []
   deriving DecidableEq, Hashable, Repr
@@ -211,57 +293,40 @@ def ins {α : Type} (key : α → Nat) (a : α) : List α → List α
   | [] => [a]
   | b :: l => if key a ≤ key b then a :: b :: l else b :: ins key a l
 
-def watchKey (w : VideoId × Option Member) : Nat := w.1 * 64 + (w.2.map (· + 1)).getD 0
-
 def attemptKey (a : Key × Nat) : Nat := callOf a.1 a.2
 
 def Command.req : Command → ReqId
-  | .signIn req .. | .signOut req .. | .create req .. | .uploaded req .. | .watch req ..
-  | .like req .. | .comment req .. | .uncomment req .. | .delete req .. | .feed req ..
-  | .channel req .. | .retry req .. | .report req .. => req
+  | .signIn req .. | .signOut req .. | .create req .. | .uploaded req .. | .like req ..
+  | .comment req .. | .uncomment req .. | .delete req .. | .retry req .. | .report req .. => req
 
 def Browsers.ready (b : Browsers) (deps : List ReqId) : Bool := deps.all b.answered.contains
 
 def Browsers.send (b : Browsers) (c : Command) (at_s : Nat) : Option Browsers :=
   match b.todo.find? fun (c', t, deps) => c' == c && t == at_s && b.ready deps with
   | some entry =>
-    some { b with todo := b.todo.erase entry, sent := ins (·.1) (Command.req c, b.deleted) b.sent
-                  times := ins (·.1) (Command.req c, at_s) b.times }
+    some { b with todo := b.todo.erase entry, times := ins (·.1) (Command.req c, at_s) b.times }
   | none => none
 
-/-- What each claim says of a reply as a browser sees it, with the store as it is then. A
-session is named by the request that signed in, so it began when that request arrived. The
-answers to reports show nothing and nobody waits for them, so they are not kept as answered. -/
-def judge (life : Auth.Lifetime) (b : Browsers) (held : Store) (req : ReqId) (viewer : Viewer)
-    (r : Reply) : Browsers :=
-  let cards := r.cards
-  let liveOk := match viewer, b.times.lookup req with
-    | some (_, sid), some t => match b.times.lookup sid with
-      | some began => !life.absolute_s.any (began + · ≤ t)
-      | none => true
-    | _, _ => true
-  let before := ((b.sent.lookup req).getD [])
-  let privateOk := cards.all fun c => c.visibility != .private || viewer.map (·.1) == some c.owner
-  let goneOk := cards.all fun c => !before.contains c.id
-  let store := held.server.inner.store
-  let confirmedOk := cards.all fun c => store.held.contains (.upload c.id)
-  let transcodedOk := cards.all fun c => b.done.any (·.video == c.id)
-  let mayHold (o : Object) := (store.possible o).any Option.isSome
-  let playableOk := cards.all fun c => mayHold (.rendition c.id) && mayHold (.thumbnail c.id)
-  let fail := [("a private video is shown to someone else", privateOk),
-    ("a deleted video is shown", goneOk),
-    ("a video is shown that the store did not say it holds", confirmedOk),
-    ("a video is shown that the worker did not report done, signed", transcodedOk),
-    ("a video is shown whose rendition or thumbnail the store may not hold", playableOk),
-    ("a session past its lifetime is let in", liveOk)].filterMap
-      fun (name, ok) => if ok then none else some name
-  let answered := { b with answered := ins id req b.answered, broken := b.broken ++ fail }
+/-- Whether a session named by a request of `viewer` lets a request of `t` in, as the browsers
+know: it began when its sign-in arrived. -/
+def liveAt (life : Auth.Lifetime) (b : Browsers) (viewer : Viewer) (t : Nat) : Bool :=
+  match viewer with
+  | some (_, sid) => match b.times.lookup sid with
+    | some began => !life.absolute_s.any (began + · ≤ t)
+    | none => true
+  | none => true
+
+/-- What a write's answer is judged by, as a browser sees it: its session's lifetime. -/
+def judge (life : Auth.Lifetime) (b : Browsers) (req : ReqId) (viewer : Viewer) (r : Reply) :
+    Browsers :=
+  let liveOk := match b.times.lookup req with
+    | some t => liveAt life b viewer t
+    | none => true
+  let answered := { b with answered := ins id req b.answered
+                           broken := if liveOk then b.broken else b.broken ++ ["a session past its lifetime is let in"] }
   match r with
-  | .deleted v => { answered with deleted := ins id v b.deleted }
-  | .watch view _ => { answered with watched := ins watchKey (view.card.id, viewer.map (·.1)) b.watched }
-  | .preparing _ _ stage =>
-    if b.stages.contains stage then answered else { answered with stages := ins (hash · |>.toNat) stage b.stages }
-  | .confirmed v => if b.confirmed.contains v then answered else { answered with confirmed := ins id v b.confirmed }
+  | .deleted v => { answered with deleted := ins vcode v b.deleted }
+  | .confirmed v => if b.confirmed.contains v then answered else { answered with confirmed := ins vcode v b.confirmed }
   | .reported => b
   | .forged => if b.refused.contains req then b else { b with refused := ins id req b.refused }
   | _ => answered
@@ -272,7 +337,7 @@ def Browsers.answered' (b : Browsers) : SchedIn → Option Browsers
     if b.out.contains (key, attempt) then
       let b := { b with out := b.out.erase (key, attempt) }
       match key, r with
-      | .delete v, .answer .deleted => some (if b.gone.contains v then b else { b with gone := ins id v b.gone })
+      | .delete v, .answer .deleted => some (if b.gone.contains v then b else { b with gone := ins vcode v b.gone })
       | _, _ => some b
     else none
   | _ => none
@@ -287,9 +352,9 @@ def Browsers.call (b : Browsers) (a : Schedule.Attempt Key Unit) : Browsers :=
   | .delete _ => { b with deleteTries := max b.deleteTries a.attempt }
   | .transcode _ => b
 
-def Browsers.observe (b : Browsers) (life : Auth.Lifetime) (held : Store) : SchedOut ⊕ Out → Browsers
-  | .inr (.reply req viewer r) => judge life b held req viewer r
-  | .inr (.orphan v) => if b.orphans.contains v then b else { b with orphans := ins id v b.orphans }
+def Browsers.observe (b : Browsers) (life : Auth.Lifetime) : SchedOut ⊕ Out → Browsers
+  | .inr (.reply req viewer r) => judge life b req viewer r
+  | .inr (.orphan v) => if b.orphans.contains v then b else { b with orphans := ins vcode v b.orphans }
   | .inl (.call a) => b.call a
   | .inl (.abandon key attempt) =>
     if b.out.contains (key, attempt) then { b with out := b.out.erase (key, attempt) }
@@ -302,13 +367,13 @@ def Browsers.reported (b : Browsers) (worker : Worker) (req : ReqId) (r : Report
     Option Browsers :=
   if r.signed workerKey signature then
     match r with
-    | .done round => some (if b.done.contains round then b else { b with done := ins (fun r => r.video * 8 + r.n) round b.done })
+    | .done round => some (if b.done.contains round then b else { b with done := ins (fun r => vcode r.video * 8 + r.n) round b.done })
     | .failed _ => some b
   else if worker.forging && !b.forged.contains req then some { b with forged := ins id req b.forged }
   else none
 
 def world (life : Auth.Lifetime) (script : Script) (worker : Worker) :
-    Outside fullSig (Browsers × Store) where
+    Outside csig (Browsers × Store) where
   init := ({ todo := script }, (store worker).init)
   allow d
     | x@(.inr (.request (.report req r signature) _)) => do
@@ -317,7 +382,7 @@ def world (life : Auth.Lifetime) (script : Script) (worker : Worker) :
     | .inr (.request c at_s) => (d.1.send c at_s).map (·, d.2)
     | .inl x => do pure (← d.1.answered' x, ← (store worker).allow d.2 (.inl x))
     | x => ((store worker).allow d.2 x).map (d.1, ·)
-  observe d out := (d.1.observe life d.2 out, (store worker).observe d.2 out)
+  observe d out := (d.1.observe life out, (store worker).observe d.2 out)
 
 def answers : List (Rpc.Reply Answer) :=
   [.unknown, .answer (.found 1), .answer .missing, .answer .deleted, .answer .failed]
@@ -325,9 +390,9 @@ def answers : List (Rpc.Reply Answer) :=
 def workerAnswers : List (Rpc.Reply Answer) := [.unknown, .answer .accepted, .answer .failed]
 
 /-- The request id of a report: one for each round, kind and signer, for the small bounds
-checked (videos below 2, rounds below 4). -/
+checked (videos below 4, rounds below 4). -/
 def reportReq (r : Report) (forged : Bool) : ReqId :=
-  100 + 16 * r.round.video + 4 * r.round.n + 2 * (match r with | .done _ => 0 | .failed _ => 1)
+  100 + 16 * vcode r.round.video + 4 * r.round.n + 2 * (match r with | .done _ => 0 | .failed _ => 1)
     + (if forged then 1 else 0)
 
 def signedReport (r : Report) : SchedIn ⊕ Input :=
@@ -337,14 +402,14 @@ def forgedReport (r : Report) : SchedIn ⊕ Input :=
   .inr (.request (.report (reportReq r true) r "forged") 0)
 
 /-- The worker's reports of every job it was given, and, with `forging`, a done report of the
-first round of video 0 signed by someone else. -/
+first round of `a`'s first video signed by someone else. -/
 def reports (worker : Worker) (d : Browsers × Store) : List (SchedIn ⊕ Input) :=
   let rounds := (d.2.server.inner.jobs.map (·.2.id)).filter fun r =>
     !worker.silent && (worker.late || !d.1.deleted.contains r.video)
   (rounds.flatMap fun r =>
       if worker.firstFails then [signedReport (if r.n == 0 then .failed r else .done r)]
       else signedReport (.done r) :: if worker.failures then [signedReport (.failed r)] else [])
-    ++ if worker.forging then [forgedReport (.done ⟨0, 0⟩)] else []
+    ++ if worker.forging then [forgedReport (.done ⟨vid a 0, 0⟩)] else []
 
 def samples (worker : Worker) (d : Browsers × Store) : List (SchedIn ⊕ Input) :=
   (d.1.todo.filterMap fun (c, at_s, deps) =>
@@ -357,27 +422,67 @@ def samples (worker : Worker) (d : Browsers × Store) : List (SchedIn ⊕ Input)
         Sum.inl (Schedule.Input.reply key attempt r))
     ++ reports worker d
 
-abbrev W (config : Config) := World (system config) (Browsers × Store)
+abbrev W (config : Config) := World (checked config) (Browsers × Store)
 
-def site {config : Config} (w : W config) : Site := w.state.state (.inr ())
+/-- Member `k`'s site. -/
+def site {config : Config} (w : W config) (k : Fin 2) : Site := w.state.state (.inr k)
 
-def jobs {config : Config} (w : W config) : List (Schedule.Job Key Unit) :=
-  (w.state.state (.inl ()) : Schedule.State Key Unit).jobs
+def jobs {config : Config} (w : W config) (k : Fin 2) : List (Schedule.Job Key Unit) :=
+  (w.state.state (.inl k) : Schedule.State Key Unit).jobs
+
+/-- The members' sites as a read sees them. -/
+def sites {config : Config} (w : W config) : Site := Site.union [(a, site w 0), (b, site w 1)]
+
+/-- What a read gets at this state: its one reply, and who it is for. -/
+def readAt {config : Config} (w : W config) (ask : Ask) : Option (Viewer × Reply) :=
+  match (sites w).read config ask.read ask.at_s with
+  | [.reply _ viewer r] => some (viewer, r)
+  | _ => none
+
+/-- The reads a browser may make at this state: those whose requests are answered. -/
+def asked {config : Config} (w : W config) (asks : List Ask) : List (Ask × Viewer × Reply) :=
+  asks.filterMap fun ask =>
+    if w.driver.1.ready ask.deps then (readAt w ask).map (ask, ·) else none
+
+/-- What a read shows, judged as the browser sees it, with the store as it is then: the names of
+the claims it breaks. -/
+def readBreaks (life : Auth.Lifetime) {config : Config} (w : W config) (ask : Ask) (viewer : Viewer)
+    (r : Reply) : List String :=
+  let b := w.driver.1
+  let cards := r.cards
+  let store := w.driver.2.server.inner.store
+  let mayHold (o : Object) := (store.possible o).any Option.isSome
+  [("a private video is shown to someone else",
+      cards.all fun c => c.visibility != .private || viewer.map (·.1) == some c.owner),
+    ("a deleted video is shown", cards.all fun c => !b.deleted.contains c.id),
+    ("a video is shown that the store did not say it holds",
+      cards.all fun c => store.held.contains (.upload c.id)),
+    ("a video is shown that the worker did not report done, signed",
+      cards.all fun c => b.done.any (·.video == c.id)),
+    ("a video is shown whose rendition or thumbnail the store may not hold",
+      cards.all fun c => mayHold (.rendition c.id) && mayHold (.thumbnail c.id)),
+    ("a session past its lifetime is let in", cards.isEmpty || liveAt life b viewer ask.at_s)].filterMap
+    fun (name, ok) => if ok then none else some name
 
 /-- The browsers' requests reach the site in the order sent; the actors in `crashing` may crash
 anywhere. -/
-def env (crashing : fullSig.Id → Bool := fun _ => true) : EnvModel fullSig where
+def env (crashing : csig.Id → Bool := fun _ => true) : EnvModel csig where
   mayCrash := crashing
   restarts _ := true
 
-/-- Only the site crashes, for the scenarios too large to crash either. -/
-def siteCrashes : fullSig.Id → Bool
-  | .inr () => true
-  | .inl () => false
+/-- Only `a`'s actor crashes, for the scenarios too large for its scheduler to crash too. -/
+def siteCrashes : csig.Id → Bool
+  | .inr 0 => true
+  | _ => false
+
+/-- Only `a`'s actor and scheduler crash: `b` takes part only in reads and visits. -/
+def aCrashes : csig.Id → Bool
+  | .inr 0 | .inl 0 => true
+  | _ => false
 
 /-- One attempt for each job: the scenarios with many requests. -/
 def config : Config :=
-  { maxMembers := 2, maxSessions := 1, maxVideos := 2, maxOwned := 1, maxPending := 1,
+  { maxSessions := 1, maxVideos := 1, maxOwned := 1, maxPending := 1,
     maxComments := 2, maxCommentsEach := 1, maxJobs := 3, pageSize := 1, pending_s := none
     workerKey
     checkRetry := { maxAttempts := 1, deadline_ms := 1, base_ms := 1, cap_ms := 1 }
@@ -393,22 +498,23 @@ def deleteTwice : Config :=
   { config with deleteRetry := { maxAttempts := 2, deadline_ms := 1, base_ms := 1, cap_ms := 1 } }
 
 def bounded (config : Config) {c : Config} (w : W c) : Bool :=
-  let s := site w
-  s.channels.length ≤ config.maxMembers && s.videos.length ≤ config.maxVideos
-    && (jobs w).length ≤ config.maxJobs
-    && s.videos.all (·.comments.length ≤ config.maxComments)
-    && s.channels.all (fun (m, _) => (s.videos.filter (·.owner == m)).length ≤ config.maxOwned)
-    && s.videos.all (fun v => v.comments.all fun c =>
-      (v.comments.filter (·.author == c.author)).length ≤ config.maxCommentsEach)
-    && s.channels.all fun (_, ch) => ch.sessions.ids.length ≤ config.maxSessions
+  [0, 1].all fun (k : Fin 2) =>
+    let s := site w k
+    s.channels.length ≤ 1 && s.videos.length ≤ config.maxVideos
+      && (jobs w k).length ≤ config.maxJobs
+      && s.videos.all (·.comments.length ≤ config.maxComments)
+      && s.channels.all (fun (m, _) => (s.videos.filter (·.owner == m)).length ≤ config.maxOwned)
+      && s.videos.all (fun v => v.comments.all fun c =>
+        (v.comments.filter (·.author == c.author)).length ≤ config.maxCommentsEach)
+      && s.channels.all fun (_, ch) => ch.sessions.ids.length ≤ config.maxSessions
 
-/-- The delete of `v`'s object is not over: its job is held, or on its way to the scheduler, or
-its end on its way to the site, or the report of it not yet handed over. -/
+/-- The delete of `v`'s object is not over: its job is held, or on its way to a scheduler, or
+its end on its way to the owner, or the report of it not yet handed over. -/
 def deleting {config : Config} (w : W config) (v : VideoId) : Bool :=
-  (jobs w).any (·.key == .delete v)
+  [0, 1].any (fun (k : Fin 2) => (jobs w k).any (·.key == .delete v))
     || w.state.net.any (fun e => match e with
-      | ⟨_, .inl (), .schedule _ spec⟩ => spec.key == .delete v
-      | ⟨_, .inr (), .job key _⟩ => key == .delete v
+      | ⟨_, .inl _, .schedule _ spec⟩ => spec.key == .delete v
+      | ⟨_, .inr _, .job key _⟩ => key == .delete v
       | _ => false)
     || w.state.outbox.contains (Sum.inr (Out.orphan v))
 
@@ -416,112 +522,103 @@ def t : Title := ⟨"t", by decide⟩
 def none_ : About := ⟨"", by decide⟩
 def hi : Remark := ⟨"hi", by decide⟩
 
-/-- Member 0 signs in with request 1 and session 1, member 1 with request 2 and session 2. -/
-def signIns : List (Command × List ReqId) :=
-  [(.signIn 1 "id" "a" "a", []), (.signIn 2 "id" "b" "b", [1])]
+def v0 : VideoId := vid a 0
 
-/-- `0` makes a public video and says it is uploaded; `1` watches it, likes it twice, and `0`
-likes it; `0` deletes it, and `1` asks for it again. -/
+/-- `a` signs in with request 1 and session 1, `b` with request 2 and session 2. -/
+def signIns : List (Command × List ReqId) :=
+  [(.signIn 1 a "a", []), (.signIn 2 b "b", [1])]
+
+/-- `a` makes a public video and says it is uploaded; `b` likes it twice, and `a` likes it; `a`
+deletes it. `b` watches it at any time, and again once the delete is answered. -/
 def life : Script := .of <|
   signIns ++
-  [ (.create 3 0 1 t none_ .public .mp4, [2]), (.uploaded 4 0 1 0, [3]),
-    (.watch 5 (some (1, 2)) 0, [4]), (.like 6 1 2 0 true, [5]), (.like 7 1 2 0 true, [6]),
-    (.like 8 0 1 0 true, [7]), (.delete 9 0 1 0, [8]), (.watch 10 (some (1, 2)) 0, [9]) ]
+  [ (.create 3 a 1 t none_ .public .mp4, [2]), (.uploaded 4 a 1 v0, [3]),
+    (.like 6 b 2 v0 true, [4]), (.like 7 b 2 v0 true, [6]),
+    (.like 8 a 1 v0 true, [7]), (.delete 9 a 1 v0, [8]) ]
 
-/-- `0` makes a video and says twice that it is uploaded, the second while the first check may
-be out; then asks for it. -/
+def byB : Viewer := some (b, 2)
+def byA : Viewer := some (a, 1)
+
+/-- `a` makes a video and says twice that it is uploaded, the second while the first check may
+be out. -/
 def twice : Script := .of <|
   signIns.take 1 ++
-  [ (.create 3 0 1 t none_ .public .mp4, [1]), (.uploaded 4 0 1 0, [3]),
-    (.uploaded 5 0 1 0, [3]), (.watch 6 (some (0, 1)) 0, [4, 5]) ]
+  [ (.create 3 a 1 t none_ .public .mp4, [1]), (.uploaded 4 a 1 v0, [3]),
+    (.uploaded 5 a 1 v0, [3]) ]
 
-/-- `0` makes a private video; `1`, a stranger and `0` ask for it, for `0`'s channel and for
-the feed; `1` tries to like it and comment on it. -/
+/-- `a` makes a private video; `b`, a stranger and `a` ask for it, for `a`'s channel and for
+the feed; `b` tries to like it and comment on it. -/
 def secret : Script := .of <|
   signIns ++
-  [ (.create 3 0 1 t none_ .private .webm, [2]), (.uploaded 4 0 1 0, [3]),
-    (.watch 5 (some (1, 2)) 0, [4]), (.watch 6 none 0, [5]), (.watch 7 (some (0, 1)) 0, [6]),
-    (.channel 8 (some (1, 2)) 0, [7]), (.channel 9 (some (0, 1)) 0, [8]),
-    (.feed 10 (some (1, 2)) none, [9]), (.like 11 1 2 0 true, [10]), (.comment 12 1 2 0 hi, [11]) ]
+  [ (.create 3 a 1 t none_ .private .webm, [2]), (.uploaded 4 a 1 v0, [3]),
+    (.like 11 b 2 v0 true, [4]), (.comment 12 b 2 v0 hi, [11]) ]
 
-/-- `0` makes a video and deletes it at once, while a check may be out; then asks for it. -/
+/-- `a` makes a video and deletes it at once, while a check may be out. -/
 def gone : Script := .of <|
   signIns.take 1 ++
-  [ (.create 3 0 1 t none_ .unlisted .mp4, [1]), (.uploaded 4 0 1 0, [3]),
-    (.delete 5 0 1 0, [3]), (.channel 6 (some (0, 1)) 0, [5]) ]
+  [ (.create 3 a 1 t none_ .unlisted .mp4, [1]), (.uploaded 4 a 1 v0, [3]),
+    (.delete 5 a 1 v0, [3]) ]
 
-/-- `0` makes a video and deletes it, and asks for its channel. -/
+/-- `a` makes a video and deletes it. -/
 def purge : Script := .of <|
   signIns.take 1 ++
-  [ (.create 3 0 1 t none_ .unlisted .mp4, [1]), (.delete 4 0 1 0, [3]),
-    (.channel 5 (some (0, 1)) 0, [4]) ]
+  [ (.create 3 a 1 t none_ .unlisted .mp4, [1]), (.delete 4 a 1 v0, [3]) ]
 
-/-- `0` makes a video and never says it is uploaded; its last check comes, and `0` asks for it
-and for its channel. -/
+/-- `a` makes a video and never says it is uploaded; its last check comes. -/
 def lapsed : Script := .of <|
-  signIns.take 1 ++
-  [ (.create 3 0 1 t none_ .public .mp4, [1]), (.channel 4 (some (0, 1)) 0, [3]),
-    (.watch 5 (some (0, 1)) 0, [4]) ]
+  signIns.take 1 ++ [ (.create 3 a 1 t none_ .public .mp4, [1]) ]
 
-/-- `0` signs in at 0 and makes a private video; it watches it at 50, inside its session's
-lifetime of 100, and at 150, past it, when it also tries to like it and is then let in by the
-session of a new sign-in. -/
+/-- `a` signs in at 0 and makes a private video, and tries to like it at 150, past its session's
+lifetime of 100, and is then let in by the session of a new sign-in. -/
 def expiry : Script :=
-  [ (.signIn 1 "id" "a" "a", 0, []), (.create 2 0 1 t none_ .private .mp4, 10, [1]),
-    (.uploaded 3 0 1 0, 20, [2]), (.watch 4 (some (0, 1)) 0, 50, [3]),
-    (.watch 5 (some (0, 1)) 0, 150, [4]), (.like 6 0 1 0 true, 150, [5]),
-    (.signIn 7 "id" "a" "a", 150, [6]), (.watch 8 (some (0, 7)) 0, 160, [7]) ]
+  [ (.signIn 1 a "a", 0, []), (.create 2 a 1 t none_ .private .mp4, 10, [1]),
+    (.uploaded 3 a 1 v0, 20, [2]), (.like 6 a 1 v0 true, 150, [3]),
+    (.signIn 7 a "a", 150, [6]) ]
 
 def short : Config := { config with lifetime := { absolute_s := some 100 } }
 
-/-- `0` makes a public video and says it is uploaded; it asks for it while it may be prepared,
-asks for it to be tried again (which does something only if it failed), and a stranger asks for
-it. -/
+/-- `a` makes a public video and says it is uploaded, and asks for it to be tried again (which
+does something only if it failed). -/
 def pipeline : Script := .of <|
   signIns.take 1 ++
-  [ (.create 3 0 1 t none_ .public .mp4, [1]), (.uploaded 4 0 1 0, [3]),
-    (.watch 5 (some (0, 1)) 0, [4]), (.retry 6 0 1 0, [5]), (.watch 7 none 0, [6]) ]
+  [ (.create 3 a 1 t none_ .public .mp4, [1]), (.uploaded 4 a 1 v0, [3]), (.retry 6 a 1 v0, [4]) ]
 
-/-- `0` makes a public video and says it is uploaded; it asks for it, and a stranger asks for
-it. -/
+/-- `a` makes a public video and says it is uploaded. -/
 def forgery : Script := .of <|
-  signIns.take 1 ++
-  [ (.create 3 0 1 t none_ .public .mp4, [1]), (.uploaded 4 0 1 0, [3]),
-    (.watch 5 (some (0, 1)) 0, [4]), (.watch 6 none 0, [5]) ]
+  signIns.take 1 ++ [ (.create 3 a 1 t none_ .public .mp4, [1]), (.uploaded 4 a 1 v0, [3]) ]
+
+/-! The reads of the scenarios: a watch page, a channel page and the feed, by `a`, `b` or a
+stranger, at any state once their requests are answered. -/
+
+def watchBy (viewer : Viewer) (name : Nat) (deps : List ReqId := []) (at_s : Nat := 0) : Ask :=
+  { name, read := .watch viewer v0, deps, at_s }
+
+def lifeReads : List Ask := [watchBy byB 5 [4]]
+
+def secretReads : List Ask :=
+  [ watchBy byB 5 [4], watchBy none 6 [4], watchBy byA 7 [4],
+    { name := 8, read := .channel byB a, deps := [4] }, { name := 9, read := .channel byA a, deps := [4] },
+    { name := 10, read := .feed byB none, deps := [4] } ]
+
+def ownerReads : List Ask := [watchBy byA 5 [3]]
+
+def expiryReads : List Ask :=
+  [ watchBy byA 4 [3] 50, watchBy byA 5 [3] 150, watchBy (some (a, 7)) 8 [7] 160 ]
 
 /-! The small bounds' scripts: each a large one's, cut to the requests its witnesses need. -/
 
-/-- `life` up to its likes: `1` watches a public video and likes it twice, and `0` likes it. -/
-def likes : Script := life.take 8
+/-- `life` up to its likes. -/
+def likes : Script := life.take 7
 
-/-- `0` makes a public video, watches it once it is shown, deletes it, and asks for it again. -/
+/-- `a` makes a public video, deletes it, and watches it. -/
 def deleteShown : Script := .of <|
   signIns.take 1 ++
-  [ (.create 3 0 1 t none_ .public .mp4, [1]), (.uploaded 4 0 1 0, [3]),
-    (.watch 5 (some (0, 1)) 0, [4]), (.delete 6 0 1 0, [5]), (.watch 7 (some (0, 1)) 0, [6]) ]
+  [ (.create 3 a 1 t none_ .public .mp4, [1]), (.uploaded 4 a 1 v0, [3]), (.delete 6 a 1 v0, [4]) ]
 
-/-- `gone` without asking for the channel after the delete. -/
-def goneShort : Script := gone.take 4
+/-- `pipeline` without the retry. -/
+def prepared : Script := pipeline.take 3
 
-/-- `twice` without asking for the video after both checks. -/
-def twiceShort : Script := twice.take 4
-
-/-- `lapsed` without asking for the channel: `0` makes a video, never says it is uploaded, and
-asks for it. -/
-def lapsedShort : Script := .of <|
-  signIns.take 1 ++
-  [ (.create 3 0 1 t none_ .public .mp4, [1]), (.watch 5 (some (0, 1)) 0, [3]) ]
-
-/-- `pipeline` up to the first time `0` asks for its video, while it may be prepared. -/
-def prepared : Script := pipeline.take 4
-
-/-- `0` makes a public video, says it is uploaded, and asks for it to be tried again. -/
-def retried : Script := .of <|
-  signIns.take 1 ++
-  [ (.create 3 0 1 t none_ .public .mp4, [1]), (.uploaded 4 0 1 0, [3]), (.retry 5 0 1 0, [4]) ]
-
-/-- `forgery` without the stranger's request. -/
-def forgeryShort : Script := forgery.take 4
+def retried : Script := pipeline
 
 /-- A worker that takes each job and reports it done, once, at any moment while its video is
 there: for the scenarios about the site and the store, whose interleavings the worker's faults
@@ -537,29 +634,38 @@ def forged : Worker := { deliveries := 2, forging := true, failures := false, ev
 
 def lapsing : Config := { checkTwice with pending_s := some 1 }
 
-def claims {config : Config} : List (Check.Property (W config)) :=
-  [ .always "a private video is shown to its owner only" fun w =>
-      !w.driver.1.broken.contains "a private video is shown to someone else",
-    .always "a video is not shown to a request made after its delete was answered" fun w =>
-      !w.driver.1.broken.contains "a deleted video is shown",
-    .always "a video is shown only once the store said it holds its object" fun w =>
-      !w.driver.1.broken.contains "a video is shown that the store did not say it holds",
-    .always "a video is shown only once the worker reported it done, signed" fun w =>
-      !w.driver.1.broken.contains "a video is shown that the worker did not report done, signed",
-    .always "a video shown has a rendition and a thumbnail the store may hold" fun w =>
-      !w.driver.1.broken.contains "a video is shown whose rendition or thumbnail the store may not hold",
+def claims {config : Config} (life : Auth.Lifetime) (asks : List Ask) : List (Check.Property (W config)) :=
+  let reads (claim : String) (w : W config) : Bool :=
+    (asked w asks).all fun (ask, viewer, r) => !(readBreaks life w ask viewer r).contains claim
+  [ .always "a private video is shown to its owner only" (reads "a private video is shown to someone else"),
+    .always "a video is not shown once its delete was answered" (reads "a deleted video is shown"),
+    .always "a video is shown only once the store said it holds its object"
+      (reads "a video is shown that the store did not say it holds"),
+    .always "a video is shown only once the worker reported it done, signed"
+      (reads "a video is shown that the worker did not report done, signed"),
+    .always "a video shown has a rendition and a thumbnail the store may hold"
+      (reads "a video is shown whose rendition or thumbnail the store may not hold"),
     .always "a session past its lifetime lets no request in" fun w =>
-      !w.driver.1.broken.contains "a session past its lifetime is let in",
+      reads "a session past its lifetime is let in" w
+        && !w.driver.1.broken.contains "a session past its lifetime is let in",
     .always "each like is a member's, counted once" fun w =>
-      (site w).videos.all fun v => v.likes.eraseDups.length == v.likes.length,
+      [0, 1].all fun (k : Fin 2) => (site w k).videos.all fun v => v.likes.eraseDups.length == v.likes.length,
     .always "every bound holds" fun w => bounded config w,
     .always "with no crash, a deleted video's object is deleted in the store, or reported, once \
         its job is over"
       fun w => w.crashes != 0 || w.driver.1.deleted.all fun v =>
         deleting w v || w.driver.1.gone.contains v || w.driver.1.orphans.contains v ]
 
-def shown {config : Config} : Check.Property (W config) :=
-  .sometimes "a video is shown" fun w => !w.driver.1.watched.isEmpty
+/-- The reply read `name` of `asks` gets at this state, if it may be made. -/
+def got {config : Config} (w : W config) (asks : List Ask) (name : Nat) : Option Reply :=
+  ((asked w asks).find? (·.1.name == name)).map (·.2.2)
+
+def showsVideo : Option Reply → Bool
+  | some (.watch _ _) => true
+  | _ => false
+
+def shown {config : Config} (asks : List Ask) : Check.Property (W config) :=
+  .sometimes "a video is shown" fun w => (asked w asks).any fun (_, _, r) => !r.cards.isEmpty
 
 def confirmedOnce {config : Config} : Check.Property (W config) :=
   .sometimes "a check confirms an upload and its request is told" fun w =>
@@ -571,52 +677,60 @@ def goneWhileHeld {config : Config} : Check.Property (W config) :=
 
 def deletedAfterRetry {config : Config} : Check.Property (W config) :=
   .sometimes "an object is deleted in the store after its first delete failed" fun w =>
-    w.driver.1.gone.contains 0 && w.driver.1.deleteTries == 2
+    w.driver.1.gone.contains v0 && w.driver.1.deleteTries == 2
 
 def reported {config : Config} : Check.Property (W config) :=
-  .sometimes "an object given up is reported" fun w => w.driver.1.orphans.contains 0
+  .sometimes "an object given up is reported" fun w => w.driver.1.orphans.contains v0
 
 def checkedAgain {config : Config} : Check.Property (W config) :=
   .sometimes "a last check is tried again" fun w => w.driver.1.expireTries == 2
 
 def twoLikes {config : Config} : Check.Property (W config) :=
-  .sometimes "a video has two likes" fun w => (site w).videos.any (·.likes.length == 2)
+  .sometimes "a video has two likes" fun w => (site w 0).videos.any (·.likes.length == 2)
 
-def watchedTwice {config : Config} : Check.Property (W config) :=
-  .sometimes "a private video is watched by its owner in two sessions" fun w =>
-    (w.driver.1.watched.filter (· == (0, some 0))).length == 2
+def shownThenGone {config : Config} : Check.Property (W config) :=
+  .sometimes "a video shown is deleted and then not shown" fun w =>
+    w.driver.1.deleted.contains v0 && !showsVideo (got w ownerReads 5)
+
+def watchedFirst {config : Config} : Check.Property (W config) :=
+  .sometimes "a private video is watched by its owner inside its session's lifetime" fun w =>
+    showsVideo (got w expiryReads 4)
+
+def watchedAgain {config : Config} : Check.Property (W config) :=
+  .sometimes "a private video is watched by its owner in a new session, past the first's lifetime" fun w =>
+    showsVideo (got w expiryReads 8)
 
 def ownerWatches {config : Config} : Check.Property (W config) :=
-  .sometimes "a private video is watched by its owner" fun w =>
-    w.driver.1.watched.contains (0, some 0)
+  .sometimes "a private video is watched by its owner" fun w => showsVideo (got w secretReads 7)
 
 def othersAsk {config : Config} : Check.Property (W config) :=
-  .sometimes "a private video is asked for by another member and by a stranger" fun w =>
-    w.driver.1.answered.contains 5 && w.driver.1.answered.contains 6
+  .sometimes "a private video is ready, and asked for by another member and by a stranger" fun w =>
+    (site w 0).videos.any (·.status.isReady) && got w secretReads 5 == some .notFound
+      && got w secretReads 6 == some .notFound
 
 def lapsedReady {config : Config} : Check.Property (W config) :=
   .sometimes "an upload never confirmed is made ready by its last check, and shown" fun w =>
-    w.driver.1.watched.contains (0, some 0)
+    showsVideo (got w ownerReads 5)
 
 def lapsedOut {config : Config} : Check.Property (W config) :=
   .sometimes "an upload never confirmed is taken out by its last check" fun w =>
-    (site w).next == 1 && (site w).videos.isEmpty
+    (site w 0).next == 1 && (site w 0).videos.isEmpty
 
 def preparing {config : Config} : Check.Property (W config) :=
   .sometimes "a video being prepared is shown so to its owner" fun w =>
-    w.driver.1.stages.contains .transcoding
+    got w ownerReads 5 == some (.preparing v0 "t" .transcoding)
 
 def failedShown {config : Config} : Check.Property (W config) :=
   .sometimes "a video whose transcode failed is shown so to its owner" fun w =>
-    w.driver.1.stages.contains .failed
+    got w ownerReads 5 == some (.preparing v0 "t" .failed)
 
 def shownAfterRetry {config : Config} : Check.Property (W config) :=
   .sometimes "a video is shown after its owner tried its transcode again" fun w =>
-    w.driver.1.done.contains ⟨0, 1⟩ && w.driver.1.watched.any (·.1 == 0)
+    w.driver.1.done.contains ⟨v0, 1⟩ && showsVideo (got w ownerReads 5)
 
 def readyAfterRetry {config : Config} : Check.Property (W config) :=
   .sometimes "a video is ready after its owner tried its transcode again" fun w =>
-    w.driver.1.done.contains ⟨0, 1⟩ && (site w).videos.any fun v => v.id == 0 && v.status matches .ready ..
+    w.driver.1.done.contains ⟨v0, 1⟩ && (site w 0).videos.any fun v => v.id == v0 && v.status matches .ready ..
 
 def forgedRefused {config : Config} : Check.Property (W config) :=
   .sometimes "a forged report is refused" fun w => !w.driver.1.refused.isEmpty
@@ -626,16 +740,17 @@ def deliveredTwice {config : Config} : Check.Property (W config) :=
 
 /-- No video is transcoding: each confirmed upload is ready or failed. -/
 def settled {config : Config} (w : W config) : Bool :=
-  (site w).videos.all fun v => !(v.status matches .transcoding ..)
+  [0, 1].all fun (k : Fin 2) => (site w k).videos.all fun v => !(v.status matches .transcoding ..)
 
-/-- The site of `config` checked against `script`; its sessions are judged by `life`, the
-site's own unless a seeded bug says otherwise. -/
-def check (config : Config) (script : Script) (witnesses : List (Check.Property (W config)))
-    (maxCrashes : Nat := 1) (life : Auth.Lifetime := config.lifetime)
-    (crashing : fullSig.Id → Bool := fun _ => true) (worker : Worker := {}) (live : Bool := false) :=
-  Check.system (system config)
+/-- The site of `config` checked against `script`, its reads `asks` judged at every state; its
+sessions are judged by `life`, the site's own unless a seeded bug says otherwise. -/
+def check (config : Config) (script : Script) (asks : List Ask)
+    (witnesses : List (Check.Property (W config))) (maxCrashes : Nat := 1)
+    (life : Auth.Lifetime := config.lifetime) (crashing : csig.Id → Bool := aCrashes)
+    (worker : Worker := {}) (live : Bool := false) :=
+  Check.system (checked config)
     { env := env crashing, driver := (world life script worker).driver (samples worker), maxCrashes }
-    (claims ++ witnesses) { maxStates := 3000000, checkDeadlock := live, terminal := settled }
+    (claims life asks ++ witnesses) { maxStates := 3000000, checkDeadlock := live, terminal := settled }
 
 def trusting : Config := { config with trustBrowser := true }
 def hasty : Config := { config with readyOnTimeout := true }
@@ -647,40 +762,46 @@ def found {S L : Type} (r : Check.Report S L) : Option (String × Nat) :=
   | some (.violated p t) => some (p, t.steps.length)
   | _ => none
 
-/-- One member cannot fill the site: their videos, and their comments on one video, are bounded
-far below the site's; a video's owner takes out anyone's comment on it. -/
+/-- One member cannot fill another's site: their videos, and their comments on one video, are
+bounded; a video's owner takes out anyone's comment on it. -/
 def capTests : List (String × Bool) :=
   let cfg : Config := { maxOwned := 2, maxCommentsEach := 2, workerKey }
-  let video (id owner : Nat) : Video :=
-    { id, owner, title := t, about := none_, visibility := .public, media := .mp4, status := .ready 1 }
-  let s : Site := { videos := [video 1 0, video 0 0], next := 2 }
+  let video (n : Nat) (owner : Who) : Video :=
+    { id := vid owner n, owner, title := t, about := none_, visibility := .public, media := .mp4,
+      status := .ready 1, made_s := 0 }
+  let s : Site := { videos := [video 1 a, video 0 a], next := 2 }
   let says (r : Site × List Out) (reply : Reply) := r.2 == [.reply 9 none reply]
-  let c (id author : Nat) : Comment := { id, author, body := hi }
-  let v := { video 0 0 with comments := [c 0 1, c 1 1] }
-  [ ("caps: a member with maxOwned videos is refused another, and another member is not",
-      says (s.create cfg 9 none 0 t none_ .public .mp4 0) .tooMany
-        && (s.create cfg 9 none 1 t none_ .public .mp4 0).1.videos.length == 3),
+  let c (id : Nat) (author : Who) : Comment := { id, author, name := "", body := hi }
+  let x := { video 0 a with comments := [c 0 b, c 1 b] }
+  let other : Who := ⟨name "id", name "c"⟩
+  [ ("caps: a member with maxOwned videos is refused another",
+      says (s.create cfg 9 none a t none_ .public .mp4 0) .tooMany
+        && ((({ } : Site).create cfg 9 none b t none_ .public .mp4 0).1.videos.length == 1)),
     ("caps: a member with maxCommentsEach comments on a video is refused another, another member is not",
-      says (s.comment cfg 9 none 1 v hi) (.tooManyComments 0)
-        && says (s.comment cfg 9 none 2 v hi) (.commented 0)),
+      says (s.comment cfg 9 none b "" x hi) (.tooManyComments v0)
+        && says (s.comment cfg 9 none other "" x hi) (.commented v0)),
     ("caps: a video's owner takes out another member's comment on it, a third member cannot",
-      says (s.uncomment 9 none 0 v 0) (.uncommented 0) && says (s.uncomment 9 none 2 v 0) .notFound
-        && says (s.uncomment 9 none 1 v 1) (.uncommented 0)),
+      says (s.uncomment 9 none a x 0) (.uncommented v0) && says (s.uncomment 9 none other x 0) .notFound
+        && says (s.uncomment 9 none b x 1) (.uncommented v0)),
     ("calls: the model's call of an attempt names its key and attempt back",
-      [Key.check 1 9, .expire 1, .delete 0, .check 0 63, .transcode ⟨1, 7⟩, .transcode ⟨0, 0⟩].all fun k =>
-        (List.range 8).all fun n => attemptOf (callOf k n) == some (k, n)) ]
+      [Key.check (vid a 1) 9, .expire (vid b 1), .delete v0, .check v0 63, .transcode ⟨vid b 1, 7⟩,
+        .transcode ⟨v0, 0⟩].all fun k =>
+        (List.range 8).all fun n => attemptOf (callOf k n) == some (k, n)),
+    ("routes: an input goes to the actor of the member it is about, and a visit to the owner's",
+      (Input.request (.like 1 b 2 v0 true) 0).member == b && (Input.visit (.like 1 byB b v0 true)).member == a
+        && (Input.job (.delete v0) .scheduled).member == a) ]
 
 /-- A check by its name: the report it prints, and whether it passed. -/
 structure Run where
   name : String
   result : Unit → String × Bool
 
-def passes {config : Config} (r : Check.Report (W config) (Event fullSig)) (witnesses : Nat) :
+def passes {config : Config} (r : Check.Report (W config) (Event csig)) (witnesses : Nat) :
     String × Bool :=
   (r.renderSystem, r.ok && r.witnesses.length == witnesses)
 
 /-- A seeded bug, found as a violation of `claim`. -/
-def seeded {config : Config} (r : Check.Report (W config) (Event fullSig)) (claim : String) :
+def seeded {config : Config} (r : Check.Report (W config) (Event csig)) (claim : String) :
     String × Bool :=
   match found r with
   | some (p, n) => (s!"\"{p}\" after {n} steps", p == claim)
@@ -702,78 +823,81 @@ need, and where it says so with fewer of the store's answers (`unknown` and `fou
 crash. What a small one leaves out, its large one checks. -/
 def smallRuns : List Run :=
   [ ⟨"check: a video watched and liked three times, with the store's faults and a crash anywhere",
-      fun () => passes (check config likes [shown, twoLikes] (worker := quiet)) 2⟩,
+      fun () => passes (check config likes lifeReads [shown lifeReads, twoLikes] (worker := quiet)) 2⟩,
     ⟨"check: a video shown, deleted and asked for again, with no crash",
-      fun () => passes (check config deleteShown [shown, goneWhileHeld] 0
-        (worker := { quiet with everyAnswer := false })) 2⟩,
+      fun () => passes (check config deleteShown ownerReads [shown ownerReads, goneWhileHeld, shownThenGone] 0
+        (worker := { quiet with everyAnswer := false })) 3⟩,
     ⟨"check: a private video, with the store's faults and a crash anywhere",
-      fun () => passes (check config secret [ownerWatches, othersAsk] (worker := quiet)) 2⟩,
+      fun () => passes (check config secret secretReads [ownerWatches, othersAsk] (worker := quiet)) 2⟩,
     ⟨"check: a video deleted while its check may be out, the store answering found or unknown, and a crash of the site anywhere",
-      fun () => passes (check config goneShort [goneWhileHeld] (crashing := siteCrashes)
+      fun () => passes (check config gone ownerReads [goneWhileHeld] (crashing := siteCrashes)
         (worker := { silent := true, everyAnswer := false })) 1⟩,
     ⟨"check: a second check while the first may be out, with no crash",
-      fun () => passes (check config twiceShort [confirmedOnce] 0 (worker := { silent := true })) 1⟩,
+      fun () => passes (check config twice ownerReads [confirmedOnce] 0 (worker := { silent := true })) 1⟩,
     ⟨"check: a delete tried twice, deleted or reported, and a crash anywhere",
-      fun () => passes (check deleteTwice purge [goneWhileHeld, deletedAfterRetry, reported]
+      fun () => passes (check deleteTwice purge ownerReads [goneWhileHeld, deletedAfterRetry, reported]
         (worker := quiet)) 3⟩,
     ⟨"check: an upload never confirmed, checked a last time, twice, and a crash anywhere",
-      fun () => passes (check lapsing lapsedShort [lapsedReady, lapsedOut, checkedAgain]
+      fun () => passes (check lapsing lapsed ownerReads [lapsedReady, lapsedOut, checkedAgain]
         (worker := quiet)) 3⟩,
     ⟨"check: a session past its lifetime lets nothing in, and a new sign-in does",
-      fun () => passes (check short expiry [watchedTwice] (worker := quiet)) 1⟩,
+      fun () => passes (check short expiry expiryReads [watchedFirst, watchedAgain] (worker := quiet)) 2⟩,
     ⟨"check: the pipeline, with jobs and reports late, failed or never, and a crash of the site anywhere",
-      fun () => passes (check config prepared [shown, preparing, failedShown] (crashing := siteCrashes)
-        (worker := { faulty with startFaults := false })) 3⟩,
+      fun () => passes (check config prepared ownerReads [shown ownerReads, preparing, failedShown]
+        (crashing := siteCrashes) (worker := { faulty with startFaults := false })) 3⟩,
     ⟨"check: reports delivered twice and forged beside the worker's, and a crash anywhere",
-      fun () => passes (check config forgeryShort [shown, forgedRefused, deliveredTwice]
+      fun () => passes (check config forgery ownerReads [shown ownerReads, forgedRefused, deliveredTwice]
         (worker := forged)) 3⟩,
     ⟨"check: with no crash, every run that cannot go on leaves each confirmed upload ready or failed",
-      fun () => passes (check config prepared [shown, failedShown] 0 (worker := faulty)
+      fun () => passes (check config prepared ownerReads [shown ownerReads, failedShown] 0 (worker := faulty)
         (live := true)) 2⟩,
     ⟨"check: with no crash, a transcode that failed is tried again, and every run that cannot go on leaves the upload ready or failed",
-      fun () => passes (check config retried [readyAfterRetry] 0
+      fun () => passes (check config retried ownerReads [readyAfterRetry] 0
         (worker := { faulty with firstFails := true }) (live := true)) 1⟩ ]
 
 /-- The scenarios at large bounds. -/
 def largeRuns : List Run :=
   [ ⟨"check: a video's life, with the store's faults and a crash anywhere",
-      fun () => passes (check config life [shown, goneWhileHeld, twoLikes] (worker := quiet)) 3⟩,
+      fun () => passes (check config life lifeReads [shown lifeReads, goneWhileHeld, twoLikes]
+        (worker := quiet) (crashing := fun _ => true)) 3⟩,
     ⟨"check: a private video, with the store's faults and two crashes anywhere",
-      fun () => passes (check config secret [ownerWatches, othersAsk] (worker := quiet) (maxCrashes := 2)) 2⟩,
+      fun () => passes (check config secret secretReads [ownerWatches, othersAsk] (worker := quiet)
+        (maxCrashes := 2) (crashing := fun _ => true)) 2⟩,
     ⟨"check: a video deleted while its check may be out, and a crash of the site anywhere",
-      fun () => passes (check config gone [goneWhileHeld] (crashing := siteCrashes)
+      fun () => passes (check config gone ownerReads [goneWhileHeld] (crashing := siteCrashes)
         (worker := { silent := true })) 1⟩,
     ⟨"check: a second check while the first may be out, and a crash of the site anywhere",
-      fun () => passes (check config twice [confirmedOnce] (crashing := siteCrashes)
+      fun () => passes (check config twice ownerReads [confirmedOnce] (crashing := siteCrashes)
         (worker := { silent := true })) 1⟩,
     ⟨"check: a delete tried twice, deleted or reported, and two crashes anywhere",
-      fun () => passes (check deleteTwice purge [goneWhileHeld, deletedAfterRetry, reported]
+      fun () => passes (check deleteTwice purge ownerReads [goneWhileHeld, deletedAfterRetry, reported]
         (worker := quiet) (maxCrashes := 2)) 3⟩,
     ⟨"check: an upload never confirmed, checked a last time, twice, and a crash anywhere",
-      fun () => passes (check lapsing lapsed [lapsedReady, lapsedOut, checkedAgain] (worker := quiet)) 3⟩,
+      fun () => passes (check lapsing lapsed ownerReads [lapsedReady, lapsedOut, checkedAgain] (worker := quiet)) 3⟩,
     ⟨"check: a session past its lifetime lets nothing in, and a new sign-in does, with two crashes anywhere",
-      fun () => passes (check short expiry [watchedTwice] (worker := quiet) (maxCrashes := 2)) 1⟩,
+      fun () => passes (check short expiry expiryReads [watchedFirst, watchedAgain] (worker := quiet)
+        (maxCrashes := 2)) 2⟩,
     ⟨"check: the pipeline, with jobs and reports late, failed or never, a retry, and a crash of the site anywhere",
-      fun () => passes (check config pipeline [shown, preparing, failedShown, shownAfterRetry]
+      fun () => passes (check config pipeline ownerReads [shown ownerReads, preparing, failedShown, shownAfterRetry]
         (crashing := siteCrashes) (worker := { faulty with startFaults := false })) 4⟩,
     ⟨"check: reports delivered twice and forged beside the worker's, and a crash anywhere",
-      fun () => passes (check config forgery [shown, forgedRefused, deliveredTwice]
-        (worker := forged)) 3⟩,
+      fun () => passes (check config forgery ownerReads [shown ownerReads, forgedRefused, deliveredTwice]
+        (worker := forged) (crashing := fun _ => true)) 3⟩,
     ⟨"check: with no crash, every run that cannot go on leaves each confirmed upload ready or failed",
-      fun () => passes (check config pipeline [shown, failedShown, shownAfterRetry] 0
+      fun () => passes (check config pipeline ownerReads [shown ownerReads, failedShown, shownAfterRetry] 0
         (worker := faulty) (live := true)) 3⟩ ]
 
 /-- Seeded bugs, each found at the bounds of `lake test`. -/
 def seededRuns : List Run :=
   [ ⟨"check, seeded: trusting the browser shows a video the store never confirmed",
-      fun () => seeded (check trusting life [] 0 (worker := quiet)) unconfirmed⟩,
+      fun () => seeded (check trusting likes lifeReads [] 0 (worker := quiet)) unconfirmed⟩,
     ⟨"check, seeded: a check that timed out taken as found shows such a video",
-      fun () => seeded (check hasty life [] 0 (worker := quiet)) unconfirmed⟩,
+      fun () => seeded (check hasty likes lifeReads [] 0 (worker := quiet)) unconfirmed⟩,
     ⟨"check, seeded: sessions that never end let a request in past the lifetime",
-      fun () => seeded (check { short with lifetime := {} } expiry [] 0 short.lifetime (worker := quiet))
+      fun () => seeded (check { short with lifetime := {} } expiry expiryReads [] 0 short.lifetime (worker := quiet))
         "a session past its lifetime lets no request in"⟩,
     ⟨"check, seeded: a report taken unsigned shows a video the worker never reported done",
-      fun () => seeded (check credulous forgery [] 0 (worker := forged))
+      fun () => seeded (check credulous forgery ownerReads [] 0 (worker := forged))
         "a video is shown only once the worker reported it done, signed"⟩ ]
 
 def runs : Size → List Run

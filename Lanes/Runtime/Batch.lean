@@ -42,13 +42,17 @@ inductive Command (σ : Signature) (P : List σ.Id → Type) (W : Type) where
   the actors they reach can step in parallel (`Journal.turnAll`). -/
   | inputs (xs : List σ.In)
   | idle (timers : Bool) (waiter : W)
-  /-- Read the states of the actors `ids` at the end of the batch. -/
-  | peek (ids : List σ.Id) (reply : P ids)
+  /-- Read the states of the actors `ids`, and of every actor started that `every` holds of, at
+  the end of the batch. -/
+  | peek (ids : List σ.Id) (every : σ.Id → Bool) (reply : P ids)
 
-/-- The states of the actors `ids`, read together. -/
+/-- The states of the actors `ids`, read together, and those of every actor started that `every`
+holds of (`others`): an actor not started has its initial state. -/
 structure Peek (sys : System σ) (ids : List σ.Id) where
   states : List ((i : σ.Id) × sys.State i)
   ids_eq : states.map (·.1) = ids
+  every : σ.Id → Bool := fun _ => false
+  others : List ((i : σ.Id) × sys.State i) := []
 
 inductive Act (sys : System σ) (P : List σ.Id → Type) where
   | append (entries : Array (Journal.Entry σ))
@@ -119,8 +123,8 @@ def Command.isPeek : Command σ P W → Bool
   | .peek .. => true
   | _ => false
 
-def Command.peek? : Command σ P W → Option ((ids : List σ.Id) × P ids)
-  | .peek ids reply => some ⟨ids, reply⟩
+def Command.peek? : Command σ P W → Option ((ids : List σ.Id) × (σ.Id → Bool) × P ids)
+  | .peek ids every reply => some ⟨ids, every, reply⟩
   | _ => none
 
 def due (c : Config) (written : Nat) : Bool :=
@@ -152,14 +156,45 @@ def grown (acts : Array (Act sys P)) : Nat :=
 
 variable [Hashable σ.Id]
 
-/-- The states of `ids` in kernel `k`. -/
-def Peek.of (k : Kernel sys) (ids : List σ.Id) : Peek sys ids :=
-  ⟨ids.map fun i => ⟨i, (k.cell i).state⟩, by simp [List.map_map, Function.comp_def]⟩
+/-- The states of `ids` in kernel `k`, and of every actor of `k` started that `every` holds of. -/
+def Peek.of (k : Kernel sys) (ids : List σ.Id) (every : σ.Id → Bool := fun _ => false) :
+    Peek sys ids where
+  states := ids.map fun i => ⟨i, (k.cell i).state⟩
+  ids_eq := by simp [List.map_map, Function.comp_def]
+  every := every
+  others := k.cells.toList.filterMap fun x => if every x.1 then some ⟨x.1, x.2.state⟩ else none
 
 /-- A peek gives each actor's state in the kernel it was read from. -/
-theorem Peek.get_of (k : Kernel sys) (ids : List σ.Id) (i : σ.Id) (h : i ∈ ids) :
-    (Peek.of k ids).get i h = (k.cell i).state :=
+theorem Peek.get_of (k : Kernel sys) (ids : List σ.Id) (every : σ.Id → Bool) (i : σ.Id)
+    (h : i ∈ ids) : (Peek.of k ids every).get i h = (k.cell i).state :=
   Peek.find_map (fun j => (k.cell j).state) ids i _
+
+/-- Every state among a peek's others is that actor's state in the kernel it was read from, of
+an actor `every` holds of. -/
+theorem Peek.others_of {k : Kernel sys} {ids : List σ.Id} {every : σ.Id → Bool}
+    {x : (i : σ.Id) × sys.State i} (h : x ∈ (Peek.of k ids every).others) :
+    every x.1 = true ∧ x.2 = (k.cell x.1).state := by
+  simp only [Peek.of, List.mem_filterMap] at h
+  obtain ⟨⟨i, cell⟩, hmem, hx⟩ := h
+  split at hx
+  · next hp =>
+    cases hx
+    have hget : k.cells.get? i = some cell := Std.DHashMap.mem_toList_iff_get?_eq_some.mp hmem
+    exact ⟨hp, by simp [Kernel.cell, hget]⟩
+  · cases hx
+
+/-- An actor `every` holds of that is not among a peek's others has its initial state in the
+kernel it was read from: it was never started. -/
+theorem Peek.init_of_not_others {k : Kernel sys} {ids : List σ.Id} {every : σ.Id → Bool}
+    {i : σ.Id} (hp : every i = true) (h : i ∉ (Peek.of k ids every).others.map (·.1)) :
+    (k.cell i).state = (sys.actor i).init := by
+  cases hget : k.cells.get? i with
+  | none => simp [Kernel.cell, hget]
+  | some cell =>
+    exfalso
+    refine h (List.mem_map.mpr ⟨⟨i, cell.state⟩, ?_, rfl⟩)
+    simp only [Peek.of, List.mem_filterMap]
+    exact ⟨⟨i, cell⟩, Std.DHashMap.mem_toList_iff_get?_eq_some.mpr hget, by simp [hp]⟩
 
 /-- A turn, kept back to be written with the turns after it. Its outputs are all its last
 entry's (`Journal.turn_placed`), so their origin is where that entry falls in the history. -/
@@ -205,12 +240,13 @@ def scan (c : Config) (ks : Kernel sys × Scan sys P W) :
   | .peek .. => ks
 
 /-- The answers to `peeks` from kernel `k`. -/
-def answers (k : Kernel sys) (peeks : List ((ids : List σ.Id) × P ids)) : List (Act sys P) :=
-  peeks.map fun p => .answer p.1 p.2 (Peek.of k p.1)
+def answers (k : Kernel sys) (peeks : List ((ids : List σ.Id) × (σ.Id → Bool) × P ids)) :
+    List (Act sys P) :=
+  peeks.map fun p => .answer p.1 p.2.2 (Peek.of k p.1 p.2.1)
 
 /-- The end of a batch: what is kept back is written, and the peeks are answered from the kernel
 that leaves. -/
-def finish (c : Config) (ks : Kernel sys × Scan sys P W) (peeks : List ((ids : List σ.Id) × P ids)) :
+def finish (c : Config) (ks : Kernel sys × Scan sys P W) (peeks : List ((ids : List σ.Id) × (σ.Id → Bool) × P ids)) :
     Result sys P W :=
   match flush c (if ks.2.worked then ks else work c none ks) with
   | (k, s) =>
@@ -253,7 +289,7 @@ theorem group_ins (most : Nat) (commands : List (Command σ P W)) :
       · simp only [List.flatMap_cons, Command.ins, ← ih]
     | inputs xs => simp only [group, List.flatMap_cons, ih]
     | idle timers waiter => simp only [group, List.flatMap_cons, ih]
-    | peek i reply => simp only [group, List.flatMap_cons, ih]
+    | peek i every reply => simp only [group, List.flatMap_cons, ih]
 
 /-- One batch: a turn for each input, at one time; when no input came, one turn without. Its
 peeks are answered at its end. -/
@@ -302,7 +338,7 @@ def Act.Sound (k : Kernel sys) (before : List (Act sys P)) : Act sys P → Prop
     image = (k.exec (journal before)).kernel.image
       ∧ handed before = (k.exec (journal before)).outputs
   | .answer ids _ peek =>
-    peek = Peek.of (k.exec (journal before)).kernel ids
+    peek = Peek.of (k.exec (journal before)).kernel ids peek.every
       ∧ handed before = (k.exec (journal before)).outputs
 
 def Sound (k : Kernel sys) (acts : List (Act sys P)) : Prop :=
@@ -466,7 +502,7 @@ private theorem inv_scan (c : Config) {k0 : Kernel sys} {ks : Kernel sys × Scan
   | idle timers waiter =>
     obtain ⟨⟨hk, ho, he, hs⟩, -⟩ := inv_flush c h
     exact ⟨hk, ho, he, hs⟩
-  | peek ids reply => exact h
+  | peek ids every reply => exact h
 
 private theorem inv_foldl (c : Config) {k0 : Kernel sys} (commands : List (Command σ P W)) :
     ∀ {ks : Kernel sys × Scan sys P W}, Inv k0 ks → Inv k0 (commands.foldl (scan c) ks) := by
@@ -474,7 +510,7 @@ private theorem inv_foldl (c : Config) {k0 : Kernel sys} (commands : List (Comma
   | nil => exact id
   | cons command commands ih => exact fun h => ih (inv_scan c h command)
 
-private theorem answers_mem {k : Kernel sys} {peeks : List ((ids : List σ.Id) × P ids)}
+private theorem answers_mem {k : Kernel sys} {peeks : List ((ids : List σ.Id) × (σ.Id → Bool) × P ids)}
     {a : Act sys P} (h : a ∈ answers k peeks) :
     a.ops = [] ∧ a.outputs = [] ∧ a.events = [] ∧ a.steps = [] ∧ a.placed = [] := by
   simp only [answers, List.mem_map] at h
@@ -482,7 +518,7 @@ private theorem answers_mem {k : Kernel sys} {peeks : List ((ids : List σ.Id) �
   exact ⟨rfl, rfl, rfl, rfl, rfl⟩
 
 /-- Answers write nothing, hand nothing over and record nothing. -/
-private theorem answers_none (k : Kernel sys) (peeks : List ((ids : List σ.Id) × P ids))
+private theorem answers_none (k : Kernel sys) (peeks : List ((ids : List σ.Id) × (σ.Id → Bool) × P ids))
     (acts : List (Act sys P)) :
     journal (acts ++ answers k peeks) = journal acts ∧ handed (acts ++ answers k peeks) = handed acts
       ∧ recorded (acts ++ answers k peeks) = recorded acts
@@ -493,24 +529,24 @@ private theorem answers_none (k : Kernel sys) (peeks : List ((ids : List σ.Id) 
     rw [(List.flatMap_eq_nil_iff (l := answers k peeks)).mpr (fun a ha => by simp [answers_mem ha]),
       List.append_nil]
 
-private theorem sound_answers {k0 k : Kernel sys} (peeks : List ((ids : List σ.Id) × P ids)) :
+private theorem sound_answers {k0 k : Kernel sys} (peeks : List ((ids : List σ.Id) × (σ.Id → Bool) × P ids)) :
     ∀ {acts : List (Act sys P)}, Sound k0 acts → k = (k0.exec (journal acts)).kernel →
       handed acts = (k0.exec (journal acts)).outputs → Sound k0 (acts ++ answers k peeks) := by
   induction peeks with
   | nil => intro acts h _ _; simpa [answers] using h
   | cons p peeks ih =>
     intro acts h hk hh
-    have hj : journal (acts ++ [Act.answer p.1 p.2 (Peek.of k p.1)]) = journal acts := by
+    have hj : journal (acts ++ [Act.answer p.1 p.2.2 (Peek.of k p.1 p.2.1)]) = journal acts := by
       simp [journal, Act.ops]
-    have hh' : handed (acts ++ [Act.answer p.1 p.2 (Peek.of k p.1)]) = handed acts := by
+    have hh' : handed (acts ++ [Act.answer p.1 p.2.2 (Peek.of k p.1 p.2.1)]) = handed acts := by
       simp [handed, Act.outputs]
-    have := ih (acts := acts ++ [.answer p.1 p.2 (Peek.of k p.1)])
-      (sound_push h (by simp only [Act.Sound]; exact ⟨by rw [hk], hh⟩)) (by rw [hj]; exact hk)
+    have := ih (acts := acts ++ [.answer p.1 p.2.2 (Peek.of k p.1 p.2.1)])
+      (sound_push h (by simp only [Act.Sound]; exact ⟨by rw [hk]; rfl, hh⟩)) (by rw [hj]; exact hk)
       (by rw [hj, hh']; exact hh)
     simpa [answers] using this
 
 private theorem inv_finish (c : Config) {k0 : Kernel sys} {ks : Kernel sys × Scan sys P W}
-    (peeks : List ((ids : List σ.Id) × P ids)) (h : Inv k0 ks) :
+    (peeks : List ((ids : List σ.Id) × (σ.Id → Bool) × P ids)) (h : Inv k0 ks) :
     (finish c ks peeks).kernel = (k0.exec (journal (finish c ks peeks).acts.toList)).kernel
       ∧ handed (finish c ks peeks).acts.toList
           = (k0.exec (journal (finish c ks peeks).acts.toList)).outputs
@@ -569,7 +605,7 @@ private theorem foldl_erase (c : Config) (commands : List (Command σ P W)) :
   | cons command rest ih =>
     intro ks
     cases command with
-    | peek ids reply =>
+    | peek ids every reply =>
       rw [List.filter_cons_of_neg (by simp [Command.isPeek]), List.foldl_cons, ih]
       rfl
     | _ => rw [List.filter_cons_of_pos (by rfl), List.foldl_cons, List.foldl_cons, ih]
@@ -643,7 +679,7 @@ private theorem waiting_foldl (c : Config) (commands : List (Command σ P W)) :
       obtain ⟨k, s⟩ := w
       split <;> simp [waiting_flush, ← hw]
     | idle timers waiter => simp [scan, Command.idle?, waiting_flush]
-    | peek ids reply => simp [scan, Command.idle?]
+    | peek ids every reply => simp [scan, Command.idle?]
 
 /-- Those waiting for the shard to be idle, from before the batch and from its commands in
 order, are answered at its end exactly when the kernel is then quiet, with or without timers as
@@ -858,7 +894,7 @@ private theorem idinv_scan (c : Config) {k0 : Kernel sys} {ks : Kernel sys × Sc
     generalize flush c ks = f at hf
     obtain ⟨k, s⟩ := f
     exact hf
-  | peek ids reply => exact hi
+  | peek ids every reply => exact hi
 
 private theorem idinv_foldl (c : Config) {k0 : Kernel sys} (commands : List (Command σ P W)) :
     ∀ {ks : Kernel sys × Scan sys P W}, Inv k0 ks → IdInv c.index k0 ks →

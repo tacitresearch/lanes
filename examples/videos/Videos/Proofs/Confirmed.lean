@@ -7,11 +7,12 @@ import Videos.Proofs.Gone
 /-!
 # A video is shown only once the store confirmed its upload and the worker its transcode
 
-In every run from the empty site, an output that shows a video comes after an input in which the
-scheduler said that a job asking the store whether the video's upload is there (a `HEAD`, by
-the job's key: `Key.op`) succeeded with `found` (`Site.listed_confirmed`), and after a report of
-the worker that a round of the video's transcode is done, whose signature is the worker's
-(`Site.listed_transcoded`). The scheduler says a job succeeded with an answer only in the step
+Of every read over the sites of members, each the site of a run from the empty site: a video it
+shows is in a site whose run has an input in which the scheduler said that a job asking the
+store whether the video's upload is there (a `HEAD`, by the job's key: `Key.op`) succeeded with
+`found` (`Site.listed_confirmed`), and a report of the worker that a round of the video's
+transcode is done, whose signature is the worker's (`Site.listed_transcoded`). A read at a
+boundary sees each member's site as the member's actor's run left it. The scheduler says a job succeeded with an answer only in the step
 that takes that answer to one of the job's attempts (`Schedule.succeeded_replied`), and every
 attempt is that job's call (`Videos.Web.storeCall`). The browser's word is not enough, a check
 the store did not answer in time is not taken as found, and a report not signed with the
@@ -199,15 +200,7 @@ theorem keeps_request (hc : config.Honest) {es : List Turn} {s : Site} (h : Conf
   have videos {s' : Site} (hv : s'.videos = s.videos) : Confirmed config es s' :=
     fun w hw => h w (hv ▸ hw)
   cases c with
-  | signIn req issuer subject name =>
-    show Keeps config es (s.signIn config req issuer subject name at_s)
-    unfold signIn
-    dsimp only
-    split
-    · exact videos rfl
-    · split
-      · exact h
-      · exact videos rfl
+  | signIn req who name => exact videos rfl
   | signOut req m session =>
     exact withSession_cases same fun _ => videos rfl
   | create req m session title about visibility media =>
@@ -228,32 +221,11 @@ theorem keeps_request (hc : config.Honest) {es : List Turn} {s : Site} (h : Conf
       simp only [hc.trustBrowser, Bool.false_eq_true, ↓reduceIte]
       exact confirmed_setVideo h (Evident.awaiting rfl)
     · exact h
-  | watch req viewer v =>
-    show Keeps config es (s.watch req (s.viewer config.lifetime at_s viewer) v at_s)
-    rw [Keeps, watch_fst]
-    exact h
-  | like req m session v on =>
-    exact withSession_cases same fun _ => seen_cases same fun w hw =>
-      confirmed_setVideo h ((h w hw).same rfl rfl)
-  | comment req m session v body =>
-    refine withSession_cases same fun _ => seen_cases same fun w hw => ?_
-    unfold comment
-    split
-    · exact h
-    · exact confirmed_setVideo h ((h w hw).same rfl rfl)
-  | uncomment req m session v c =>
-    refine withSession_cases same fun _ => seen_cases same fun w hw => ?_
-    unfold uncomment
-    split
-    · exact confirmed_setVideo h ((h w hw).same rfl rfl)
-    · exact h
+  | like req m session v on => exact withSession_cases same fun _ => h
+  | comment req m session v body => exact withSession_cases same fun _ => h
+  | uncomment req m session v c => exact withSession_cases same fun _ => h
   | delete req m session v =>
     exact withSession_cases same fun _ => owned_cases same fun w _ => confirmed_filter h _
-  | feed req viewer before => exact h
-  | channel req viewer whose =>
-    show Keeps config es (s.channel req (s.viewer config.lifetime at_s viewer) whose)
-    rw [Keeps, channel_fst]
-    exact h
   | retry req m session v =>
     refine withSession_cases same fun _ => owned_cases same fun w hw => ?_
     unfold retry
@@ -262,6 +234,25 @@ theorem keeps_request (hc : config.Honest) {es : List Turn} {s : Site} (h : Conf
       exact confirmed_setVideo h ((h w hw).stays rfl (by simp [hst, Status.awaiting]) rfl)
     · exact h
   | report req r signature => exact keeps_report hc h req r signature at_s hin
+
+theorem keeps_visit {es : List Turn} {s : Site} (h : Confirmed config es s) (v : Visit) :
+    Keeps config es (s.visit config v) := by
+  have same : ∀ l, Keeps config es (s, l) := fun _ => h
+  cases v with
+  | like req viewer m v on =>
+    exact seen_cases same fun w hw => confirmed_setVideo h ((h w hw).same rfl rfl)
+  | comment req viewer m name v body =>
+    refine seen_cases same fun w hw => ?_
+    unfold comment
+    split
+    · exact h
+    · exact confirmed_setVideo h ((h w hw).same rfl rfl)
+  | uncomment req viewer m v c =>
+    refine seen_cases same fun w hw => ?_
+    unfold uncomment
+    split
+    · exact confirmed_setVideo h ((h w hw).same rfl rfl)
+    · exact h
 
 theorem keeps_unconfirmed {es : List Turn} {s : Site} (h : Confirmed config es s) (video : Video)
     (req : ReqId) (r : Reply) : Keeps config es (s.unconfirmed video req r) := by
@@ -323,6 +314,7 @@ theorem confirmed_step (hc : config.Honest) {es : List Turn} {s : Site}
     | request c at_s => exact keeps_request hc h' c at_s (by simp)
     | job key o => exact keeps_job hc h' key o (by simp)
     | noticed _ => exact h'
+    | visit v => exact keeps_visit h' v
   | inr _ => exact keeps_recover h'
 
 theorem confirmed_run_from (hc : config.Honest) (es : List Turn) {es₀ : List Turn} {s : Site}
@@ -338,35 +330,40 @@ theorem confirmed_run (hc : config.Honest) (es : List Turn) :
     Confirmed config es (Site.run config {} es).1 := by
   simpa using confirmed_run_from hc es (es₀ := []) (s := {}) (by simp [Confirmed])
 
-theorem shown_evident (hc : config.Honest) (es : List Turn) (e : Turn) :
-    ∀ o ∈ ((Site.run config {} es).1.step config e).2, ∀ c ∈ o.cards,
-      ∃ w, w.id = c.id ∧ w.status.isReady = true ∧ Evident config es w := by
+/-- What a read over the members' sites shows is a ready video of one of them, with the evidence
+of that member's run. -/
+theorem shown_evident (hc : config.Honest) (runs : List (Member × List Turn)) (r : Read) (at_s : Nat) :
+    ∀ o ∈ (union (runs.map fun p => (p.1, (Site.run config {} p.2).1))).read config r at_s, ∀ c ∈ o.cards,
+      ∃ p ∈ runs, ∃ w, w.id = c.id ∧ w.status.isReady = true ∧ Evident config p.2 w := by
   intro o ho c hc'
-  obtain ⟨_, hshows⟩ := shows_step config _ e o ho
-  obtain ⟨w, hw, rfl, hready, -⟩ := hshows c hc'
-  exact ⟨w, rfl, hready, confirmed_run hc es w hw⟩
+  obtain ⟨w, hw, rfl, hready, -⟩ := shows_read config _ r at_s o ho c hc'
+  obtain ⟨t, ht, hw⟩ := List.mem_flatMap.mp hw
+  obtain ⟨p, hp, rfl⟩ := List.mem_map.mp ht
+  exact ⟨p, hp, w, rfl, hready, confirmed_run hc p.2 w (List.mem_filter.mp hw).1⟩
 
 variable (config)
 
-/-- A video is shown only once the store confirmed its upload: in every run from the empty
-site, an output that shows a video comes after an input in which the scheduler said that a job
-asking the store whether the video's upload is there succeeded with `found`. -/
-theorem listed_confirmed (hc : config.Honest) (es : List Turn) (e : Turn) :
-    ∀ o ∈ ((Site.run config {} es).1.step config e).2, ∀ c ∈ o.cards,
-      ∃ key, key.op = .head c.id ∧ Found es key := by
+/-- A video is shown only once the store confirmed its upload: of every read over the sites of
+members' runs from the empty site, a video it shows is in a run with an input in which the
+scheduler said that a job asking the store whether the video's upload is there succeeded with
+`found`. -/
+theorem listed_confirmed (hc : config.Honest) (runs : List (Member × List Turn)) (r : Read) (at_s : Nat) :
+    ∀ o ∈ (union (runs.map fun p => (p.1, (Site.run config {} p.2).1))).read config r at_s, ∀ c ∈ o.cards,
+      ∃ p ∈ runs, ∃ key, key.op = .head c.id ∧ Found p.2 key := by
   intro o ho c hc'
-  obtain ⟨w, hid, hready, hw⟩ := shown_evident hc es e o ho c hc'
-  exact hid ▸ hw.1 (Status.awaiting_of_isReady hready)
+  obtain ⟨p, hp, w, hid, hready, hw⟩ := shown_evident hc runs r at_s o ho c hc'
+  exact ⟨p, hp, hid ▸ hw.1 (Status.awaiting_of_isReady hready)⟩
 
-/-- A video is listed as ready only after a done report for it whose signature checks: in every
-run from the empty site, an output that shows a video comes after a request in which the worker
-reported a round of the video's transcode done, with a signature that checks under the worker's
-key. -/
-theorem listed_transcoded (hc : config.Honest) (es : List Turn) (e : Turn) :
-    ∀ o ∈ ((Site.run config {} es).1.step config e).2, ∀ c ∈ o.cards, Transcoded config es c.id := by
+/-- A video is listed as ready only after a done report for it whose signature checks: of every
+read over the sites of members' runs from the empty site, a video it shows is in a run with a
+request in which the worker reported a round of the video's transcode done, with a signature
+that checks under the worker's key. -/
+theorem listed_transcoded (hc : config.Honest) (runs : List (Member × List Turn)) (r : Read) (at_s : Nat) :
+    ∀ o ∈ (union (runs.map fun p => (p.1, (Site.run config {} p.2).1))).read config r at_s, ∀ c ∈ o.cards,
+      ∃ p ∈ runs, Transcoded config p.2 c.id := by
   intro o ho c hc'
-  obtain ⟨w, hid, hready, hw⟩ := shown_evident hc es e o ho c hc'
-  exact hid ▸ hw.2 hready
+  obtain ⟨p, hp, w, hid, hready, hw⟩ := shown_evident hc runs r at_s o ho c hc'
+  exact ⟨p, hp, hid ▸ hw.2 hready⟩
 
 theorem settle_filter (s : Site) (r : Report) :
     (s.settle r).videos.filter (·.id != r.round.video) = s.videos.filter (·.id != r.round.video) := by

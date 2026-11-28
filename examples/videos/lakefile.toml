@@ -37,7 +37,7 @@ root = "Test"
 name = "videos"
 root = "Main"
 
-# How wide the waves of the site's journal are, as it runs and split by member (`Videos.Waves`):
+# How wide the waves of the site's journal are, an actor and a scheduler for each member (`Videos.Waves`):
 # `videosWaves [entries]`. Built by `lake build`, not run by `lake test`.
 [[lean_exe]]
 name = "videosWaves"
