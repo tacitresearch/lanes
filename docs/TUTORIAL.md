@@ -15,12 +15,13 @@ cd lanes
 lake exe lanes new tut --dir ../tut
 cd ../tut
 lake exe cache get   # prebuilt Mathlib, once: 500 MB to fetch, 7.5 GB on disk
-lake test            # the first time builds Lanes and the app (minutes), then runs the checks
+lake test            # the first time builds Lanes and the app (minutes), then checks and proves
 lake exe tut         # serves http://127.0.0.1:8080; Ctrl-C stops it
 ```
 
-`lake test` ends with `PASS: every reachable state explored`. Open the page and press "Add
-one", or ask from another terminal:
+`lake test` prints `PASS (complete): every reachable state explored`, and ends with `2 passed, 0
+bounded, 0 failed`: the model check and the proofs. Open the page and press "Add one", or ask
+from another terminal:
 
 ```bash
 curl -X POST http://127.0.0.1:8080/increment
@@ -31,7 +32,8 @@ curl -X POST http://127.0.0.1:8080/increment
 ```
 
 The app is four files. `Tut/Counter.lean` is the logic, `Main.lean` the web page and the
-server, `Check.lean` the model checks, and `Tut/Proofs.lean` the proofs that need Mathlib.
+server, `Check.lean` the model checks, and `Tut/Proofs.lean` the theorems. Nothing imports the
+theorems but `lake build`, so a broken proof stops neither the checks nor the server.
 
 **A step is pure.** The counter's logic is `service` in `Tut/Counter.lean`: given the count and
 a request, it returns the new count and the responses. It cannot read a clock, a file or a
@@ -143,10 +145,10 @@ its own witness, since a refused decrement now meets the old `!·.applied` too:
 
 Each property is a function of a state of the search, `w`. `w.state.state ()` is the count
 held by the one actor, whose name is `()`, and `w.state.outbox` the responses not yet sent.
-`lake test` prints:
+`lake test` prints the checker's report, then `2 passed, 0 bounded, 0 failed`:
 
 ```text
-PASS: every reachable state explored
+PASS (complete): every reachable state explored
 reached "the counter reaches its limit" in 5 steps
 reached "an increment is refused" in 7 steps
 reached "a decrement is refused" in 3 steps
@@ -160,7 +162,8 @@ Now seed a bug. In `service`, write `1 <` for `0 <`, so that a decrement at one 
       if 1 < count then (count - 1, [⟨req, count - 1, true⟩])
 ```
 
-`lake test` fails, and prints the shortest run that breaks the property:
+`lake test` fails. The report gives the shortest run that breaks the property, and a line
+after it, `FAIL (check) the counter, with a limit of 2 and four requests`, says what failed:
 
 ```text
 FAIL: "a request is refused only at zero or at the limit" is violated after 5 steps
@@ -183,7 +186,9 @@ Read it as a story. A client sends `increment 1`. The actor starts (every start,
 too, goes through its recovery) and takes it: the count is 1.
 Then `decrement 4` arrives and is refused at 1. The state reached shows the count and the two
 answers not yet sent. Put `0 <` back and the check passes again. `lake test` exits with 1 on a
-`FAIL`, so CI stops on it.
+`FAIL`, so CI stops on it, and with 2 on `PASS (bounded)`: a search that hit a bound covered
+only part of the instance, which is not a pass. `lake test -- --json` prints the same results as
+one JSON object, each with its kind (`check` or `proof`), for a program to read.
 
 The checks catch the bug of step 2 as well: with no `if` at all, no decrement is ever refused,
 and `lake test` prints `FAIL: never reached: "a decrement is refused"`. Faults find bugs too:
@@ -197,8 +202,8 @@ The code of this step is `Tests/Tutorial/Check.lean`, where `buggy` is the bug.
 ## 4. Prove it for every run
 
 **A proof covers every run.** The check covered a limit of 2, four requests and one crash. The
-two theorems at the end of `Tut/Counter.lean` cover every limit, every sequence of requests and
-every fault:
+first two theorems of `Tut/Proofs.lean` cover every limit, every sequence of requests and every
+fault:
 
 ```lean
 /-- The counter never exceeds its limit. -/
@@ -215,14 +220,16 @@ theorem system_le_limit (config : Config) (env : EnvModel sig) :
 `actor_invariant` proves the first by induction: the property holds at the start, every message
 keeps it, and recovery keeps it. It splits on the message, unfolds the definitions in brackets,
 and closes each case with `grind`, which splits the `if`s and does the arithmetic. You did not
-touch it in step 2: `lake build` proved it again with the `decrement` case. The second theorem
+touch it in step 2: `lake test` proved it again with the `decrement` case. The second theorem
 lifts what one actor keeps to the whole system, in every environment.
 
-A case `actor_invariant` cannot close is left as a goal. Write `≤` for `<` in the increment, and
-`lake build` stops (after a long `trace:` line with the command it ran):
+A case `actor_invariant` cannot close is left as a goal. Write `≤` for `<` in the increment.
+`lake test` runs the checks, which find the counter past its limit, then builds the proofs,
+which fail with `FAIL (proof) the proofs`, and prints Lean's message (after a long `trace:` line
+with the command it ran):
 
 ```
-error: Tut/Counter.lean:60:2: unsolved goals
+error: Tut/Proofs.lean:17:2: unsolved goals
 case refine_2.increment
 config : Config
 s✝ : Nat
@@ -255,20 +262,20 @@ Now put `sorry` in place of `actor_invariant [Server.actor, service]`. The proof
 fails:
 
 ```
-warning: Tut/Counter.lean:58:8: declaration uses `sorry`
-info: Tut/Proofs.lean:25:15: 'Tut.system_le_limit' depends on axioms: [propext, sorryAx, Classical.choice]
-error: Tut/Proofs.lean:25:0: ❌️ Docstring on `#guard_msgs` does not match generated message:
+warning: Tut/Proofs.lean:15:8: declaration uses `sorry`
+info: Tut/Proofs.lean:36:15: 'Tut.system_le_limit' depends on axioms: [propext, sorryAx, Classical.choice]
+error: Tut/Proofs.lean:36:0: ❌️ Docstring on `#guard_msgs` does not match generated message:
 
 - info: 'Tut.system_le_limit' depends on axioms: [propext, Classical.choice, Quot.sound]
 + info: 'Tut.system_le_limit' depends on axioms: [propext, sorryAx, Classical.choice]
 ```
 
-`lake test` still passes with the `sorry`: it builds only what the checks import. So before
-calling a change done, run `lake build`, and `lake exe lanes lint`, which reports the `sorry`
-too (`no-sorry`). Lanes keeps its own gates in `Tests/Axioms/`.
+`lake test` fails on the `sorry` even without a gate: it builds the proofs with warnings as
+errors (`Testing.build`), and a `sorry` is a warning. The checks still run first, since
+`Check.lean` does not import the proofs. `lake exe lanes lint` reports the `sorry` too
+(`no-sorry`). Lanes keeps its own gates in `Tests/Axioms/`.
 
-The code of this step is `Tests/Tutorial/Counter.lean` (the theorems) and
-`Tests/Tutorial/Proofs.lean` (the gate).
+The code of this step is `Tests/Tutorial/Proofs.lean`: the theorems and the gate.
 
 ## 5. Where next
 

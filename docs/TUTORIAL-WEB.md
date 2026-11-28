@@ -310,7 +310,7 @@ never reaches a delete fails (rule 5.3):
 ```
 
 ```text
-PASS: every reachable state explored
+PASS (complete): every reachable state explored
 reached "the shelf is full" in 5 steps
 reached "a file is listed" in 5 steps
 reached "a file is deleted" in 5 steps

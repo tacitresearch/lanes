@@ -178,7 +178,7 @@ def report := search model
 
 def tests : List (String × Bool) :=
   [ ("courier: against a network that fails at any moment, every promise holds",
-      report.ok && report.complete),
+      report.ok),
     ("courier: bytes that are not a parcel end the connection they arrive on",
       let adopted := tell {} .accepted
       let after := tell adopted (.received 0 ⟨#[7, 1, 9, 9]⟩)

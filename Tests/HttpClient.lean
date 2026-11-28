@@ -398,7 +398,7 @@ def check :=
 def tests : List (String × Bool) :=
   requestTests ++ responseTests ++ readingTests ++ roundTripTests ++
   [ ("http client: a caller is right against everything a service may do, answers or not",
-      check.ok && check.complete) ]
+      check.ok) ]
 
 /-- A server on a local port. To whoever connects it sends `reply` (nothing, when that is
 empty) and then holds the connection open until the other side leaves. -/

@@ -229,8 +229,8 @@ def tests : List (String × Bool) :=
   let lost := ((Kernel.boot alarms).1.exec misfire).kernel
   let queued := ((Kernel.boot busy).1.accept ()).kernel
   let shared := (Kernel.boot busy).1.exec [.input (), .input (), .input (), .batch 6]
-  [ ("kernel agenda: invariant and consequences hold whatever the shell does",
-      r.ok && r.witnesses.length == 11),
+  [ ("kernel agenda: invariant and consequences hold whatever the shell does, to depth 4",
+      r.passed && r.witnesses.length == 11),
     ("kernel agenda: a timer fired at the wrong actor still fires at its own",
       pending lost == [(false, .ring false, ⟨1, 0⟩)] && lost.wait == .none && firesTimer lost
         && !lost.quiet true),

@@ -315,11 +315,11 @@ def checks : IO (List (String × Bool)) := do
     | none => unless r.complete do IO.println s!"http stream {name}: incomplete at {r.states}"
   return [
     ("http stream: a body framed by its length is handed on in pieces that make it up, one at a "
-      ++ "time, and the request behind it read", length.ok && length.complete),
-    ("http stream: a chunked body likewise", chunked.ok && chunked.complete),
+      ++ "time, and the request behind it read", length.ok),
+    ("http stream: a chunked body likewise", chunked.ok),
     ("http stream: a streamed response is its head, the chunks of the parts given and its end",
-      down.ok && down.complete),
+      down.ok),
     ("http stream: a stream of events writes each event given once, keeps open and ends at stop",
-      evs.ok && evs.complete) ]
+      evs.ok) ]
 
 end Tests.HttpStream

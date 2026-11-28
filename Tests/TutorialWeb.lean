@@ -32,7 +32,7 @@ def tests : IO (List (String × Bool)) := do
   let outputs := [fixed.renderSystem, bug.renderSystem]
   return [("tutorial web: it has lean blocks", !lean.isEmpty),
       ("tutorial web: the shelf of step 5 passes its check", fixed.ok),
-      ("tutorial web: the bug of step 5 fails it", !bug.ok)]
+      ("tutorial web: the bug of step 5 fails it", !bug.passed)]
     ++ lean.zipIdx.map (fun ((_, body), k) =>
       (s!"tutorial web: lean block {k + 1} is in Tests/TutorialWeb/", code.any (occursIn body)))
     ++ text.zipIdx.map (fun (body, k) =>

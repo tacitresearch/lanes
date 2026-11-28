@@ -70,7 +70,7 @@ def tests : List (String × Bool) :=
   let safe := check {} 1
   let buggy := check { votesOncePerTerm := false } 0
   [ ("election: at most one leader per term, with reordering and a crash",
-      safe.ok && safe.complete),
+      safe.ok),
     ("election: the check is not vacuous: a leader is elected and terms advance",
       safe.witnesses.length == 2),
     ("election: timeouts, crashes and restarts were all explored",
@@ -112,10 +112,10 @@ def fingerprintTests : IO (List (String × Bool)) := do
   let buggy := check { votesOncePerTerm := false } crashes (fingerprinted := true)
   let config : Config := { votesOncePerTerm := false }
   return [("election: the fingerprinted check explores the same states and says it is fingerprinted",
-      printed.ok && printed.complete && printed.fingerprinted && printed.states == plain.states
+      printed.passed && printed.complete && printed.fingerprinted && printed.states == plain.states
         && printed.transitions == plain.transitions && printed.depth == plain.depth
         && printed.witnesses.length == 2
-        && (printed.renderSystem.splitOn "PASS (fingerprinted)").length == 2),
+        && (printed.renderSystem.splitOn "PASS (bounded, fingerprinted)").length == 2),
     ("election: computing a fingerprinted check's successors in tasks gives the same report",
       inTasks.renderSystem == printed.renderSystem),
     ("election: a fingerprinted check finds two leaders in one term, and the trace replays",

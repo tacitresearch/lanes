@@ -155,7 +155,7 @@ def tests : List (String × Bool) :=
       | _ => false),
     (s!"throttle model: one that waits as told calls only when it may, and gets through "
         ++ s!"({fixed.states} states)",
-      fixed.ok && fixed.complete),
+      fixed.ok),
     ("throttle model: a call within the limit is not throttled, one beyond it is",
       !model.allows [callOut 0 0, .input (.reply 0 (.answer (.throttled 1)))]
         && model.allows [callOut 0 0, callOut 1 1, .input (.reply 1 (.answer (.throttled 1))),

@@ -208,16 +208,16 @@ def tests : List (String × Bool) :=
   let besides := checkBeside
   [ (s!"jobs: every job is answered once, retried with its key and job, within the slots "
         ++ s!"({two.states} states)",
-      two.ok && two.complete && two.witnesses.length == 4),
+      two.ok && two.witnesses.length == 4),
     (s!"jobs: beyond maxInFlight a job is refused, and still answered once ({one.states} states)",
-      one.ok && one.complete
+      one.ok
         && (Check.system (jobs 1) { driver := (world submissions).driver samples }
           [.sometimes "a job is refused" (answeredWith (· == .refused))]).witnesses.length == 1),
     (s!"jobs: the same when the actor crashes and restarts and results come late or never "
         ++ s!"({faulty.states} states)",
-      faulty.ok && faulty.complete && faulty.witnesses.length == 4),
+      faulty.ok && faulty.witnesses.length == 4),
     (s!"jobs: beside an application, which is told each answer once ({besides.states} states)",
-      besides.ok && besides.complete && besides.witnesses.length == 1) ]
+      besides.ok && besides.witnesses.length == 1) ]
 
 /-! The pool, live: calls to a local service that fails twice before it succeeds, to a closed
 port and to a service that never answers; and a pure worker. -/
