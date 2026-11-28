@@ -1,4 +1,4 @@
-# D?. A served journal is versioned by the application's name; the gate's settings are read from it
+# D94. A served journal is versioned by the application's name; the gate's settings are read from it
 
 Status: Accepted
 

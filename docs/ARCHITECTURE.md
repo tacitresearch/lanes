@@ -416,7 +416,7 @@ Where: `Lanes/Web/` (`Http/`, `IO/Server.lean`), `Lanes/Semantics/Front.lean`.
 
 Also:
 
-- A journal of the gate `serve` ran before `docs/decisions/D43-one-gate.md` is refused; one `serve` wrote behind a gate of other settings is replayed behind that gate and carried across (`Http.regateUpgrade`, `docs/decisions/new-journal-version.md`).
+- A journal of the gate `serve` ran before `docs/decisions/D43-one-gate.md` is refused; one `serve` wrote behind a gate of other settings is replayed behind that gate and carried across (`Http.regateUpgrade`, `docs/decisions/D94-journal-version.md`).
 - Proved of `fronted sys` by projection from the gate alone, for every `sys`: at most once per arrival where the link from outside to the gate does not duplicate (`Http.fronted_answered_le_arrived`, from `Http.Gate.answered_le_handled`) and deadlines stay armed (`Http.fronted_deadlines_armed`); and in every fair run in which the gate does not crash a request the gate has admitted is answered (`Http.fronted_pending_leaves`, `Http.fronted_pending_answered`, from `Http.Gate.pending_leaves` and `Http.Gate.pending_answered` of the gate alone, through the hidden inputs and outputs and the join); model-checked with the properties checked of `served`, and the premises of the leads-to rule on the gate alone with the link a join gives it from outside.
 - Proved of `served sys` for every system, bridge and configuration: an arrival is answered at most once in any environment whose link from outside to the gate does not duplicate (`Http.served_answered_le_arrived`, `Http.kernel_served_answered_le_arrived`, with crashes, loss, reordering and duplication elsewhere allowed), a waiting request keeps its deadline armed (`Http.served_deadlines_armed`), and in every fair run in which the gate does not crash a request the gate has admitted is answered, by the system or with `504` (`Http.served_pending_leaves`, `Http.served_pending_answered`). These are the theorems of `fronted sys` carried through its hidden inputs and outputs.
 - The server prepares each request as its bridge says (`Bridge.prepare`, pure) on the request's own task before it enters the shard, so a password or a cookie a bridge takes out is never journalled and slow work is not done on the shard's thread (`docs/decisions/D44-request-prepared-before-journal.md`).
@@ -848,7 +848,7 @@ a refinement check means every run's inputs and outputs are a trace of the spec
 (`Check.refines_sound`, `Check.refines_traces`). Under D45 a PASS finds bugs; the claim rests on a
 theorem.
 
-Two other searches reach further (`docs/decisions/new-checker-scale.md`). `Check.fingerprint`
+Two other searches reach further (`docs/decisions/D92-checker-scale.md`). `Check.fingerprint`
 (`Lanes/Check/Fingerprint.lean`) keeps a hash of each state instead of the state: what it reports
 replays and is checked again (`Check.fingerprint_violated`, `Check.systemFingerprinted_violated`),
 but a pass is not exhaustive, and the report says it was fingerprinted. `Check.systemReduced`

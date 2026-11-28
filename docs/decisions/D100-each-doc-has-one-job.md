@@ -1,4 +1,4 @@
-# D?. Each doc has one job, and is generated or tested where it can be
+# D100. Each doc has one job, and is generated or tested where it can be
 
 Status: Accepted
 
@@ -18,7 +18,7 @@ definition rewrote.
   page and the open items of the roadmap and of the standard library's triage (`docs/STDLIB.md`)
   are listed one a line in `docs/known-limits-to-file.md` until they are filed. `docs/history/` is
   gone: git keeps it. This supersedes the part of
-  `docs/decisions/new-generated-lines-are-local.md` that keeps the status in fragments.
+  `docs/decisions/D93-generated-lines-are-local.md` that keeps the status in fragments.
 - A doc states rules and reasons, or it is generated or tested. The inventory is computed by
   `lanesInventory`, which `lanes lint` runs for the checks `inventory` and `inventory-none` and
   `lanes inventory` prints; no committed file holds it. This supersedes the part of

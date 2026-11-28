@@ -1,6 +1,6 @@
 # D46. Bind what touches physics
 
-Status: Partly superseded by new-one-crypto-library.md (libsodium)
+Status: Partly superseded by D95-one-crypto-library.md (libsodium)
 
 Write in Lean what decides: protocols, parsers, state machines, formats, each proved. Bind what
 depends on what Lean cannot express or check, as every other language does: how long code takes
