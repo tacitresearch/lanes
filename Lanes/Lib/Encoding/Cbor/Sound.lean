@@ -11,17 +11,21 @@ public import Lanes.Proof.Utf8
 /-!
 # What the CBOR decoder and encoder are proved to do
 
-- `Cbor.decode_encode`: the decoder reads back what the encoder writes, every value within the
+- `Cbor.decode_encode`: the decoder reads back what the encoder writes, for every value within the
   decoder's limits, taking any encoding or only preferred ones.
-- `Cbor.decode_deterministic_encode`: the decoder that takes only deterministic encodings reads
-  back every value whose maps are in deterministic order, from its encoding.
-- `Cbor.encodeDeterministic_eq_of_equiv`: the deterministic encoding is canonical: two values
-  equal in the data model, `Cbor.Equiv`, whose maps may hold their entries in other orders, have
-  the same deterministic encoding.
-- `Cbor.encode_of_decode_preferred`, `Cbor.encodeDeterministic_of_decode`: a strict decoder takes
-  only the bytes the encoder writes for what it read, so a value has one accepted encoding.
-- `Cbor.decode_tooLarge`, `Cbor.fits_of_decode`: the decoder refuses an input over its size, and
-  what it reads is within its depth and length.
+- `Cbor.decode_encodeDeterministic`: the decoder that takes only deterministic encodings takes
+  every deterministic encoding of a value within its limits, and reads it as `canonical v`.
+- `Cbor.encodeDeterministic_eq_of_equiv`: the deterministic encoding is canonical: values equal
+  in the data model (`Cbor.Equiv`), whose maps may hold their entries in other orders, have the
+  same deterministic encoding.
+- `Cbor.encode_of_decode_preferred`, `Cbor.encodeDeterministic_of_decode`,
+  `Cbor.eq_of_decode_strict`: a strict decoder takes only the bytes the encoder writes for what it
+  read, so each value has one accepted encoding.
+- `Cbor.decode_tooLarge`, `Cbor.size_of_decode`, `Cbor.fits_of_decode`: the decoder refuses an
+  input over its size, and what it reads is within its depth and its length.
+
+The decoder's reads are proved against the encoder's writes through `item_encode`, by induction
+on the value with the bytes before and after it left free.
 -/
 
 @[expose] public section
@@ -620,5 +624,263 @@ theorem size_of_decode {cfg : Config} {bytes : ByteArray} {v : Cbor}
   split at h
   · cases h
   · omega
+
+/-! ### The deterministic encoding is canonical -/
+
+mutual
+/-- Equal in the data model: the same values, but for the order of each map's entries. -/
+def Equiv : Cbor → Cbor → Prop
+  | .array xs, .array ys => EquivAll xs ys
+  | .map xs, .map ys => ∃ zs, zs.Perm ys ∧ EquivEntries xs zs
+  | .tag t v, .tag u w => t = u ∧ Equiv v w
+  | v, w => v = w
+
+def EquivAll : List Cbor → List Cbor → Prop
+  | [], [] => True
+  | x :: xs, y :: ys => Equiv x y ∧ EquivAll xs ys
+  | _, _ => False
+
+def EquivEntries : List (Cbor × Cbor) → List (Cbor × Cbor) → Prop
+  | [], [] => True
+  | e :: es, f :: fs => Equiv e.1 f.1 ∧ Equiv e.2 f.2 ∧ EquivEntries es fs
+  | _, _ => False
+end
+
+def joinBytes : List ByteArray → ByteArray
+  | [] => .empty
+  | b :: bs => b ++ joinBytes bs
+
+theorem entryBytes_eq (e : Cbor × Cbor) : entryBytes e = encode e.1 ++ encode e.2 := by
+  rw [entryBytes, encodeTo_eq]
+
+theorem encodeMap_eq (es : List (Cbor × Cbor)) : encodeMap es = joinBytes (es.map entryBytes) := by
+  induction es with
+  | nil => rfl
+  | cons e es ih =>
+    rw [encodeMap_cons, List.map_cons, joinBytes, ih, entryBytes_eq, ByteArray.append_assoc]
+
+/-- The order of the deterministic encoding: bytewise. -/
+def byteLe (a b : ByteArray) : Bool := decide (a ≤ b)
+
+theorem map_sortEntries (es : List (Cbor × Cbor)) :
+    (sortEntries es).map entryBytes = (es.map entryBytes).mergeSort byteLe := by
+  unfold sortEntries
+  rw [List.map_map]
+  have : ((es.map fun e => (entryBytes e, e)).mergeSort fun a b => decide (a.1 ≤ b.1)).map
+        (entryBytes ∘ (·.2)) =
+      ((es.map fun e => (entryBytes e, e)).mergeSort fun a b => decide (a.1 ≤ b.1)).map (·.1) := by
+    refine List.map_congr_left fun d hd => ?_
+    obtain ⟨e, _, rfl⟩ := List.mem_map.mp (List.mem_mergeSort.mp hd)
+    rfl
+  rw [this, List.map_mergeSort (r := fun a b : ByteArray × (Cbor × Cbor) => decide (a.1 ≤ b.1))
+    (s := byteLe) (f := (·.1)) (fun _ _ _ _ => rfl), List.map_map]
+  rfl
+
+theorem mergeSort_eq_of_perm {l₁ l₂ : List ByteArray} (h : l₁.Perm l₂) :
+    l₁.mergeSort byteLe = l₂.mergeSort byteLe := by
+  have trans : ∀ a b c : ByteArray, byteLe a b → byteLe b c → byteLe a c := by
+    intro a b c hab hbc
+    simp only [byteLe, decide_eq_true_eq] at hab hbc ⊢
+    exact Std.le_trans hab hbc
+  have total : ∀ a b : ByteArray, (byteLe a b || byteLe b a) = true := by
+    intro a b
+    simp only [byteLe, Bool.or_eq_true, decide_eq_true_eq]
+    exact Std.le_total
+  apply List.Perm.eq_of_pairwise (le := fun a b => byteLe a b = true)
+  · intro a b _ _ hab hba
+    simp only [byteLe, decide_eq_true_eq] at hab hba
+    exact Std.le_antisymm hab hba
+  · exact List.pairwise_mergeSort trans total l₁
+  · exact List.pairwise_mergeSort trans total l₂
+  · exact (List.mergeSort_perm l₁ _).trans (h.trans (List.mergeSort_perm l₂ _).symm)
+
+theorem canonicalAll_eq (xs : List Cbor) : canonicalAll xs = xs.map canonical := by
+  induction xs with
+  | nil => rfl
+  | cons x xs ih => rw [canonicalAll, ih, List.map_cons]
+
+theorem canonicalEntries_eq (es : List (Cbor × Cbor)) :
+    canonicalEntries es = es.map fun e => (canonical e.1, canonical e.2) := by
+  induction es with
+  | nil => rfl
+  | cons e es ih => rw [canonicalEntries, ih, List.map_cons]
+
+theorem encode_canonical_map (es : List (Cbor × Cbor)) :
+    encode (canonical (.map es)) = (head 5 es.length).toByteArray ++
+      joinBytes (((canonicalEntries es).map entryBytes).mergeSort byteLe) := by
+  rw [canonical, encode_map, encodeMap_eq, map_sortEntries, sortEntries, List.length_map,
+    List.length_mergeSort, List.length_map, canonicalEntries_eq, List.length_map]
+
+mutual
+theorem encode_canonical_of_equiv : (v w : Cbor) → Equiv v w →
+    encode (canonical v) = encode (canonical w)
+  | .array xs, w, h => by
+    cases w <;> (try simp [Equiv] at h)
+    rename_i ys
+    have := encodeList_canonical_of_equivAll xs ys h
+    rw [canonical, canonical, encode_array, encode_array, this.1, this.2]
+  | .map xs, w, h => by
+    cases w <;> (try simp [Equiv] at h)
+    rename_i ys
+    obtain ⟨zs, hp, he⟩ := h
+    have hb := entries_of_equivEntries xs zs he
+    have hl : xs.length = ys.length := by
+      have := congrArg List.length hb
+      simp only [List.length_map, canonicalEntries_eq] at this
+      rw [this, hp.length_eq]
+    rw [encode_canonical_map, encode_canonical_map, hl, hb]
+    congr 2
+    apply mergeSort_eq_of_perm
+    rw [canonicalEntries_eq, canonicalEntries_eq]
+    exact (hp.map _).map _
+  | .tag t v, w, h => by
+    cases w <;> (try simp [Equiv] at h)
+    rename_i u w
+    rw [canonical, canonical, encode_tag, encode_tag, h.1, encode_canonical_of_equiv v w h.2]
+  | .uint _, w, h | .nint _, w, h | .float _, w, h | .bytes _, w, h | .text _, w, h
+  | .bool _, w, h | .null, w, h | .undefined, w, h | .simple _, w, h => by
+    cases w <;> simp_all [Equiv]
+
+theorem encodeList_canonical_of_equivAll : (xs ys : List Cbor) → EquivAll xs ys →
+    (canonicalAll xs).length = (canonicalAll ys).length ∧
+      encodeList (canonicalAll xs) = encodeList (canonicalAll ys)
+  | [], [], _ => ⟨rfl, rfl⟩
+  | x :: xs, y :: ys, h => by
+    have := encodeList_canonical_of_equivAll xs ys h.2
+    simp only [canonicalAll, List.length_cons, this.1, encodeList_cons,
+      encode_canonical_of_equiv x y h.1, this.2, and_self]
+  | [], _ :: _, h | _ :: _, [], h => h.elim
+
+theorem entries_of_equivEntries : (xs zs : List (Cbor × Cbor)) → EquivEntries xs zs →
+    (canonicalEntries xs).map entryBytes = (canonicalEntries zs).map entryBytes
+  | [], [], _ => rfl
+  | e :: es, f :: fs, h => by
+    simp only [canonicalEntries, List.map_cons, entryBytes_eq,
+      encode_canonical_of_equiv e.1 f.1 h.1, encode_canonical_of_equiv e.2 f.2 h.2.1,
+      entries_of_equivEntries es fs h.2.2]
+  | [], _ :: _, h | _ :: _, [], h => h.elim
+end
+
+/-- The deterministic encoding is canonical: values equal in the data model, whose maps may hold
+their entries in other orders, have the same deterministic encoding. -/
+theorem encodeDeterministic_eq_of_equiv {v w : Cbor} (h : Equiv v w) :
+    encodeDeterministic v = encodeDeterministic w :=
+  encode_canonical_of_equiv v w h
+
+/-! ### The deterministic decoder takes every deterministic encoding -/
+
+theorem mem_of_mem_sortEntries {es : List (Cbor × Cbor)} {e : Cbor × Cbor}
+    (h : e ∈ sortEntries es) : e ∈ es := by
+  unfold sortEntries at h
+  obtain ⟨d, hd, rfl⟩ := List.mem_map.mp h
+  obtain ⟨e', he', rfl⟩ := List.mem_map.mp (List.mem_mergeSort.mp hd)
+  exact he'
+
+theorem sortEntries_perm (es : List (Cbor × Cbor)) : (sortEntries es).Perm es := by
+  unfold sortEntries
+  have := (List.mergeSort_perm (es.map fun e => (entryBytes e, e))
+    (fun a b => decide (a.1 ≤ b.1))).map (·.2)
+  rwa [List.map_map, show ((·.2) ∘ fun e : Cbor × Cbor => (entryBytes e, e)) = id from rfl,
+    List.map_id] at this
+
+/-- The order of decorated entries, by their bytes. -/
+def entryLe (a b : ByteArray × (Cbor × Cbor)) : Bool := decide (a.1 ≤ b.1)
+
+theorem sortEntries_sortEntries (es : List (Cbor × Cbor)) :
+    sortEntries (sortEntries es) = sortEntries es := by
+  let D := es.map fun e => (entryBytes e, e)
+  have hD : (sortEntries es).map (fun e => (entryBytes e, e)) = D.mergeSort entryLe := by
+    unfold sortEntries
+    rw [List.map_map]
+    conv => rhs; rw [← List.map_id (D.mergeSort entryLe)]
+    refine List.map_congr_left fun d hd => ?_
+    obtain ⟨e, _, rfl⟩ := List.mem_map.mp (List.mem_mergeSort.mp hd)
+    rfl
+  have hp : (D.mergeSort entryLe).Pairwise (fun a b => entryLe a b = true) := by
+    refine List.pairwise_mergeSort ?_ ?_ D
+    · intro a b c hab hbc
+      simp only [entryLe, decide_eq_true_eq] at hab hbc ⊢
+      exact Std.le_trans hab hbc
+    · intro a b
+      simp only [entryLe, Bool.or_eq_true, decide_eq_true_eq]
+      exact Std.le_total
+  rw [sortEntries.eq_1 (sortEntries es)]
+  change ((sortEntries es).map (fun e => (entryBytes e, e)) |>.mergeSort entryLe).map (·.2) = _
+  rw [hD, List.mergeSort_of_pairwise hp]
+  rfl
+
+mutual
+theorem canonical_canonical : (v : Cbor) → canonical (canonical v) = canonical v
+  | .array xs => by simp only [canonical, canonicalAll_canonicalAll xs]
+  | .map xs => by
+    simp only [canonical]
+    have hfix : canonicalEntries (sortEntries (canonicalEntries xs)) =
+        sortEntries (canonicalEntries xs) := by
+      rw [canonicalEntries_eq (sortEntries _)]
+      conv => rhs; rw [← List.map_id (sortEntries (canonicalEntries xs))]
+      refine List.map_congr_left fun e he => ?_
+      have := canonicalEntries_fixed xs e (mem_of_mem_sortEntries he)
+      rw [this.1, this.2]; rfl
+    rw [hfix, sortEntries_sortEntries]
+  | .tag t v => by simp only [canonical, canonical_canonical v]
+  | .uint _ | .nint _ | .float _ | .bytes _ | .text _ | .bool _ | .null | .undefined
+  | .simple _ => rfl
+
+theorem canonicalAll_canonicalAll : (xs : List Cbor) →
+    canonicalAll (canonicalAll xs) = canonicalAll xs
+  | [] => rfl
+  | x :: xs => by simp only [canonicalAll, canonical_canonical x, canonicalAll_canonicalAll xs]
+
+theorem canonicalEntries_fixed : (es : List (Cbor × Cbor)) → ∀ e ∈ canonicalEntries es,
+    canonical e.1 = e.1 ∧ canonical e.2 = e.2
+  | [], _, h => by simp [canonicalEntries] at h
+  | f :: fs, e, h => by
+    rcases List.mem_cons.mp h with rfl | h
+    · exact ⟨canonical_canonical f.1, canonical_canonical f.2⟩
+    · exact canonicalEntries_fixed fs e h
+end
+
+theorem all_perm {α : Type} {l₁ l₂ : List α} (p : α → Bool) (h : l₁.Perm l₂) :
+    l₁.all p = l₂.all p := by
+  rw [Bool.eq_iff_iff, List.all_eq_true, List.all_eq_true]
+  exact ⟨fun hl x hx => hl x (h.mem_iff.mpr hx), fun hl x hx => hl x (h.mem_iff.mp hx)⟩
+
+mutual
+theorem fits_canonical : (v : Cbor) → (d L : Nat) → fits d L (canonical v) = fits d L v
+  | .array _, 0, _ | .map _, 0, _ | .tag _ _, 0, _ => by simp [fits]
+  | .array xs, d + 1, L => by
+    simp only [canonical, fits, canonicalAll_eq, List.length_map]
+    rw [← canonicalAll_eq, all_canonicalAll xs d L]
+  | .map xs, d + 1, L => by
+    simp only [canonical, fits]
+    rw [(sortEntries_perm _).length_eq, all_perm _ (sortEntries_perm _), all_canonicalEntries xs d L,
+      canonicalEntries_eq, List.length_map]
+  | .tag t v, d + 1, L => by simp only [canonical, fits]; exact fits_canonical v d L
+  | .uint _, _, _ | .nint _, _, _ | .float _, _, _ | .bytes _, _, _ | .text _, _, _
+  | .bool _, _, _ | .null, _, _ | .undefined, _, _ | .simple _, _, _ => rfl
+
+theorem all_canonicalAll : (xs : List Cbor) → (d L : Nat) →
+    (canonicalAll xs).all (fits d L) = xs.all (fits d L)
+  | [], _, _ => rfl
+  | x :: xs, d, L => by
+    simp only [canonicalAll, List.all_cons, fits_canonical x d L, all_canonicalAll xs d L]
+
+theorem all_canonicalEntries : (es : List (Cbor × Cbor)) → (d L : Nat) →
+    (canonicalEntries es).all (fun e => fits d L e.1 && fits d L e.2) =
+      es.all (fun e => fits d L e.1 && fits d L e.2)
+  | [], _, _ => rfl
+  | e :: es, d, L => by
+    simp only [canonicalEntries, List.all_cons, fits_canonical e.1 d L, fits_canonical e.2 d L,
+      all_canonicalEntries es d L]
+end
+
+/-- The decoder that takes only deterministic encodings takes every deterministic encoding of a
+value within its limits, and reads it as the value with its maps in deterministic order. -/
+theorem decode_encodeDeterministic (cfg : Config) (v : Cbor) (hL : cfg.maxLength < 2 ^ 64)
+    (hv : v.fits cfg.maxDepth cfg.maxLength = true)
+    (hsize : (encodeDeterministic v).size ≤ cfg.maxSize) (hacc : cfg.accept = .deterministic) :
+    decode cfg (encodeDeterministic v) = .ok (canonical v) :=
+  decode_deterministic_encode cfg (canonical v) hL (by rw [fits_canonical]; exact hv) hsize hacc
+    (by rw [encodeDeterministic, canonical_canonical])
 
 end Lanes.Cbor
