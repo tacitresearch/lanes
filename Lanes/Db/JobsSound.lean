@@ -701,7 +701,7 @@ theorem cancel_all (key : String) : (q.cancel key).All q.OnTable := by
 
 theorem claimAll_all (cfg : Config) (now : Int64) : ∀ js, (q.claimAll cfg now js).All q.OnTable
   | [] => .pure _
-  | j :: js => Txn.All.bind (update_all q _) fun _ =>
+  | _ :: js => Txn.All.bind (update_all q _) fun _ =>
       Txn.All.bind (claimAll_all cfg now js) fun _ => .pure _
 
 theorem finish_all (cfg : Config) (id lease now : Int64) (v : Verdict) :
