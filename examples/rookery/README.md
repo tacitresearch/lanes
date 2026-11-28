@@ -227,8 +227,8 @@ package; none touches the library.
    timed and exactly-once. The memo is in the spec itself instead (`Board.api`), with
    `Once.Memo`'s `seen` and `record`, so exactly-once is a theorem of the spec
    (`Board.handle_api_again`) and the link from outside is assumed not to duplicate.
-4. **`Once.Memo` has no `DecidableEq` and no `Codable`**, so a state holding one derives
-   neither; both are given in `Rookery/Spec.lean`.
+4. **`Once.Memo` has no `DecidableEq`**, so a state holding one does not derive it; it is
+   given in `Rookery/Spec.lean`.
 5. **Lemmas about tables of pairs** (`lookup_modify`, `lookup_append_self`, `mem_modify`) belong
    in `Lanes/Proof/List/` and are in `Rookery/Proofs/Table.lean`. A finite map that both runs
    and proves easily (no `Ord` instance to prove for a subtype of `String`) would replace them.

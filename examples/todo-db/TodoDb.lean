@@ -31,25 +31,16 @@ open Lanes.Db
 
 /-! ## The table -/
 
-structure Todo where
+/-- The table `todos`, keyed by `id`. The index `todos.byTitle` on `(owner, title)` is not
+unique: uniqueness is the invariant, proved per transaction. -/
+lanes_data structure Todo where
   id : Int64
   owner : Int64
   title : String
   done : Bool := false
   deriving DecidableEq, Repr, Hashable
-
-/-- `(owner, title)`, not unique: uniqueness is the invariant, proved per transaction. -/
-def byTitle : Index := { name := "by_title", columns := [1, 2] }
-
-def todos : TableOf Todo where
-  table := { name := "todos", key := 1, indexes := [byTitle],
-             columns := [{ name := "id", ty := .int }, { name := "owner", ty := .int },
-                         { name := "title", ty := .text }, { name := "done", ty := .bool }] }
-  toRow t := [.int t.id, .int t.owner, .text t.title, .bool t.done]
-  ofRow
-    | [.int id, .int owner, .text title, .bool done] => some { id, owner, title, done }
-    | _ => none
-  ofRow_toRow _ := rfl
+  table todos key id
+    index byTitle on owner, title
 
 def schema : Schema := [todos.table]
 
@@ -87,7 +78,7 @@ def insertNew (owner : Int64) (title : String) : Txn Answer := do
 /-- `checked`: look the title up first. -/
 def add (checked : Bool) (owner : Int64) (title : String) : Txn Answer :=
   if checked then do
-    match ← todos.lookup byTitle [.int owner, .text title] 1 with
+    match ← todos.lookup todos.byTitle [.int owner, .text title] 1 with
     | t :: _ => pure (.existing t.id)
     | [] => insertNew owner title
   else insertNew owner title
@@ -114,7 +105,7 @@ def handler (checked : Bool) : Handler Request Answer
   | .add owner title => add checked owner title
   | .complete owner id => complete owner id
   | .remove owner id => remove owner id
-  | .list owner => .list <$> todos.scan { table := todos.table, index := some byTitle, eq := [.int owner], limit := list_max }
+  | .list owner => .list <$> todos.scan { table := todos.table, index := some todos.byTitle, eq := [.int owner], limit := list_max }
 
 /-! ## The actor -/
 

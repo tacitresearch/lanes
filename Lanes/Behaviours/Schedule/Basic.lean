@@ -50,14 +50,14 @@ lanes_data structure Retry where
   jitter_ms : Nat := 0
   /-- No attempt is started after this time. -/
   until_ms : Option Nat := none
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Work where
   | call (retry : Retry)
   | once
   /-- A notice every `max 1 period_ms`, until the job is cancelled. -/
   | every (period_ms : Nat)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data structure Spec (K P : Type) where
   key : K
@@ -65,14 +65,14 @@ lanes_data structure Spec (K P : Type) where
   work : Work
   /-- When the job is first due. -/
   at_ms : Nat
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Phase where
   | waiting
   | running
   /-- Cancelled while an attempt is out: it ends when the attempt does. -/
   | cancelling
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- `at_ms` is when the timer the job waits on is due: its next run while it waits, the end of
 its attempt's wait while one is out. `attempt` counts the attempts started. -/
@@ -83,13 +83,13 @@ lanes_data structure Job (K P : Type) where
   at_ms : Nat
   attempt : Nat
   phase : Phase
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- Durable: a restart that forgot a job would never run it. -/
 lanes_data structure State (K P : Type) where
   now_ms : Nat
   jobs : List (Job K P)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- One attempt of a call, named by its key and number (rule 3.4): the far side can tell a
 retry from a new request by the key. -/
@@ -100,12 +100,12 @@ lanes_data structure Attempt (K P : Type) where
   start_ms : Nat
   deadline_ms : Nat
   payload : P
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Refusal where
   | full
   | tooLarge
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Outcome (P A : Type) where
   | scheduled
@@ -117,7 +117,7 @@ lanes_data inductive Outcome (P A : Type) where
   /-- The dead letter: the job gave up after `attempts`, the last of which was answered `last`
   (`none`: `unknown`, or no answer by the deadline). -/
   | failed (payload : P) (attempts : Nat) (last : Option A)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- Whether an answer ends a job. The others answer a scheduling. -/
 def Outcome.isEnd {P A : Type} : Outcome P A → Bool
@@ -129,7 +129,7 @@ lanes_data inductive Input (K P A : Type) where
   | schedule (now_ms : Nat) (spec : Spec K P)
   | cancel (key : K)
   | reply (key : K) (attempt : Nat) (reply : Rpc.Reply A)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Output (K P A : Type) where
   | call (attempt : Attempt K P)
@@ -138,7 +138,7 @@ lanes_data inductive Output (K P A : Type) where
   /-- A job's time has come; `now_ms` is the scheduler's time then, which a sweep compares with. -/
   | notice (key : K) (payload : P) (now_ms : Nat)
   | answer (key : K) (outcome : Outcome P A)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Msg (K P A : Type) where
   | schedule (now_ms : Nat) (spec : Spec K P)
@@ -148,7 +148,7 @@ lanes_data inductive Msg (K P A : Type) where
   | due (key : K)
   /-- The end of the wait for an attempt's answer. -/
   | expire (key : K)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- Every limit is explicit (rule 2.6). -/
 structure Config (K P A : Type) where

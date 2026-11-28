@@ -34,7 +34,7 @@ lanes_data inductive Status where
   | processing
   | succeeded
   | canceled
-  deriving DecidableEq, Repr, Hashable, Codable, Enum
+  deriving DecidableEq, Repr, Hashable, Enum
 
 namespace Status
 

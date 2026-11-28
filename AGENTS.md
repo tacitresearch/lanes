@@ -283,17 +283,22 @@ framework's soundness theorems (the `…Sound` modules), and `import Lanes.Seman
 layer, which imports both. Tests and the examples' proofs import what they cite. `import
 Lanes.Testing` is the test kit, for tests only, so that no binary that serves links it.
 
-Declare the messages, inputs, outputs and states of a system with `lanes_data`: the ordinary
-declaration with a prefix, whose `deriving` also takes three classes Lean cannot derive without
-linking `Lean` into the binary.
+Declare the messages, inputs, outputs and states of a system, and the types of its JSON and its
+tables, with `lanes_data`: the ordinary declaration with a prefix, whose `deriving` also takes
+classes Lean cannot derive without linking `Lean` into the binary, and, for a structure, a
+`table` line.
 
 ```lean
-lanes_data structure Entry (N C : Type) where
-  term : Nat
-  /-- The node that took the command from its client. -/
-  origin : N
-  cmd : C
-  deriving DecidableEq, Repr, Hashable, Codable
+lanes_data structure Todo where
+  id : Int64
+  owner : Int64
+  title : String
+  /-- When it was done, if it was. -/
+  doneAt : Option Int64 := none
+  deriving DecidableEq, Repr, ToJson, FromJson
+  table todos key id
+    index byOwner on owner, title
+    unique index byTitle "todo_titles" on title
 
 lanes_data inductive Id (F : Type) where
   | front (f : F)
@@ -301,20 +306,25 @@ lanes_data inductive Id (F : Type) where
   deriving DecidableEq, Repr, Hashable, Enum
 ```
 
-- `Codable` gives `Entry.codec : Codec N → Codec C → Codec (Entry N C)` and an instance;
-  `Codec.of T` is the instance's codec, and its law holds by construction
-  (`Lanes/Data/Codec.lean`). Every field's type needs `Codable`: `Nat`, `Int`, `String`, `Bool`, `Unit`, `ByteArray`, `Fin n`,
-  `Option`, `List`, pairs, sums, sigma types, subtypes, `Std.ExtTreeMap`, and types declared
-  this way.
+- `ToJson, FromJson`, always together, give the instances and `LawfulJson` (what is written
+  reads back) and `NonNullJson`, by construction (`Lanes/Lib/Encoding/Json/Derive.lean`). A
+  structure is an object of its fields, named as in Lean, a field encoded as `null` left out; a
+  constructor is its name, or an object of one field, its name, holding the object of its
+  arguments. Every field's type needs the three classes, and `Option α` needs `NonNullJson α`; a
+  type parameter is given them.
+- A `table` line declares a `TableOf` (`todos`) with its laws, and each index as
+  `todos.byOwner`. The columns are the key's fields, then the others in order. Every field's type
+  is a column (`Db.ColumnOf`, `Lanes/Db/Columns.lean`): `Int64`, `ByteArray`, `String`, `Bool`,
+  or `Option` of one, nullable. PostgreSQL names are the Lean names in `snake_case`, an index's
+  prefixed by its table's (`todos_by_owner`), unless a string gives one.
 - `Enum` lists every value. `LawfulBEq` compares a structure field by field, for one that holds a
   function on an `Enum` type and so has no `DecidableEq`.
 - Arguments are `(x y : T)` or `(x : T := default)`, fields `x : T` or `x : T := default`,
   each with an optional docstring; a constructor may be a keyword (`| open`). A value with a
-  property is a subtype,
-  read back only if the property holds. A field whose type names an earlier field is refused.
-  `extends` and indices are not accepted: write those with `structure` or `inductive` and the
-  codec with `Codec.struct%` or `Codec.sum%`. A recursive type has no codec: a codec is a value,
-  and neither `lanes_data` nor the macros can define one that refers to itself.
+  property is a subtype, read back only if the property holds. A field whose type names an
+  earlier field is refused. `extends` and indices are not accepted: write those with `structure`
+  or `inductive`, and the instances with `Json.Codec` and `Db.Columns`. A recursive type has no
+  derived JSON: a codec is a value, and the command cannot define one that refers to itself.
 
 ## Proofs
 

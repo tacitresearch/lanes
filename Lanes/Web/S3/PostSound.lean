@@ -7,7 +7,7 @@ module
 public import Lanes.Web.S3.Post
 public import Lanes.Lib.Encoding.Json.ParserSound
 public import Lanes.Lib.Encoding.Json.BasicSound
-public import Lanes.Data.Codec
+public import Lanes.Proof.Utf8
 
 /-!
 The policy a form carries says what was asked: its base64 is well formed, it holds JSON within
@@ -121,7 +121,7 @@ theorem decode?_encode (d : Document) (h : ∀ c ∈ d.conditions, c.Small) :
   have hp : Json.parse (Json.compress d.json) = .ok d.json.normalize :=
     Json.parse_compress _ (depth_document d) (digits_document d h)
   have hu : String.fromUTF8? (Json.compress d.json).toUTF8 = some (Json.compress d.json) :=
-    Codec.fromUTF8?_toUTF8 _
+    fromUTF8?_toByteArray _
   simp only [decode?, Document.encode, Base64.decode_encode, Option.bind_eq_bind,
     Option.bind_some, hu, hp]
   simp [Except.toOption, read?_normalize]

@@ -56,6 +56,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Lib/Encoding/Json.lean` | | Imports the modules below |
 | `Lanes/Lib/Encoding/Json/Basic.lean` | | Values, not a format |
 | `Lanes/Lib/Encoding/Json/Classes.lean` | | Typed values to and from `Json`, not text |
+| `Lanes/Lib/Encoding/Json/Derive.lean` | | Typed values to and from `Json`, not text; each reads back (`Json.Fields.readObject_object`, `Json.Codec.ofAlts`), and `Tests/Derive.lean` pins the shapes |
 | `Lanes/Lib/Encoding/Json/Grammar.lean` | | RFC 8259's grammar, the spec the parser and printers are proved against; JSONTestSuite (`Tests/Json.lean`) |
 | `Lanes/Lib/Encoding/Json/Parser.lean` | `oracles/go/json` | |
 | `Lanes/Lib/Encoding/Json/Printer.lean` | `oracles/go/json` | Go parses what the printer writes in the parser's cases; proved to read back (`Json.parse_compress`) |

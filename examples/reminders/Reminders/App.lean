@@ -23,12 +23,12 @@ open Lanes
 lanes_data inductive Key where
   | reminder (id : Nat)
   | sweep
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Task where
   | deliver (id : Nat) (text : String)
   | sweep
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- The service's answer to a delivery: its HTTP status. -/
 abbrev Answer := Nat
@@ -39,20 +39,20 @@ lanes_data inductive Stage where
   /-- Given up on: the scheduler's dead letter. -/
   | failed
   | cancelled
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data structure Reminder where
   id : Nat
   text : String
   at_ms : Nat
   stage : Stage
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- Durable: the reminders, and the next id. -/
 lanes_data structure State where
   reminders : List Reminder := []
   nextId : Nat := 0
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive In where
   | remind (req : Nat) (now_ms : Nat) (text : String) (in_s : Nat)
@@ -60,7 +60,7 @@ lanes_data inductive In where
   | list (req : Nat)
   | noticed (key : Key) (task : Task) (now_ms : Nat)
   | answered (key : Key) (outcome : Schedule.Outcome Task Answer)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Out where
   | reply (req : Nat) (reminders : List Reminder) (notice : String)
@@ -68,7 +68,7 @@ lanes_data inductive Out where
   | cancel (key : Key)
   /-- A reminder given up on after `attempts`. -/
   | deadLetter (id : Nat) (text : String) (attempts : Nat)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 def Task.size : Task → Nat
   | .deliver _ text => text.utf8ByteSize
