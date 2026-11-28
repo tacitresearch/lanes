@@ -194,25 +194,20 @@ def get (c : Cluster) (key : String) : Async (Option (Option String)) := do
 
 end Cluster
 
-/-- A signature for reading a journal's marks without knowing what its inputs are. -/
-abbrev blind : Signature where
-  Id := Unit
-  Msg _ := Unit
-  In := Unit
-
 structure Shape where
   /-- How many entries of the node's history the file no longer holds: where it was last cut. -/
   cutAt : Nat := 0
   entries : Nat := 0
   bytes : Nat := 0
 
-/-- A journal file begins with its header, and a cut one goes on with the mark of the save that
-cut it. -/
+/-- A journal file begins with its prelude, and a cut one goes on with the mark of the save that
+cut it, read with the file's own schema: the fifth of an entry's constructors. -/
 def shape (file : ByteArray) : Shape :=
   match Frame.decode file with
-  | _ :: first :: rest =>
-    let cutAt := match Journal.Entry.ofBytes (σ := blind) Codec.unit first with
-      | some (.snapshot index) => index
+  | _ :: _ :: schema :: first :: rest =>
+    let writer := (Body.readAny Journal.schemaLimits schema).toOption.bind Schema.ofValue?
+    let cutAt := match writer.map (Body.read Journal.Kind.journal.limits · first) with
+      | some (.ok (.ctor 4 [.nat index])) => index
       | _ => 0
     { cutAt, entries := rest.length + 1, bytes := file.size }
   | _ => { bytes := file.size }

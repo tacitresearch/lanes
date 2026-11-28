@@ -72,7 +72,7 @@ def survives (disk : Disk) (writes : List Write) (bytes : Nat)
     loads left (history done part)
       && match left.read (sys := Bank3) (Request.codec Codec.fin) none "bank" with
         | .ok found =>
-          loads (finish left (left.mend "bank" found.size)) (history done part)
+          loads (finish left (left.mend (Request.codec Codec.fin) "bank" found)) (history done part)
         | .error _ => false
 
 open Journal (Disk Write) in
@@ -106,7 +106,7 @@ def readingTests (disk : Disk) (save : List Journal.Write) : List (String × Boo
     | r => r
   let begun (d : Disk) : Disk :=
     match d.start (sys := Bank3) input none "bank" true with
-    | .ok found => finish d (d.mend "bank" found.size)
+    | .ok found => finish d (d.mend input "bank" found)
     | .error _ => d
   [ ("disk: a start whose read of either file fails refuses, and one whose reads do not loads "
       ++ "what dying anywhere in a save left",
@@ -126,7 +126,8 @@ def readingTests (disk : Disk) (save : List Journal.Write) : List (String × Boo
 
 def diskTests : List (String × Bool) :=
   let input := Request.codec Codec.fin
-  let fresh := finish {} (Journal.Disk.mend "bank" {} 0)
+  let nothing : Journal.Disk.Found Bank3 := { past := [], saved := none, size := 0 }
+  let fresh := finish {} (Journal.Disk.mend input "bank" {} nothing)
   let turn := Journal.appendWrites input entries
   let disk := finish fresh turn
   let save := Journal.saveWrites input (actors Codec.fin 100) "bank" entries.length
@@ -134,7 +135,7 @@ def diskTests : List (String × Bool) :=
   let later : List (Journal.Entry (sig (Fin 3))) :=
     [.advance 12, .input (.transfer ⟨3, 2, 0, 4⟩), .batch 64, .handed]
   [ ("disk: no journal, and a new one, are the journal of nothing",
-      survives {} (Journal.Disk.mend "bank" {} 0) 0 fun _ _ => []),
+      survives {} (Journal.Disk.mend input "bank" {} nothing) 0 fun _ _ => []),
     ("disk: a store that may not begin a journal is refused one that is not there, or has not "
       ++ "its header, and no other",
       let start := fun (create : Bool) (disk : Journal.Disk) =>
@@ -142,7 +143,7 @@ def diskTests : List (String × Bool) :=
         | .ok found => some found.past.length
         | .error .missing => none
         | .error _ => some 0
-      let header := (Journal.header "bank").size
+      let header := (Frame.encode ((Journal.prelude (σ := sig (Fin 3)) input "bank").take 2)).size
       start false {} == none && start true {} == some 0
         && start false { journal := fresh.journal.extract 0 header } == none
         && start false fresh == some 0 && start false disk == some entries.length),
@@ -176,9 +177,9 @@ def fileTests : List (String × Bool) :=
       (opened "bank" (flip file (8 * (file.size - 3)))).toOption.isNone),
     ("journal: another system's journal is refused",
       (match opened "ledger" file with | .error (.foreign (some "bank")) => true | _ => false)),
-    ("journal: a journal written with another codec is refused, not cut",
+    ("journal: a journal written with inputs of another type is refused at its schema, not cut",
       (match Journal.open? (σ := sig Bool) (Request.codec Codec.bool) "bank" file with
-        | .error (.unreadable 5) => true
+        | .error (.schema e) => (toString e).contains "Nat"
         | _ => false)) ]
 
 def balances (rt : Runtime Bank3) : Async (List Int) :=
@@ -787,7 +788,7 @@ def upgradeTest : Async (List (String × Bool)) := do
     rt.stop
     return (← seen.get, balances)
   let (first, before) ← run
-  let header := (Frame.decode (← IO.FS.readBinFile path)).head?
+  let header := Journal.named? (← IO.FS.readBinFile path)
   let (second, after) ← run
   let unsaved ← ({ v2 with actors := none } : Journal.Store Bank3).open.toBaseIO
   remove path
@@ -799,7 +800,7 @@ def upgradeTest : Async (List (String × Bool)) := do
     ("upgrade: and writes the migration, so the next start reads version 2's files and hands "
       ++ "nothing over again",
       second == #[] && after == before
-        && header == some (Journal.header (Journal.label "bank" 2))),
+        && header == some (Journal.label "bank" 2)),
     ("upgrade: a store that reads older versions and cannot save is refused",
       unsaved.toOption.isNone) ]
 

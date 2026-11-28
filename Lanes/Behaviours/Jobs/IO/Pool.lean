@@ -7,15 +7,14 @@ module
 public import Std.Async
 public import Lanes.Runtime.IO.Shell
 public import Lanes.Behaviours.Jobs.Basic
-public import Lanes.Web.IO.Client
 
 /-!
 The pool of workers behind the jobs actor (`Lanes.Behaviours.Jobs.Basic`). Each attempt the actor
 dispatches is performed on a task of its own and its result handed back as an input. What to
 do, when to try again, how long to wait and how many at once are the actor's; `Jobs.pool` is
 what the workers may do, which the checker explores. A worker is a pure function
-(`Jobs.compute`) or a call to another service through the HTTP client (`Jobs.call`), which
-sends the job's key with every attempt so the service can tell a retry from a new request.
+(`Jobs.compute`) or a call to another service through the HTTP client (`Jobs.call`, in
+`Lanes/Web/IO/Jobs.lean`).
 -/
 
 public section
@@ -54,18 +53,5 @@ def handler (port : Port σ K J R) (perform : K → Nat → J → Async R)
 /-- A worker that computes `f`. -/
 def compute (f : J → R) : K → Nat → J → Async R :=
   fun _ _ job => pure (f job)
-
-/-- The call with `name: value` among its headers, in place of any header of that name. -/
-def withHeader (name value : String) (call : Http.Client.Call) : Http.Client.Call :=
-  { call with request := { call.request with
-      headers := (name, value) :: call.request.headers.filter
-        fun (n, _) => n.toLower != name.toLower } }
-
-/-- A worker that makes the call through the HTTP client, with the job's key in the header
-`header`, the same for every attempt of the job. -/
-def call (config : Http.Client.Config) (keyText : K → String)
-    (header : String := "Idempotency-Key") : K → Nat → Http.Client.Call →
-      Async (Option Http.Response) :=
-  fun key _ job => Http.Client.exchange (withHeader header (keyText key) job) config
 
 end Lanes.Jobs

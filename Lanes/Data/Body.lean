@@ -547,6 +547,17 @@ def read (limits : Limits) (s : Schema) (bytes : ByteArray) : Except Error Value
     | .ok (v, stop) => if stop = bytes.size then .ok v else fail stop (.trailing (bytes.size - stop))
     | .error e => .error e
 
+/-- A value with no schema: every value inside it is written with a tag, so the bytes carry its
+shape. It is the second part of a `dependent` pair whose first is `()`. -/
+def writeAny (limits : Limits) (v : Value) : Except Error ByteArray :=
+  write limits (.dependent .unit) (.ctor 0 [.ctor 0 [], v])
+
+def readAny (limits : Limits) (bytes : ByteArray) : Except Error Value :=
+  match read limits (.dependent .unit) bytes with
+  | .ok (.ctor 0 [_, v]) => .ok v
+  | .ok _ => fail 0 .misfit
+  | .error e => .error e
+
 variable {α : Type}
 
 /-- The bytes of `a`, written with its type's schema. -/
