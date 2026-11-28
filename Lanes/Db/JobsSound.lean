@@ -747,6 +747,196 @@ theorem keyUnique_empty (schema : Schema) : q.KeyUnique (Db.empty schema) := by
   intro x hx
   simp [rows_empty] at hx
 
+
+/-! ## Transactions that only add jobs
+
+An application's transaction usually touches the jobs table in one way: it adds jobs, through
+`enqueue`. `Adds enq` says so of an operation: it is on another table, reads the jobs table, or
+inserts a job `enq` admits. A transaction all of whose operations add (`Txn.All (q.Adds enq)`)
+keeps the table (`keeps_of_adds`), is on the table when it touches its name (`onTable_of_adds`),
+and keeps every property of each job that `enq` gives (`fixed_of_adds`). -/
+
+variable (q)
+
+/-- The operation is on another table, reads the jobs table, or inserts a job `enq` admits. -/
+def Adds (enq : Job W → Prop) (o : Op) : Prop :=
+  o.table.name ≠ q.name ∨ (o.table = q.table ∧ o.writes = false) ∨ ∃ j, enq j ∧ o = .insert q.table (q.toRow j)
+
+/-- Every job of the table has the property `P`. -/
+def Fixed (P : Job W → Prop) (db : Db) : Prop := ∀ j ∈ q.jobs db, P j
+
+variable {q}
+
+theorem adds_rows {enq : Job W → Prop} {o : Op} (ho : q.Adds enq o) {db : Db} {r : o.Ret} {db' : Db}
+    (h : o.apply db = .ok (r, db')) :
+    db'.rows q.name = db.rows q.name ∨ ∃ j, enq j ∧ o = .insert q.table (q.toRow j) := by
+  rcases ho with hn | ⟨-, hw⟩ | hins
+  · left
+    rw [Op.rows_apply o h]
+    split
+    · next hc => exact absurd hc.2.symm hn
+    · rfl
+  · left
+    rw [Op.rows_apply o h]
+    simp [hw]
+  · exact .inr hins
+
+theorem insert_run {j : Job W} {db : Db} {r : (Op.insert q.table (q.toRow j)).Ret} {db' : Db}
+    (h : (Op.insert q.table (q.toRow j)).apply db = .ok (r, db')) : (q.rows.insert j).run db = .ok (r, db') :=
+  (Txn.run_op_ok _ h).trans rfl
+
+theorem keeps_of_adds {enq : Job W → Prop} {α : Type} {t : Txn α} (ht : t.All (q.Adds enq)) : q.Keeps t := by
+  intro db₀ a db' hF h
+  refine ht.keeps (I := fun db => q.Functional db ∧ ∀ id w, q.Has db₀ id w → q.Has db id w)
+    (fun o ho db r db' ⟨hF, hk⟩ ha => ?_) db₀ a db' ⟨hF, fun _ _ h => h⟩ h
+  rcases adds_rows ho ha with hsame | ⟨j, -, rfl⟩
+  · have : q.jobs db' = q.jobs db := by unfold jobs; rw [hsame]
+    obtain ⟨hF', hk'⟩ := keeps_of_eq this hF
+    exact ⟨hF', fun id w hh => hk' id w (hk id w hh)⟩
+  · obtain ⟨hF', hk'⟩ := insert_keeps j db r db' hF (insert_run ha)
+    exact ⟨hF', fun id w hh => hk' id w (hk id w hh)⟩
+
+theorem onTable_of_adds {enq : Job W → Prop} {α : Type} {t : Txn α} (ht : t.All (q.Adds enq)) :
+    t.All q.OnTable :=
+  ht.mono fun o ho hn => by
+    rcases ho with hn' | ⟨ht, -⟩ | ⟨j, -, rfl⟩
+    · exact absurd hn hn'
+    · exact ht
+    · rfl
+
+theorem fixed_insert {P : Job W → Prop} {j : Job W} (hj : P j) {db : Db} {b : Bool} {db' : Db}
+    (hP : q.Fixed P db) (h : (q.rows.insert j).run db = .ok (b, db')) : q.Fixed P db' := by
+  have ha := Txn.run_single h
+  have hrows := rows_other ha rfl
+  simp only [Op.writes, ↓reduceIte] at hrows
+  change db'.rows q.name = ((Op.insert q.table (q.toRow j)).onRows (db.rows q.name)).2 at hrows
+  intro j' hj'
+  obtain ⟨x, hx, hxj⟩ := mem_jobs.mp hj'
+  rw [hrows] at hx
+  rcases Op.insert_rows q.table (q.toRow j) (db.rows q.name) with hsame | ⟨hperm, -⟩
+  · rw [hsame] at hx; exact hP j' (mem_jobs.mpr ⟨x, hx, hxj⟩)
+  · rcases List.mem_cons.mp (hperm.mem_iff.mp hx) with rfl | hx
+    · obtain rfl := Option.some.inj ((q.ofRow_toRow j).symm.trans hxj); exact hj
+    · exact hP j' (mem_jobs.mpr ⟨x, hx, hxj⟩)
+
+theorem fixed_of_adds {enq P : Job W → Prop} (henq : ∀ j, enq j → P j) {α : Type} {t : Txn α}
+    (ht : t.All (q.Adds enq)) : ∀ db a db', q.Fixed P db → t.run db = .ok (a, db') → q.Fixed P db' :=
+  ht.keeps fun o ho db r db' hP ha => by
+    rcases adds_rows ho ha with hsame | ⟨j, hj, rfl⟩
+    · intro j' hj'; unfold jobs at hj'; rw [hsame] at hj'; exact hP j' hj'
+    · exact fixed_insert (henq j hj) hP (insert_run ha)
+
+/-- A property of a job's id, key and work, which no claim, finish or cancel changes. -/
+def Stable (P : Job W → Prop) : Prop :=
+  ∀ j j' : Job W, j.id = j'.id → j.key = j'.key → j.work = j'.work → P j → P j'
+
+theorem fixed_update {P : Job W → Prop} (j : Job W) {db : Db} {b : Bool} {db' : Db}
+    (hP : q.Fixed P db) (hj : P j) (h : (q.rows.update j).run db = .ok (b, db')) : q.Fixed P db' := by
+  have ha := Txn.run_single h
+  have hrows := rows_other ha rfl
+  simp only [Op.writes, ↓reduceIte] at hrows
+  change db'.rows q.name = ((Op.update q.table (q.toRow j)).onRows (db.rows q.name)).2 at hrows
+  intro j' hj'
+  obtain ⟨x, hx, hxj⟩ := mem_jobs.mp hj'
+  rw [hrows] at hx
+  rcases Op.update_rows q.table (q.toRow j) (db.rows q.name) with hsame | hmap
+  · rw [hsame] at hx; exact hP j' (mem_jobs.mpr ⟨x, hx, hxj⟩)
+  · rw [hmap] at hx
+    obtain ⟨y, hy, rfl⟩ := List.mem_map.mp hx
+    split at hxj
+    · obtain rfl := Option.some.inj ((q.ofRow_toRow j).symm.trans hxj); exact hj
+    · exact hP j' (mem_jobs.mpr ⟨y, hy, hxj⟩)
+
+theorem stable_claimed {P : Job W → Prop} (hs : Stable P) (cfg : Config) (now : Int64) {j : Job W}
+    (hj : P j) : P (cfg.claimed now j) :=
+  hs j _ (claimed_id cfg now j).symm (by unfold Config.claimed; split <;> rfl) (claimed_work cfg now j).symm hj
+
+theorem claimAll_fixed {P : Job W → Prop} (hs : Stable P) (cfg : Config) (now : Int64) :
+    ∀ (js : List (Job W)) {db : Db} {out : List (Job W)} {db' : Db}, q.Fixed P db → (∀ j ∈ js, P j) →
+      (q.claimAll cfg now js).run db = .ok (out, db') → q.Fixed P db' := by
+  intro js
+  induction js with
+  | nil =>
+    intro db out db' hP _ h
+    simp only [claimAll, Txn.pure_eq, Txn.run_pure, Except.ok.injEq, Prod.mk.injEq] at h
+    exact h.2 ▸ hP
+  | cons j js ih =>
+    intro db out db' hP hin h
+    simp only [claimAll, Txn.bind_eq] at h
+    obtain ⟨b, db₁, h₁, h⟩ := Txn.run_bind_ok_inv h
+    obtain ⟨rest, db₂, h₂, h⟩ := Txn.run_bind_ok_inv h
+    simp only [Txn.pure_eq, Txn.run_pure, Except.ok.injEq, Prod.mk.injEq] at h
+    obtain ⟨-, rfl⟩ := h
+    exact ih (fixed_update _ hP (stable_claimed hs cfg now (hin j List.mem_cons_self)) h₁)
+      (fun j' hj' => hin j' (List.mem_cons_of_mem _ hj')) h₂
+
+/-- Every transaction of the worker keeps every stable property of each job. -/
+theorem handler_fixed {P : Job W → Prop} (hs : Stable P) (cfg : Config) (r : Req) :
+    ∀ db a db', q.Fixed P db → (q.handler cfg r).run db = .ok (a, db') → q.Fixed P db' := by
+  intro db a db' hP h
+  cases r with
+  | claim now limit =>
+    obtain ⟨out, h, -⟩ := run_map _ _ h
+    simp only [claim, Txn.bind_eq] at h
+    obtain ⟨js, db₁, h₁, h₂⟩ := Txn.run_bind_ok_inv h
+    obtain ⟨rfl, hjs⟩ := scan_mem h₁
+    exact claimAll_fixed hs cfg now js hP (fun j hj => hP j (hjs j hj).1) h₂
+  | finish id lease now v =>
+    obtain ⟨out, h, -⟩ := run_map _ _ h
+    simp only [finish, Txn.bind_eq] at h
+    obtain ⟨r, db₁, h₁, h₂⟩ := Txn.run_bind_ok_inv h
+    obtain ⟨rfl, hr⟩ := get_mem h₁
+    cases r with
+    | none => simp at h₂; exact h₂.2 ▸ hP
+    | some j =>
+      obtain ⟨hj, -⟩ := hr j rfl
+      simp only at h₂
+      split at h₂
+      · refine fixed_update _ hP ?_ h₂
+        exact hs j _ (finished_id cfg now j v).symm (by unfold Config.finished; split <;> (try split) <;> rfl)
+          (finished_work cfg now j v).symm (hP j hj)
+      · simp at h₂; exact h₂.2 ▸ hP
+
+theorem decode_any {α : Type} (t : TableOf α) (P : Op → Prop) (r : Row) : (t.decode r).All P := by
+  unfold TableOf.decode; split
+  · exact .pure _
+  · exact .abort _
+
+/-- The operations of another table leave the jobs table alone. -/
+theorem get_other {α : Type} (t : TableOf α) (hn : t.table.name ≠ q.name) (enq : Job W → Prop)
+    (key : Row) : (t.get key).All (q.Adds enq) :=
+  Txn.All.bind (Txn.All.single (.inl hn)) fun r => by
+    cases r with
+    | some x => exact Txn.All.bind (decode_any t _ x) fun _ => .pure _
+    | none => exact .pure _
+
+theorem insert_other {α : Type} (t : TableOf α) (hn : t.table.name ≠ q.name) (enq : Job W → Prop)
+    (a : α) : (t.insert a).All (q.Adds enq) := Txn.All.single (.inl hn)
+
+theorem update_other {α : Type} (t : TableOf α) (hn : t.table.name ≠ q.name) (enq : Job W → Prop)
+    (a : α) : (t.update a).All (q.Adds enq) := Txn.All.single (.inl hn)
+
+/-- `enqueue` adds the job it builds, whatever id it takes. -/
+theorem enqueue_adds {enq : Job W → Prop} (key : String) (work : W) (due every : Int64)
+    (henq : ∀ id, enq { id, key, work, due_ms := due, status := .pending, attempts := 0, lease := 0, every_ms := every }) :
+    (q.enqueue key work due every).All (q.Adds enq) := by
+  have hdecode : ∀ r, (q.rows.decode r).All (q.Adds enq) := fun r => by
+    unfold TableOf.decode; split
+    · exact .pure _
+    · exact .abort _
+  refine Txn.All.bind (Txn.All.bind (Txn.All.single (.inr (.inl ⟨rfl, rfl⟩))) fun rows =>
+    Txn.All.mapM _ hdecode rows) fun js => ?_
+  cases js with
+  | cons j _ => exact .pure _
+  | nil =>
+    refine Txn.All.bind (Txn.All.bind (Txn.All.bind (Txn.All.single (.inr (.inl ⟨rfl, rfl⟩))) fun rows =>
+      Txn.All.mapM _ hdecode rows) fun js => ?_) fun id => ?_
+    · cases js <;> exact .pure _
+    · refine Txn.All.bind (Txn.All.single (.inr (.inr ⟨_, henq id, rfl⟩))) fun b => ?_
+      cases b
+      · exact .abort _
+      · exact .pure _
+
 end Queue
 
 end Lanes.Db.Jobs

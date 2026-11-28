@@ -172,13 +172,19 @@ def storePort : Db.Port (sig Q A W R) (Q ⊕ Req) (A ⊕ Ans W) where
 whatever the worker's own counters were when it was made. -/
 def attemptNumber (id lease : Int64) : Nat := id.toBitVec.toNat * 2 ^ 64 + lease.toBitVec.toNat
 
-/-- How the adapter sees the worker: an attempt is a call under the job's id as its key. -/
-def runPort {E : Type} : Rpc.Port (sig Q A W R) (Idempotent.Keyed Int64 W) R E where
+/-- How the adapter sees the worker: an attempt is a call under the job's id as its key. A
+transaction of the application may carry an event the service reported (a webhook): `event`
+says which. -/
+def runPort {E : Type} (event : Q → Option E := fun _ => none) :
+    Rpc.Port (sig Q A W R) (Idempotent.Keyed Int64 W) R E where
   called
     | .run id lease deadline_ms work => some ⟨attemptNumber id lease, deadline_ms, ⟨some id, work⟩⟩
     | _ => none
   replied
     | .ran id lease reply => some (attemptNumber id lease, reply)
+    | _ => none
+  notified
+    | .submit q => event q
     | _ => none
 
 /-- The inputs the clients of the worker's model send: ticks, and the application's
@@ -187,15 +193,21 @@ def isClient : In Q A W R → Bool
   | .tick _ | .submit _ => true
   | _ => false
 
-def isStored : In Q A W R → Bool
+/-- The inputs the service does not send: all but answers to attempts and the events it
+reports. -/
+def isStored {E : Type} (event : Q → Option E) : In Q A W R → Bool
   | .ran .. => false
+  | .submit q => (event q).isNone
   | _ => true
 
 /-- The worker's outsides: its clients (any clock, and the application), the store, with the
-application's transactions beside the worker's, and the service the attempts go to. -/
+application's transactions beside the worker's, and the service the attempts go to, which also
+sends the transactions that carry an event it reported (`event`). -/
 def world {D S E : Type} (clients : Outside (sig Q A W R) D) (dbcfg : Db.Config)
-    (h : Handler (Q ⊕ Req) (A ⊕ Ans W)) (start : Db) (svc : Rpc.Server S (Idempotent.Keyed Int64 W) R E) :
+    (h : Handler (Q ⊕ Req) (A ⊕ Ans W)) (start : Db) (svc : Rpc.Server S (Idempotent.Keyed Int64 W) R E)
+    (event : Q → Option E := fun _ => none) :
     Outside (sig Q A W R) ((D × Db.State (Q ⊕ Req) (A ⊕ Ans W)) × Rpc.State S) :=
-  (clients.both (Db.outside dbcfg h start storePort) isClient).both (Rpc.outside runPort svc) isStored
+  (clients.both (Db.outside dbcfg h start storePort) isClient).both (Rpc.outside (runPort event) svc)
+    (isStored event)
 
 end Lanes.Db.Worker

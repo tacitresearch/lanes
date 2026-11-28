@@ -32,11 +32,13 @@ every module a row names exists, and so does every path it cites.
 | Folder | Reference | Version | Pinned in | The reference for |
 | --- | --- | --- | --- | --- |
 | `oracles/go` | Go's standard library, `golang.org/x/time` and Prometheus's `expfmt` | Go 1.24.7, x/time 0.11.0, prometheus/common 0.67.5 | `oracles/go/go.mod`, `oracles/go/go.sum` | Base64, CSV, paths and globs, HTML's character references, IP addresses, times, JSON, media types, rate limits, URLs, XML, mail addresses, the metrics page; and, with Node and h11 (`oracles/go/requests/requests.py`, by hand), the request reader |
+| `oracles/cbor2` | cbor2 | 6.3.0 | `oracles/cbor2/requirements.txt` | CBOR: what the decoder reads, and the deterministic encoding against cbor2's canonical one |
 | `oracles/botocore` | botocore, and `cryptography` for the signatures it is given | 1.44.12, cryptography 50.0.2 | `oracles/botocore/requirements.txt` | Signature Version 4; CloudFront's signed URLs (`oracles/botocore/cloudfront.jsonl`), signed with the published test keys of `oracles/botocore/keys/` |
 | `oracles/jwcrypto` | jwcrypto | 1.6.2 | `oracles/jwcrypto/requirements.txt` | JWS in compact form and JWK Sets |
 | `oracles/websockets` | websockets, its Sans-I/O protocol | 15.0.1 | `oracles/websockets/requirements.txt` | A WebSocket server's side of a connection: frames, fragments, control frames and close codes |
 | `oracles/moto` | moto's server, S3, SES API v2 and SQS | 5.2.6 | `oracles/moto/requirements.txt` | the recorded runs of the object store, multipart, email and queue models, and of `POST` forms |
 | `oracles/google` | Google's OpenID Connect provider: its discovery document and JWK Set | Fetched on 2026-11-27 | the files themselves | Google's sign-in preset (`Tests/Oidc/Google.lean`) |
+| `oracles/libpq` | libpq, the copy psycopg-binary's wheel ships, loaded with ctypes; the program refuses another major | 18, in psycopg-binary 3.3.9 | `oracles/libpq/requirements.txt` | PostgreSQL's connection strings, URIs and service file |
 | `oracles/postgres` | PostgreSQL | 16 (16.15 recorded) | the CI job's `postgresql-16` | the recorded runs of the key-value and the typed store models, and the typed store's answers against their meaning |
 
 ## Protocol modules
@@ -55,9 +57,16 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Lib/Crypto/Sha512.lean` | | Not a format: FIPS 180-4's examples, as `openssl dgst` computes them (`Tests/Crypto.lean`) |
 | `Lanes/Lib/Crypto/Verify.lean` | `Tests/Signature.lean` | A binding: OpenSSL's check against `Rsa.verifyReference` and keys `openssl` made |
 | `Lanes/Lib/Encoding/Base64.lean` | `oracles/go/base64` | |
+| `Lanes/Lib/Encoding/Cbor.lean` | | Imports the modules below |
+| `Lanes/Lib/Encoding/Cbor/Basic.lean` | | Values, not a format; a float's widths, checked against the machine's own conversion (`Tests/Cbor.lean`) |
+| `Lanes/Lib/Encoding/Cbor/Classes.lean` | | Typed values to and from `Cbor`, not bytes; each reads back (`Cbor.nat?_ofNat`, `Cbor.int?_ofInt`, the `LawfulCbor` instances) |
+| `Lanes/Lib/Encoding/Cbor/Decode.lean` | `oracles/cbor2` | Also RFC 8949's examples of Appendix A and its malformed inputs of Appendix F (`Tests/Cbor.lean`); proved to read back what the encoder writes (`Cbor.decode_encode`). Known: cbor2 refuses a map with two keys Python counts equal, such as `true` and `1`, where Lanes reads both; cbor2 reads a NaN's payload only in part |
+| `Lanes/Lib/Encoding/Cbor/Derive.lean` | | Typed values to and from `Cbor`, not bytes; each reads back (`Cbor.Fields.readObject_object`, `Cbor.Codec.ofAlts`), and `Tests/Cbor.lean` pins the shapes against the JSON's |
+| `Lanes/Lib/Encoding/Cbor/Encode.lean` | `oracles/cbor2` | Also Appendix A (`Tests/Cbor.lean`). Known: cbor2's canonical order puts shorter keys first (RFC 7049), where RFC 8949 §4.2.1 sorts them bytewise; cbor2 writes every NaN as `f97e00` |
 | `Lanes/Lib/Encoding/Csv.lean` | `oracles/go/csv` | Known: Go reads CRLF inside a quoted field as LF, where we keep the field as written |
 | `Lanes/Lib/Encoding/Digits.lean` | | Numbers in a base, read back as written (`Lanes/Lib/Encoding/Digits.lean`'s theorems); compared through every format that uses them |
 | `Lanes/Lib/File.lean` | | Not a format: a file replaced whole by the proved plan (`Tests/FileSystem.lean`, `Tests/Crypto.lean`) |
+| `Lanes/Lib/Encoding/Fields.lean` | | Fields and constructors for any format of values, not a format; their laws are proved (`Lanes.Fields.pair`, `Lanes.Alts.sum`) |
 | `Lanes/Lib/Encoding/Json.lean` | | Imports the modules below |
 | `Lanes/Lib/Encoding/Json/Basic.lean` | | Values, not a format |
 | `Lanes/Lib/Encoding/Json/Classes.lean` | | Typed values to and from `Json`, not text |
@@ -80,6 +89,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Web/Auth/Login.lean` | | Not a format: failed attempts and sessions, and their bounds |
 | `Lanes/Web/Auth/OAuth.lean` | | A flow, model-checked against an attacker's browser (`Tests/OAuth.lean`); the providers' documents are recorded (`oracles/google`) |
 | `Lanes/Web/Auth/Password.lean` | | PHC strings of Argon2id: read and written back as libsodium's `crypto_pwhash_str` wrote four (`Tests/Crypto.lean`), and proved to read back as written (`Auth.Phc.parse?_encode`); no reference is run on generated strings, since none is linked in CI's toolchain |
+| `Lanes/Web/Auth/Rows.lean` | | Not a format: rows of the typed store, whose SQL is the driver's (`Tests/Oracle/Service/Db.lean`) |
 | `Lanes/Web/Auth/Token.lean` | | Tokens only Lanes writes and reads; proved to accept exactly what it signs, before it expires (`Auth.verify_eq_some`) |
 | `Lanes/Web/Html/Basic.lean` | | Proved against a model of the HTML tokenizer (`Html.lex_render`); not yet compared with html5lib or a browser |
 | `Lanes/Web/Html/Entities.lean` | `oracles/go/html` | The table: every name is asked of Go's `html.UnescapeString` (`Tests/Oracle/Html.lean`, replayed in `lake test`). Known: Go leaves out `&nLt;` and `&nGt;` |
@@ -147,11 +157,12 @@ Each service's protocol modules and models (`Lanes/Services/README.md`).
 | `Lanes/Services/Oidc/Google.lean` | `oracles/google` | The preset's endpoints, issuers and algorithms against Google's discovery document and JWK Set as recorded (`Tests/Oidc/Google.lean`) |
 | `Lanes/Services/Postgres.lean` | | Imports the modules below |
 | `Lanes/Services/Postgres/Bytes.lean` | `Tests/Postgres.lean`, `oracles/postgres` | The fields of the messages, in the sessions recorded from PostgreSQL 16 and psql 16 (`Tests/Postgres/`) |
+| `Lanes/Services/Postgres/ConnInfo.lean` | `oracles/libpq` | Connection strings and URIs against `PQconninfoParse`, and service files against what `PQconnectStartParams` takes from them (`Tests/Oracle/Libpq.lean`). Known: libpq keeps percent-decoded bytes that are not UTF-8, which a Lean string cannot hold |
 | `Lanes/Services/Postgres/Conn.lean` | `Tests/Postgres.lean`, `oracles/postgres` | A state machine, not a format: the recorded sessions, and the live runs |
 | `Lanes/Services/Postgres/Message.lean` | `Tests/Postgres.lean`, `oracles/postgres` | The messages, in the recorded sessions; written and read again against a live server |
 | `Lanes/Services/Postgres/Pool.lean` | | Decisions, not a format: proved (`Pool.run_size`, `Pool.never_again`) and model-checked (`Tests/PostgresPool.lean`) |
 | `Lanes/Services/Postgres/Scram.lean` | `Tests/Postgres.lean`, `Tests/PostgresTls.lean` | RFC 7677's example and libpq's recorded session; with channel binding, Python's `hashlib` and PostgreSQL 16 with TLS |
-| `Lanes/Services/Postgres/Settings.lean` | `Tests/PostgresLive.lean` | libpq's variables and password file: `psql` connects with the same, against PostgreSQL 16 |
+| `Lanes/Services/Postgres/Settings.lean` | `Tests/PostgresLive.lean`, `oracles/libpq` | libpq's variables and password file: `psql` connects with the same, against PostgreSQL 16; its strings and service files through `ConnInfo.lean`'s oracle; which source wins, by hand from libpq's documentation (`Tests/PostgresSettings.lean`) |
 | `Lanes/Services/Postgres/Sql.lean` | `oracles/postgres/db.jsonl` | The SQL of the typed store's operations against PostgreSQL itself: every answer of generated transactions compared with its meaning (`Tests/Oracle/Service/Db.lean`); a value reads back from its parameter (`Postgres.Sql.decode_param`) |
 | `Lanes/Services/Postgres/Table.lean` | `oracles/postgres` | The SQL of the store's operations, against PostgreSQL itself |
 | `Lanes/Services/S3.lean` | | Imports the modules below |

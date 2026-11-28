@@ -3,119 +3,96 @@ import Shop
 import Lanes.Testing
 
 /-!
-Model checks of the shop against the payment model, run by `lake test` (Lanes rule 5.1). One
-order, each call answered with any payment in a few statuses, refused, `unknown` or never;
-webhooks for every payment the service may have made, each delivered up to twice, in any order,
-and for payments the shop never heard of; inputs reordered and handled twice; the shop crashing
-and starting again. No order is charged twice, and an order the shop says is paid has a payment
-that succeeded. A retry without the key charges the order twice.
+Model checks of the shop, run by `lake test` (Lanes rule 5.1): its worker beside the store's
+model, with the shop's transactions running at any moment, and the payment model. One order:
+its charge answered with a payment being processed, `unknown` or never; webhooks that it
+succeeded or was declined for every payment the service may have made, in any order, each
+delivered at most once, and that it succeeded for payments the shop never heard of; a restart.
+No order is charged twice, an order paid has a payment that succeeded, and an order is paid.
+Retries are checked of the worker itself (`Tests/Worker.lean`); at most once is proved, with
+retries and restarts (`Shop.charged_at_most_once`).
 -/
 
-open Lanes Shop
+open Lanes Lanes.Db Lanes.Db.Jobs Shop
 
 instance : sig.Inspect := {}
-instance (config : Config) : (shop config).Inspect := {}
 
-/-- Orders still to place, and what the shop told its customers. -/
-structure Customers where
-  toPlace : List (Nat × Nat)
-  paid : List Nat := []
+def config : Shop.Config :=
+  { jobs := { batch_max := 2, attempts_max := 2, lease_ms := 100, backoff_ms := 10 }
+    attempt_ms := 50 }
+
+instance : (worker config).Inspect := {}
+
+/-- The clock and the customers: the times still to tick, the orders still to place, and the
+attempts the worker made, which the service may answer. -/
+structure Driver where
+  ticks : List Int64
+  toPlace : List Action
+  attempts : List (Int64 × Int64) := []
   deriving DecidableEq, Hashable
 
-instance : BEq Customers := instBEqOfDecidableEq
+instance : BEq Driver := instBEqOfDecidableEq
 
-def customers (orders : List (Nat × Nat)) : Outside sig Customers where
-  init := { toPlace := orders }
+def driver (ticks : List Int64) (toPlace : List Action) : Outside sig Driver where
+  init := { ticks, toPlace }
   allow d
-    | .order order amount =>
-      if (order, amount) ∈ d.toPlace then some { d with toPlace := d.toPlace.erase (order, amount) }
-      else none
+    | .tick t => if d.ticks.head? = some t then some { d with ticks := d.ticks.tail } else none
+    | .submit a => if a ∈ d.toPlace then some { d with toPlace := d.toPlace.erase a } else none
     | _ => none
   observe d
-    | .paid order => if order ∈ d.paid then d else { d with paid := order :: d.paid }
+    | .run id lease _ _ => if (id, lease) ∈ d.attempts then d else { d with attempts := d.attempts ++ [(id, lease)] }
     | _ => d
 
-def orders : List (Nat × Nat) := [(0, 5)]
+abbrev Held := Rpc.State (Effects.Model Int64 IntentId Payments.Status Charge)
 
-def world := (customers orders).both (service 2) isOrder
+abbrev D := (Driver × Db.State (Action ⊕ Req) (Reply ⊕ Ans Charge)) × Held
 
-abbrev ShopWorld (config : Config) := World (shop config) (Customers × Held)
+instance : DecidableEq Held := inferInstance
 
-def statuses : List Payments.Status := [.processing, .succeeded, .requiresPaymentMethod]
+instance : DecidableEq (Driver × Db.State (Action ⊕ Req) (Reply ⊕ Ans Charge)) := inferInstance
 
-def samples (d : Customers × Held) : List In :=
+instance : BEq D := instBEqOfDecidableEq
+
+def theWorld (ticks : List Int64) (toPlace : List Action) : Outside sig D :=
+  world (driver ticks toPlace) {} config (Db.empty schema) 1
+
+def statuses : List Payments.Status := [.succeeded, .requiresPaymentMethod]
+
+def samples (d : D) : List (Worker.In Action Reply Charge Answer) :=
   let model := d.2.server
   let things := model.inner.inner.things
   let fresh := things.length + 7
-  d.1.toPlace.map (fun (o, a) => .order o a)
-    ++ d.2.pending.flatMap (fun id =>
-      .reply id .unknown :: .reply id (.answer .refused) ::
-        ((fresh :: things.map (·.id)).flatMap fun r =>
-          statuses.map fun st => .reply id (.answer (.made r st))))
-    ++ things.flatMap (fun t => statuses.map fun st => .webhook ⟨t.id, st, t.params⟩)
-    ++ model.inner.inner.unseen.flatMap fun (_, p) => statuses.map fun st => .webhook ⟨fresh, st, p⟩
+  d.1.1.ticks.head?.toList.map .tick ++ d.1.1.toPlace.map .submit
+    ++ Db.samples (store config) Worker.storePort false false d.1.2
+    ++ d.1.1.attempts.flatMap (fun (id, lease) =>
+      [.ran id lease .unknown, .ran id lease (.answer (.made fresh .processing))])
+    ++ things.flatMap (fun t => statuses.map fun st => .submit (.webhook ⟨t.id, st, t.params⟩))
+    ++ model.inner.inner.unseen.map fun (_, p) => .submit (.webhook ⟨fresh, .succeeded, p⟩)
 
-def paidHasSucceeded (w : ShopWorld config) : Bool :=
-  (w.state.state ()).orders.all fun o =>
-    o.status != .paid || w.driver.2.server.inner.inner.things.any fun t =>
-      t.params.order == o.order && t.state == .succeeded
+abbrev W := Lanes.World (worker config) D
 
-def env : EnvModel sig where
-  link _ _ := .unordered
-  mayCrash _ := true
-  restarts _ := true
+def ordersOf (db : Db) : List Shop.Order := (db.rows orders.table.name).filterMap orders.ofRow
 
-/-- Two payments of one order that succeeded: the customer was charged twice. -/
-def paidTwice (held : Held) (order : Nat) : Bool :=
-  (held.server.inner.inner.things.filter fun t =>
-    t.params.order == order && t.state == .succeeded).length ≥ 2
+def chargedOnce (w : W) : Bool := chargesFor w.driver.2 0 ≤ 1
 
-def check (config : Config) (maxCrashes : Nat := 1) :=
-  Check.system (shop config) { env, driver := world.driver samples, maxCrashes }
-    [ .always "no order is charged twice" fun w => chargedAtMostOnce w.driver.2 (orders.map (·.1)),
-      .always "no order has two payments that succeeded" fun w =>
-        orders.all fun (o, _) => !paidTwice w.driver.2 o,
-      .always "an order the shop calls paid has a payment that succeeded" paidHasSucceeded,
-      .sometimes "an order is paid" fun w => !w.driver.1.paid.isEmpty,
-      .sometimes "an order is paid after a call with an unknown outcome was retried" fun w =>
-        !w.driver.1.paid.isEmpty && (w.state.state ()).calls.length ≥ 2,
-      .sometimes "an order is paid whose answer never came" fun w =>
-        !w.driver.1.paid.isEmpty && w.driver.2.server.slots.all (·.result.isNone),
-      .sometimes "a webhook is delivered twice" fun w =>
-        w.driver.2.server.inner.delivered.any (·.2 == 2) ]
-    { maxStates := 2000000 }
+def paidSucceeded (w : W) : Bool :=
+  w.driver.1.2.worlds.all fun world => (ordersOf world.db).all fun o =>
+    o.status != Status.paid || w.driver.2.server.inner.inner.things.any fun t =>
+      t.params.order == o.id && t.state == .succeeded
 
-/-- The checks retry once; the proof is for every `maxAttempts`. -/
-def checked : Config := { maxAttempts := 2 }
-
-def bug : Config := { checked with keyedRetries := false }
-
-/-- The bug as the customer sees it: two payments that succeeded. -/
-def twice :=
-  Check.system (shop bug) { env, driver := world.driver samples, maxCrashes := 0 }
-    [ .always "no order has two payments that succeeded" fun w =>
-        orders.all fun (o, _) => !paidTwice w.driver.2 o ]
+def check :=
+  Check.system (worker config)
+    { env := { mayRestart := true }
+      driver := (theWorld [0] [.place "k" 0 5]).driver samples
+      maxRestarts := 1 }
+    [ .always "no order is charged twice" chargedOnce,
+      .always "an order paid has a payment that succeeded" paidSucceeded,
+      .sometimes "an order is paid" fun w => w.driver.1.2.worlds.any fun world =>
+        (ordersOf world.db).any (·.status == Status.paid) ]
+    {}
 
 def main (args : List String) : IO UInt32 := do
-  let json := Lanes.Testing.wantsJson args
-  let fixed := check checked
-  unless json do IO.println fixed.renderSystem
-  let buggy := check bug
-  let found := match buggy.failure with
-    | some (.violated "no order is charged twice" t) => some t
-    | _ => none
-  if let some t := found then unless json do
-    IO.println s!"a retry without the key: an order charged twice after {t.steps.length} steps"
-    IO.println (t.render (fun _ => "") Event.render)
-  let paidTwice := match twice.failure with
-    | some (.violated _ t) => some t
-    | _ => none
-  if let some t := paidTwice then unless json do
-    IO.println s!"a retry without the key: two payments of an order succeed after {t.steps.length} steps"
-    IO.println (t.render (fun _ => "") Event.render)
-  let tests : List (String × Bool) :=
-    [ ("the shop charges each order once, under every fault the model allows",
-        fixed.ok && fixed.witnesses.length == 4),
-      ("a retry without the key may charge an order twice", found.isSome),
-      ("a retry without the key charges an order twice", paidTwice.isSome) ]
-  Lanes.Testing.report args (Lanes.Testing.Result.tests tests .check)
+  let checked := check
+  Lanes.Testing.report args [Lanes.Testing.Result.check
+    "payments: no order charged twice, and an order paid has a payment that succeeded"
+    checked checked.renderSystem]

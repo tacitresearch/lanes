@@ -40,7 +40,7 @@ proved function tells it to.
 | Models of external services | `Lanes/Outside/{Rpc,Idempotent,Events,ObjectStore,Queue,Cache,Clock,Throttle}.lean`, `Lanes/Services/S3/MultipartModel.lean`, `Lanes/Services/Stripe/Payments.lean`, `Lanes/Outside/Effects/`, `Lanes/Web/Http/SharedCache.lean`, `Lanes/Proof/Outputs.lean` | `Idempotent.at_most_once`, `Rpc.answered_le_called`, `Events.deliveries_le`, `ObjectStore.read_sent`, `ObjectStore.held_sent`, `Multipart.read_listed`, `Queue.received_le`, `Cache.read_sent`, `Clock.wall_back_le`, `Throttle.wait_le`, `SharedCache.serve_storable`, `SharedCache.serve_of_leaks`, `System.Emits.outputs`; that a real service conforms is trusted |
 | Signature Version 4 and the S3 client | `Lanes/Web/Http/{SigV4,SigV4Sound}.lean`, `Lanes/Services/S3/{Basic,Xml,Post,PostSound,Multipart}.lean`, `Lanes/Services/S3/IO/Client.lean` | `SigV4.target_sign`, `SigV4.sortQuery_sorted`, `SigV4.canonicalHeaders_sorted`, `SigV4.encode_chunks`, `S3.Post.form_policy`, `S3.Post.admitted_bounded`, `S3.Multipart.Plan.count_le`, `S3.Multipart.Plan.range_full`; signatures tested against AWS's vectors and botocore, the client against a fake S3, the multipart flow model-checked; its IO trusted |
 | AWS | `Lanes/Services/Aws/{Refresh,Imds,Ses,SesSound,Sqs,CloudFront,CloudFrontSound}.lean`, `Lanes/Services/Aws/IO/{Credentials,Ses}.lean` | `Aws.Refresh.current_fresh`, `Aws.Refresh.refresh_in_time`, `Aws.Ses.toAddresses_json`, `Aws.CloudFront.cannedPolicy_eq`; the IO is trusted |
-| PostgreSQL and the store model | `Lanes/Services/Postgres/{Bytes,Message,MessageSound,Scram,Conn,ConnSound,Pool,Settings,Table}.lean`, `Lanes/Services/Postgres/IO/{Client,Pool}.lean`, `Lanes/Lib/Crypto/Certificate.lean`, `Lanes/Outside/Store/{Basic,Sound}.lean` | `Backend.read_encode`, `Frontend.decode_encode`, `Conn.run_fifo`, `Conn.step_committed`, `Conn.step_query`, `Conn.tls_first`, `Conn.run_bound`, `Conn.onMessage_binds`, `Pool.run_size`, `Pool.never_again`, `SslMode.defaultFor_disable`, `Store.write_skew`, `Store.lost_commit_either`; the IO is trusted, and that the server behaves like the model is a premise |
+| PostgreSQL and the store model | `Lanes/Services/Postgres/{Bytes,Message,MessageSound,Scram,Conn,ConnSound,ConnInfo,Pool,Settings,Table}.lean`, `Lanes/Services/Postgres/IO/{Client,Pool}.lean`, `Lanes/Lib/Crypto/Certificate.lean`, `Lanes/Outside/Store/{Basic,Sound}.lean` | `Backend.read_encode`, `Frontend.decode_encode`, `Conn.run_fifo`, `Conn.step_committed`, `Conn.step_query`, `Conn.tls_first`, `Conn.run_bound`, `Conn.onMessage_binds`, `Pool.run_size`, `Pool.never_again`, `SslMode.defaultFor_disable`, `Store.write_skew`, `Store.lost_commit_either`; the IO is trusted, and that the server behaves like the model is a premise |
 | The typed store | `Lanes/Db/{Basic,Columns,Query,Txn,Retry,Model,Sound}.lean`, `Lanes/Services/Postgres/Sql.lean`, `Lanes/Services/Postgres/IO/Db.lean` | `Db.invariant`, `Retry.loop_committed`, `Txn.interp_apply`, `Postgres.Sql.decode_param`; the driver is trusted, and that PostgreSQL at `SERIALIZABLE` behaves like the model is a premise |
 | Jobs, the outbox and acting once | `Lanes/Db/{Jobs,JobsSound,Worker,WorkerSound,Once,OnceSound}.lean`, `Lanes/Services/Postgres/IO/Worker.lean`, `Lanes/Web/IO/Jobs.lean` | `Worker.committed_only`, `Worker.once_each`, `Queue.claim_takes`, `Queue.claim_attempts`, `Queue.one_per_key`, `Queue.finish_stale`, `Keys.once_again`; the worker's IO is trusted |
 | Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
@@ -110,11 +110,11 @@ Also:
 - What relates two moments does not survive a restart in general: a refinement of a spec whose
   value lives in actors, acting once on a memo, a count of what was answered against what is
   owed, liveness. Each theorem says which it is: one that holds under restarts is stated for every
-  environment or under `EnvModel.Restarts` (`Bank.money_conserved_restarts`, the gate's and the
-  behaviours' `answered_le_handled`, `calls_le_scheduled`, `System.handled_le_put`), and one that
-  does not takes `env.mayRestart = false` or `EnvModel.Faultless` (`Server.implements`,
-  `Once.server_implements`, `KV.implements_once`, `Rookery.implements`, `Shop.paid_succeeded`,
-  every leads-to).
+  environment or under `EnvModel.Restarts` (`Bank.money_conserved_restarts`, the gate's
+  `answered_le_handled`, `System.handled_le_put`, `Worker.committed_only`,
+  `Shop.charged_at_most_once`), and one that does not takes `env.mayRestart = false` or
+  `EnvModel.Faultless` (`Server.implements`, `Once.server_implements`, `KV.implements_once`,
+  `Rookery.implements`, every leads-to).
 - The deterministic scheduler gives seeded runs, replayable event lists and drivers for the
   outside world; `FairScheduler` takes the event the system has owed longest, counting a timer
   that is armed again as owed from then, and its run is a fair run of the proof layer.
@@ -385,7 +385,11 @@ checked under what they carry and asked to be hashed again at a new cost
 (`Auth.Password.verify_phc`); failed attempts that lock at their limit
 (`Auth.Attempts.locked_unlock_repeat`) and sessions that keep the newest (`Auth.Sessions.ids_starts`)
 and end after a lifetime, judged at the time a request arrived, so that one over is never let in
-again (`Auth.Sessions.accepts_iff`, `Auth.Sessions.Ended.run`).
+again (`Auth.Sessions.accepts_iff`, `Auth.Sessions.Ended.run`). Those two are an actor's state,
+lost at a restart; what must survive one is in rows (`Lanes/Web/Auth/Rows.lean`): failed log-ins,
+a row per user that each transaction updates with `Auth.Attempts.fail` and `succeed`, so a
+restart unlocks no account; and open sessions, a row each, which a log-out deletes, so that a
+session closed before its signed token expires stays closed.
 
 Sign-in with another service (`docs/decisions/D72-sign-in-with-oauth.md`) is OAuth 2.0's authorization
 code flow with PKCE and OpenID Connect on it, decided in `Lanes/Web/Auth/OAuth.lean` and done
@@ -418,6 +422,7 @@ Where: `Lanes/Web/Http/`, `Lanes/Web/Html/`, `Lanes/Web/Auth/`, `Lanes/Web/IO/Si
 | HTML from a user, sanitized, holds only the elements and attributes of the policy, and URL attributes only URLs `safeUrl` passes of the policy's schemes | `Html.sanitize_safe`, `Html.lex_sanitize`, `Lanes/Web/Html/SanitizeSound.lean`; gate `Tests/Axioms/Web.lean`; attacks written by hand (`Tests/Oracle/Html.lean`) | The browser model of `Html.lex_render`; what an element or attribute the policy allows does is the policy's choice | proved |
 | A sign-in's callback is accepted only with its browser's ticket, for its state and its provider and not expired, and no state twice, among at most `maxUsed` states kept | `OAuth.check_ok`, `OAuth.Used.accepted_later`, `OAuth.Used.accepted_once`, `OAuth.Used.length_claim`, `Lanes/Web/Auth/OAuth.lean`; gate `Tests/Axioms/Web.lean`; model-checked against an attacker's browser across a restart and tested end to end (`Tests/OAuth.lean`) | The edge keeps the states used and performs what it decides (TRUSTED, "The sign-in's IO"); the key and the random source | proved; the edge trusted, tested |
 | An ID token is accepted only when its header names RS256 or ES256, a key of the provider's set of that algorithm and `kid` checks its signature, and every claim passes | `OAuth.IdToken.verify_accepted`, `OAuth.IdToken.check_ok_iff`, `Jose.verify_ok`; gate `Tests/Axioms/Web.lean`; refusals of `none`, HS256 keyed by the public key, an unknown `kid`, a changed payload and each claim tested end to end (`Tests/OAuth.lean`); `Jose.verify` against jwcrypto 1.6.2 on generated tokens, valid and tampered (`oracles/jwcrypto`) | The signature check (`native/verify.c`); the provider holds only its keys in its set (TRUSTED, "Identity providers"); the wall clock | proved of the decision; the signature trusted, tested |
+| Failed log-ins kept as rows stay within their limit, an account with that many locked, under every transaction of `Failures`; a closed session's id lets nobody in again | `Rows.Failures.bounded`, `Rows.Sessions.closed_refused`, `Lanes/Web/Auth/RowsSound.lean`; gate `Tests/Axioms/Web.lean`; `Tests/Auth.lean` | The limit is below `2 ^ 63`; with `Db.invariant`, PostgreSQL behaves like the store's model | proved |
 | No code, token or client secret of a sign-in reaches the system, and a client cannot send the identity headers | `OAuth.identity?_strip`, `OAuth.identity?_withIdentity`; `Tests/OAuth.lean` end to end | That the edge lets a callback in only through `withIdentity` (TRUSTED, "The sign-in's IO") | proved of the headers; trusted, tested |
 
 Also:
@@ -484,7 +489,7 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   Stripe documents for a PaymentIntent (`Lanes/Services/Stripe/Payments.lean`), and email
   (`Lanes/Outside/Effects/Email.lean`). A system's part of a proof is a fact about what its steps
   emit, lifted to every run by `System.Emits.outputs`; `examples/payments` proves a shop charges
-  each order at most once that way (`Shop.charged_at_most_once`). That a real service does only
+  each order at most once from an outbox (`Shop.charged_at_most_once`). That a real service does only
   what its model allows is trusted; the S3 client's runs against a fake are checked against the
   object store's, and no adapter talks to a real service yet.
 - **More outside systems** (the decision on models of more outside systems), each with a fixture
@@ -633,7 +638,9 @@ botocore on generated requests, the client against a fake S3 that checks every s
 the bytes it receives, and against moto's S3, whose run the object store's model allows
 (`oracles/README.md`). Bodies are whole, in memory. The
 credentials are read at each call from a `SigV4.Source`: fixed, or kept fresh by something
-else. A browser uploads with a form under a policy (`Lanes/Services/S3/Post.lean`), which bounds
+else, with their expiry. A link or a form signed with them at the moment (`S3.presignNow`,
+`S3.Post.formNow`) lasts as asked or until they expire, whichever is sooner
+(`S3.expiryWithin_le`). A browser uploads with a form under a policy (`Lanes/Services/S3/Post.lean`), which bounds
 the size a presigned put cannot: the policy a form carries reads back, as S3 reads it, as
 exactly the conditions and the expiry given (`S3.Post.form_policy`, `S3.Post.expiration_parse`),
 and a file S3 admits under it is within its size range and before its expiry
@@ -675,8 +682,10 @@ Also:
 
 ## AWS
 
-AWS (`Lanes/Services/Aws/`, `docs/decisions/D74-aws-integration.md`): a role's credentials
-from an instance's metadata service (IMDSv2) or a container's endpoint, and email through SES.
+AWS (`Lanes/Services/Aws/`, `docs/decisions/D74-aws-integration.md`): credentials found in the
+order of AWS's SDKs, keys in the environment, then a container's endpoint, then an instance's
+metadata service (IMDSv2) unless it is turned off (`Imds.chain`, `Imds.chain_keys`,
+`Imds.chain_container`, `Imds.chain_instance`), and email through SES.
 When to fetch and what may be handed out is a pure machine, `Aws.Refresh.step`: nothing is
 handed out within `skew_ms` of its expiry, and only what an answer gave (`Refresh.current_fresh`,
 `Refresh.current_answered`); credentials held are fetched again at the margin before they
@@ -704,6 +713,8 @@ Where: `Lanes/Services/Aws/`, its tests in `Tests/Aws/`.
 | The AWS integration never hands out credentials within `skew_ms` of their expiry, nor any that no answer gave | `Aws.Refresh.current_fresh`, `Aws.Refresh.current_answered`, `Lanes/Services/Aws/Refresh.lean`; gate `Tests/Axioms/Services.lean`; model-checked, `Tests/Aws/Refresh.lean` | The wall clock is right to within `skew_ms`; the edge reads the state it keeps (TRUSTED, "The AWS credentials' IO") | proved |
 | Credentials held are fetched again at the margin before they expire, and an answer within the deadline replaces them while they are still handed out | `Aws.Refresh.refresh_in_time`, `Aws.Refresh.accept_due`; gate `Tests/Axioms/Services.lean`; model-checked against a service that answers in time | `Config.Valid`; the edge ticks when the machine asks; the service answers within the deadline with credentials of more than the margin | proved; the edge trusted, tested against a fake metadata service |
 | The wait between failed fetches of credentials stays within `maxBackoff_ms`, and a failed fetch is tried again within it | `Aws.Refresh.backoff_le`, `Aws.Refresh.retry_within`; gate `Tests/Axioms/Services.lean` | `Config.Valid` for the retry | proved |
+| Credentials come from the environment's keys first, then a container's endpoint, and the metadata service is asked only when neither is there and it is not turned off | `Aws.Imds.chain_keys`, `Aws.Imds.chain_container`, `Aws.Imds.chain_instance`; gate `Tests/Axioms/Services.lean`; `Tests/Aws/Imds.lean` | The edge reads the variables `Imds.chain` names (TRUSTED, "The AWS credentials' IO") | proved |
+| A link or a form signed with credentials that expire ends no later than they do, and no later than asked | `S3.expiryWithin_le`, `Lanes/Services/S3/Basic.lean`; gate `Tests/Axioms/Services.lean`; `Tests/Aws/Imds.lean` against a fake metadata service and the fake S3 | The source gives the true expiry (`Refresh.currentHeld_creds`); the wall clock is right | proved; the IO trusted |
 | A message sent through SES carries exactly the recipients given | `Aws.Ses.toAddresses_json`, `Aws.Ses.json_parse`, `Lanes/Services/Aws/SesSound.lean`; a fake SES that reads them from the JSON | That SES reads the document as `Json.parse` does | proved; tested against a fake |
 | SES does only what the email model allows | A run through `Ses.handler` against a fake SES checked with `Outside.allows`, `Tests/Aws/Ses.lean`; and against moto's SES, a sender refused then verified, a send timed out, `oracles/moto/ses.jsonl` | That moto answers as SES does; not run against SES | trusted; tested against moto's SES, nightly |
 | A CloudFront canned policy is byte for byte the document AWS gives for the URL and the time | `Aws.CloudFront.cannedPolicy_eq`, `Lanes/Services/Aws/CloudFrontSound.lean`; gate `Tests/Axioms/Services.lean` | That AWS's document is botocore 1.44.12's and AWS's SDKs' (`docs/decisions/D82-cloudfront-signed-urls.md`); not run against CloudFront | proved |
@@ -739,8 +750,14 @@ certificate's signature algorithm, tested against `openssl dgst` and a real serv
 included, and resolves the host's name at each connect. Unless asked otherwise, a host on
 this machine gets no TLS and any other full verification, and the default goes without TLS
 only to a loopback address (`SslMode.defaultFor_disable`); `Postgres.Client.fromEnv` reads
-libpq's variables and a deploy's through `Settings.read`, pure and tested
-(`Lanes/Services/Postgres/Settings.lean`). A pool (`Postgres.Pool`) is a pure policy proved to keep at most `max` connections
+a connection string or URI, then the service file, then libpq's variables, then a deploy's,
+through `Settings.read`, pure and tested (`Lanes/Services/Postgres/Settings.lean`); its readers of
+strings and service files (`Lanes/Services/Postgres/ConnInfo.lean`) are compared with libpq 18's
+on generated ones (`oracles/libpq`). With several hosts it tries each in order and keeps the
+first of the kind `target_session_attrs` asks for (`TargetSessionAttrs.accepts`); with several
+hosts the default goes without TLS only when every one is on this machine
+(`SslMode.defaultForAll_disable`). A password file others may read is refused
+(`PassFile.ownerOnly_bits`). A pool (`Postgres.Pool`) is a pure policy proved to keep at most `max` connections
 open and never to hand out again one handed back broken (`Pool.run_size`, `Pool.never_again`),
 and an IO file that performs it (`Lanes/Services/Postgres/IO/Pool.lean`).
 
@@ -768,7 +785,8 @@ Where: `Lanes/Services/Postgres/`, `Lanes/Lib/Crypto/{Certificate,Sha512}.lean`,
 | SCRAM over TLS binds the hash of the certificate the handshake gave (`SCRAM-SHA-256-PLUS`, `tls-server-end-point`), always with `channelBinding := .require`: the client's last message carries `c=` the GS2 header and that hash in base 64 | `Conn.run_bound`, `Conn.onMessage_binds`, `Conn.choose_endPoint`, `Conn.choose_require`, `Scram.respond_binds`, `Scram.Binding.data_endPoint`; gate `Tests/Axioms/Lib.lean`; model-checked in `Tests/PostgresConn.lean` against a relay with another certificate and one that hides the offer | That the hash is RFC 5929's for the certificate is tested (`Tests/PostgresTls.lean`: `openssl dgst`, and PostgreSQL 16 accepting it for a certificate signed with SHA-384), not proved; the DER is OpenSSL's (`native/tls.c`, trusted) | proved for the state machine; the hash tested |
 | A PostgreSQL server reached through a relay that holds another valid certificate refuses a client that binds, as it refuses libpq | `Tests/PostgresTls.lean`, against PostgreSQL 16 with TLS and `Tests/Postgres/relay.py`, run by hand on 2026-11-27 (`LANES_POSTGRES_TLS` set), beside `psql` with `channel_binding=require` | A local server; no CI job | tested by hand |
 | The PostgreSQL pool never has more than `max` connections open or being opened, nor more than `waiting_max` clients waiting, and never hands out again a connection handed back broken | `Pool.run_size`, `Pool.run_waiting`, `Pool.never_again`, `Lanes/Services/Postgres/Pool.lean`; gate `Tests/Axioms/Lib.lean`; model-checked in `Tests/PostgresPool.lean`; live in `Tests/PostgresTls.lean` | The IO never reports a connection opened under a number used before, and tells the policy what happened (`Lanes/Services/Postgres/IO/Pool.lean`, trusted); a connection is reusable as `Conn.reusable` says | proved for the policy; the IO trusted |
-| Unless asked otherwise, the PostgreSQL client uses no TLS to this machine and full verification to any other host, and goes without TLS only to a loopback address | `SslMode.defaultFor_disable`, `SslMode.defaultFor_loopback`, `SslMode.defaultFor_remote`, `Lanes/Services/Postgres/Settings.lean`; gate `Tests/Axioms/Lib.lean`; `Tests/PostgresSettings.lean` | That `localhost` is `127.0.0.1` (RFC 6761) and that the IO connects where `Address.of` says (`TRUSTED.md`) | proved |
+| Unless asked otherwise, the PostgreSQL client uses no TLS to this machine and full verification to any other host, and goes without TLS only to a loopback address, or with several hosts only when all are | `SslMode.defaultFor_disable`, `SslMode.defaultFor_loopback`, `SslMode.defaultFor_remote`, `SslMode.defaultForAll_disable`, `Lanes/Services/Postgres/Settings.lean`; gate `Tests/Axioms/Lib.lean`; `Tests/PostgresSettings.lean` | That `localhost` is `127.0.0.1` (RFC 6761) and that the IO connects where `Address.of` says (`TRUSTED.md`) | proved |
+| The PostgreSQL client reads connection strings, URIs and service files as libpq 18 does | `oracles/libpq` on generated strings and files (`Tests/Oracle/Libpq.lean`), every difference a known one: bytes that are not UTF-8; which source wins, tested by hand from libpq's documentation (`Tests/PostgresSettings.lean`) | The libpq 18 psycopg-binary 3.3.9 ships, as recorded | tested against libpq |
 | The client works against a real PostgreSQL | `Tests/PostgresLive.lean`, against PostgreSQL 16 (`LANES_POSTGRES` set); `oracles/postgres/run.sh`, nightly in the Services workflow | A local server | tested against PostgreSQL 16, nightly |
 | The store model allows write skew and lost updates at read committed and refuses them at serializable; a lost `COMMIT` may or may not have taken effect, and later | `Store.write_skew`, `Store.lost_update`, `Store.lost_commit_either`, `Store.lost_commit_later`, `Lanes/Outside/Store/Sound.lean`; gate `Tests/Axioms/Outside.lean` | The runs stated | proved |
 | PostgreSQL behaves like the store model at the isolation level chosen | Runs against PostgreSQL 16 at both levels, recorded and checked with `Store.State.run`, nightly, and the record again in `lake test`: write skew, a lost `COMMIT` and 50 runs of transactions interleaved at random (`oracles/postgres/store.jsonl`, `Tests/Oracle/Service/Postgres.lean`) | Every theorem proved against the store model rests on it; no two transactions open at once write one key, so no request waits on a lock | trusted, tested against PostgreSQL 16 |
@@ -866,6 +884,8 @@ Where: `Lanes/Db/{Jobs,JobsSound,Worker,WorkerSound,Once,OnceSound}.lean`,
 | Every job due is taken: a claim whose scan finds no more jobs due than its limit leases every one whose attempts are not spent, and answers it for an attempt; the worker hands every job of a committed claim to its adapter in the step that reads it | `Queue.claim_takes`, `Worker.stored_runs`; gate `Tests/Axioms/Db.lean` | That this happens in every fair run is not one theorem: the store's model may fail every call | proved, per transaction and per step |
 | At most one job per key, and only the current attempt's answer counts | `Queue.one_per_key`, `Queue.finish_stale`, from `Op.unique_apply`; gate `Tests/Axioms/Db.lean` | The application's operations on a table of the jobs table's name are on that table | proved |
 | Acting once: a run under a key that committed makes every later run under it, of any body, a no-op that answers the same | `Keys.once_again`, `Lanes/Db/OnceSound.lean`; gate `Tests/Axioms/Db.lean` | None | proved |
+| Behind a service that honours keys, every effect the service may have had is under the key of a job, and of its work, in every database the store may hold | `Worker.slots_held`; gate `Tests/Axioms/Db.lean` | As for `Worker.committed_only` | proved |
+| An application's transaction that only adds jobs (`Queue.Adds`) keeps the table, is on it, and keeps any property of each job it adds that no claim or finish changes | `Queue.keeps_of_adds`, `Queue.onTable_of_adds`, `Queue.fixed_of_adds`, `Queue.handler_fixed`, `Queue.enqueue_adds`; gate `Tests/Axioms/Db.lean` | None | proved |
 | A job done had an attempt the service took | `Tests/Worker.lean`: beside the store's model and an idempotent service, with crashes and lost answers | | checked |
 | The worker on PostgreSQL: three effects, one written twice under one key, one refused once; each attempt under its job's id, every job done | `Tests/Worker.lean`, when `LANES_POSTGRES` names a server | | tested against PostgreSQL 16; CI runs none |
 
@@ -1021,11 +1041,15 @@ Also:
 
 ## Data and the standard library
 
-What every layer uses is in `Lanes/Data/`: `Enum`, `lanes_data`, and the queue. A type has two
-mappings out of the process, both derived by `lanes_data` from its declaration with their laws
+What every layer uses is in `Lanes/Data/`: `Enum`, `lanes_data`, and the queue. A type has three
+mappings out of the process, each derived by `lanes_data` from its declaration with its laws
 (`docs/decisions/D115-serialization.md`): JSON for HTTP (`deriving ToJson, FromJson`, through
-`Lanes/Lib/Encoding/Json/Derive.lean`) and rows for the typed store (a `table` line, through
-`Lanes/Db/Columns.lean`). There is no binary format: nothing writes values to a file or a peer.
+`Lanes/Lib/Encoding/Json/Derive.lean`), rows for the typed store (a `table` line, through
+`Lanes/Db/Columns.lean`), and CBOR, the standard binary encoding, for messages, files and caches
+(`deriving ToCbor, FromCbor`, through `Lanes/Lib/Encoding/Cbor/Derive.lean`;
+`docs/decisions/D118-cbor.md`). JSON and CBOR are built by the same code from the same pieces
+(`Lanes/Lib/Encoding/Fields.lean`), so a type's CBOR has the shape of its JSON. CBOR is not in
+`import Lanes`: a program imports `Lanes.Lib.Encoding.Cbor` to build and link it.
 The standard library is in `Lanes/Lib/`: encodings, addresses and URLs, time, media types,
 metrics, rate limits, the PostgreSQL protocol (below) and cryptography, with the C it binds
 (Bound C). All of it is total and `Std`-only. A parser or encoder is proved against its
@@ -1041,10 +1065,16 @@ Where: `Lanes/Data/`, `Lanes/Lib/`, `Lanes/Lib/Net/Percent.lean`, `native/`, `or
 | --- | --- | --- | --- |
 | A type `lanes_data` derives JSON for reads back what it writes, and is never `null` | `LawfulJson` and `NonNullJson`, from the laws of `Json.Fields` and `Json.Alts`, which each piece carries (`Json.Fields.readObject_object`, `Json.Codec.ofAlts`); gate `Tests/Axioms/Lib.lean` | None | proved (by construction) |
 | The shapes of derived JSON: a structure an object of its fields, `null` fields left out; a constructor its name, or an object of its name holding its arguments; what Lean's own derived encoders write reads | `Tests/Derive.lean`, in `lake test` | | tested |
+| The CBOR decoder reads back what the encoder writes, for every value within its limits, in any mode | `Cbor.decode_encode`, `Lanes/Lib/Encoding/Cbor/Sound.lean`; gate `Tests/Axioms/Lib.lean` | None | proved |
+| The deterministic encoding is canonical: values equal but for the order of their maps' entries have the same bytes; the deterministic decoder takes each such encoding, and a strict decoder takes one encoding of each value | `Cbor.encodeDeterministic_eq_of_equiv`, `Cbor.decode_encodeDeterministic`, `Cbor.eq_of_decode_strict`; gate `Tests/Axioms/Lib.lean` | None | proved |
+| The CBOR decoder refuses an input over its size, and what it reads is within its depth and length | `Cbor.decode_tooLarge`, `Cbor.size_of_decode`, `Cbor.fits_of_decode`; gate `Tests/Axioms/Lib.lean` | None | proved |
+| A type `lanes_data` derives CBOR for reads back what it writes, and is never `null` | `LawfulCbor` and `NonNullCbor`, from the laws of `Lanes.Fields` and `Lanes.Alts` (`Cbor.Fields.readObject_object`, `Cbor.Codec.ofAlts`); gate `Tests/Axioms/Lib.lean` | None | proved (by construction) |
+| CBOR reads and writes as RFC 8949 and cbor2 do: Appendix A written and read, Appendix F refused, a type's CBOR in its JSON's shape | `Tests/Cbor.lean`, in `lake test`; `oracles/cbor2`, replayed in `lake test` | That cbor2 reads RFC 8949 rightly | tested |
 
 Also:
 
 - Base64 (RFC 4648, each byte string with exactly one spelling: `Base64.decode_eq_some_iff`), compared with Go's standard library on generated cases (`lake exe lanesOracle`).
+- CBOR (RFC 8949: the preferred and the deterministic encodings, a decoder with limits and three modes of strictness, `ToCbor`/`FromCbor` with bignums), compared with Python's cbor2 on generated cases.
 - CSV (RFC 4180 with a delimiter, a quote and LF or CRLF of one's choice; a reader fed in pieces, with limits), read back as written for every table of fields within the limits (`Csv.parse_write`), compared with Go's standard library on generated cases. Its own root: `import Lanes.Lib.Encoding.Csv`.
 - Civil dates with day numbers and POSIX seconds (`Civil.ofDays_toDays`, `Civil.toDays_ofDays`).
 - IP addresses and CIDR prefixes (RFC 4291 text forms, RFC 5952 output, `Ip.parse_print`, `Ip.Prefix.parse_print`, `Ip.Prefix.contains_iff`), compared with Go's standard library on generated cases.
@@ -1060,7 +1090,8 @@ Also:
 
 ### Limits
 
-- A recursive type has no derived JSON: a `Json.Codec` is a value, and `lanes_data` cannot define one that refers to itself.
+- A recursive type has no derived JSON or CBOR: a codec is a value, and `lanes_data` cannot define one that refers to itself.
+- A CBOR value holds no float width (the data model has none): the encoder writes the shortest that holds the value. The decoder does not refuse a map with a key twice, nor check what a tag holds, and reads one item, not a sequence.
 - A table's columns are 64-bit: `Int` and `Nat` have no column, since a value that does not fit would not read back.
 - `Path.under` reads text, not the file system: a symbolic link below the root can lead outside it.
 - IPv6 zones (`fe80::1%eth0`) are refused, also in URLs, and a leap second (`23:59:60`) is not a time.
@@ -1170,7 +1201,7 @@ would, in the order `examples/README.md` reads them: the counter `lanes new` wri
 key-value store with front ends, whose read cache breaks refinement (`examples/kv-cache`,
 `KV.implements`, `KV.caching_not_implements`); a watchdog
 (`examples/watchdog`); a shop that charges each order at most once through a model of a payment
-service (`examples/payments`, `Shop.charged_at_most_once`); a to-do list kept in PostgreSQL
+service from an outbox (`examples/payments`, `Shop.charged_at_most_once`); a to-do list kept in PostgreSQL
 (`examples/todo-db`); `examples/sign-in`, members of a video site signed in with Google or
 GitHub, with sessions; uploads that stream (`examples/upload`); reminders in a jobs table
 (`examples/reminders`);
@@ -1244,7 +1275,7 @@ Also:
 
 ### Payments
 
-A shop that charges each order through the payment model, retrying calls that time out under the order's key.
+A shop whose orders are rows: placing one, under the customer's idempotency key (`Keys.once`), adds the order and its charge to an outbox under `charge-<order>`; the worker charges it through the payment model under the job's id; a webhook's transaction marks the order paid or declined.
 
 Where: `examples/payments/Shop.lean`.
 
@@ -1252,13 +1283,8 @@ Where: `examples/payments/Shop.lean`.
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| Payments: the shop charges each order at most once, in every run, under every fault the payment model allows | `Shop.charged_at_most_once`, `Shop.emits_keyed`, `examples/payments/Shop/Proofs.lean`; gate `examples/payments/Shop/Proofs/Axioms.lean` | Retries under the key (`keyedRetries`); the payment service behaves as `Payments.outside` (trusted, above); a charge counts from the moment it is sent | proved |
-| Payments: a retry without the key charges an order twice | `examples/payments/Check.lean`, run by its `lake test` | One order, one retry | checked |
-| Payments: an order the shop calls paid has a payment that succeeded | `Shop.paid_succeeded`, `examples/payments/Shop/Proofs/Paid.lean`, from `Effects.Sound.shows_reply` and `Effects.Sound.shows_report` (`Lanes/Outside/Effects/Basic.lean`) and `Outside.Beside` (`Lanes/Proof/Outputs.lean`); gate `examples/payments/Shop/Proofs/Axioms.lean`; model-checked, `examples/payments/Check.lean` | The payment service behaves as `Payments.outside` (trusted, above). "Calls paid" is an order in the state `paid` or a `paid` output handed over; the payment is one the model holds as `succeeded`, made by a request for that order. Every run and environment model without process restarts, every number of attempts, with or without keyed retries. Not under restarts: the shop forgets its calls and numbers them from zero again while the model keeps their routes, so an answer to an earlier call can mark another order paid | proved |
-
-Also:
-
-- Checked: model-checked on one order with crashes, where a retry without the key charges the order twice.
+| Payments: the service makes at most one payment for each order, in every run, under every fault the payment model allows, with retries, lost commits and process restarts | `Shop.charged_at_most_once`, from `Worker.slots_held`, `Queue.one_per_key`, `Idempotent.keys_nodup` and `Shop.shop_adds` (the shop only adds charges, each under its order's key), `examples/payments/Shop/Proofs.lean`; gate `examples/payments/Shop/Proofs/Axioms.lean` | The payment service behaves as `Payments.outside` (trusted, above); PostgreSQL behaves like the store's model; a payment counts from the moment it is asked for | proved |
+| Payments: an order paid has a payment that succeeded, made for it | `examples/payments/Check.lean`, run by its `lake test`: one order, webhooks in any order, a restart | One order | checked |
 
 ### Reminders
 
