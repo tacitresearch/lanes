@@ -40,6 +40,8 @@ inductive Value where
   | bool (b : Bool)
   deriving DecidableEq, Hashable
 
+instance : Inhabited Value := ⟨.null⟩
+
 instance : Repr Value where
   reprPrec
     | .null, _ => "null"

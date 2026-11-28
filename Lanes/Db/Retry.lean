@@ -12,10 +12,10 @@ public import Lanes.Db.Txn
 A call runs a handler's transaction to its result (`Result`): committed with the handler's
 answer, failed (it did not take effect), or unknown (the connection was lost after `COMMIT` was
 sent). The driver runs it in attempts, each a transaction of its own, and decides after each
-with `Retry.next`, pure, which `Lanes/Lib/Postgres/IO/Db.lean` only follows: a serialization
-failure or a deadlock (SQLSTATE `40001`, `40P01`), or a connection lost before `COMMIT` was sent,
-rolled the attempt back, so it is tried again, up to `attempts_max` attempts; anything else ends
-the call. A lost `COMMIT` is never tried again: it may have committed.
+with `Retry.next`, pure, which `Lanes/Lib/Postgres/IO/Db.lean` only follows: a conflict (a
+serialization failure, a deadlock, or what `Postgres.Sql.retryable` counts with them), or a
+connection lost before `COMMIT` was sent, rolled the attempt back, so it is tried again, up to
+`attempts_max` attempts; anything else ends the call. A lost `COMMIT` is never tried again: it may have committed.
 
 `Served` is what the server did with an attempt, for the theorem that a call that committed
 after retries is one run of its transaction against the state it committed against

@@ -27,7 +27,7 @@ their replies mean, pure, so that the driver (`Lanes/Lib/Postgres/IO/Db.lean`) d
   a conflict with a transaction the statement could not see is a serialization failure, which
   the driver retries.
 - **Replies.** `classify` says what a reply means for an attempt: rows, a serialization failure
-  or deadlock (`40001`, `40P01`), a connection lost, or another error, by its SQLSTATE.
+  or deadlock (`40001`, `40P01`), a unique violation (`23505`), a connection lost, or another error, by its SQLSTATE.
 -/
 
 @[expose] public section
@@ -198,7 +198,11 @@ inductive Verdict where
   | error (sqlstate : String)
   deriving DecidableEq, Repr
 
-def retryable (code : String) : Bool := code == "40001" || code == "40P01"
+/-- A serialization failure, a deadlock, or a unique violation. A write checks its unique indexes
+in the statement's snapshot, so a unique violation means a transaction it could not see took
+the values first, which PostgreSQL does not always report as a serialization failure. Trying a
+pure transaction again is safe in every case; these are the ones a new attempt can change. -/
+def retryable (code : String) : Bool := code == "40001" || code == "40P01" || code == "23505"
 
 /-- A reply to `BEGIN` or to a statement. -/
 def classify : Reply → Verdict
