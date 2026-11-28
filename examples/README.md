@@ -2,9 +2,9 @@
 
 Applications built on Lanes, each a Lake package of its own that depends on the framework in
 this repository by path, as an application of yours would depend on it by git. They are written
-to be read: copy one to start. The tests do not import them, but two of their systems are
+to be read: copy one to start. The tests do not import them, but some of their systems are
 copied into `Tests/Fixtures/` and must stay the same as the copies (`Tests/Copies.lean`): those
-of `examples/kv-cache` and `examples/watchdog`. `examples/counter` is what
+of `examples/bank`, `examples/kv-cache` and `examples/watchdog`. `examples/counter` is what
 `lanes new` writes (`Tests/New.lean`). The large ones are also here to find out what the
 framework is missing: anything one of them has to work around is a defect of Lanes, and is fixed
 there. Actor state lives as long as the process, as in Go, Tokio or Erlang: every start is a

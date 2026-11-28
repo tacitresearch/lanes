@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 
 /-!
-Two fixtures are their examples' systems, copied because an example is a Lake package of its
+Some fixtures are their examples' systems, copied because an example is a Lake package of its
 own that the tests cannot import. Each copy, from its `namespace` line on, is its example's file
 with `Tests.Fixtures.` before the namespace, so the two cannot drift apart; their headers may
 differ.
@@ -14,7 +14,8 @@ namespace Tests.Copies
 
 /-- The fixtures and the files they copy. -/
 def copies : List (String × String) :=
-  [ ("Tests/Fixtures/KV.lean", "examples/kv-cache/KV.lean"),
+  [ ("Tests/Fixtures/Bank.lean", "examples/bank/Bank.lean"),
+    ("Tests/Fixtures/KV.lean", "examples/kv-cache/KV.lean"),
     ("Tests/Fixtures/Watchdog.lean", "examples/watchdog/Watchdog.lean") ]
 
 /-- A file from its first `namespace` line on, with `Tests.Fixtures.` taken out. -/
