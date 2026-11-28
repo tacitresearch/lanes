@@ -47,7 +47,10 @@ target sign pkg : FilePath := do
 
 @[default_target]
 lean_lib Lanes where
-  roots := #[`Lanes, `Lanes.Proofs, `Lanes.Semantics, `Lanes.Testing]
+  -- CBOR is a root of its own, not imported by `Lanes`: a program that does not import it does
+  -- not build it or link it.
+  roots := #[`Lanes, `Lanes.Proofs, `Lanes.Semantics, `Lanes.Testing, `Lanes.Lib.Encoding.Cbor,
+    `Lanes.Lib.Encoding.Cbor.Sound]
   moreLinkObjs := #[native, tls, verify, sign]
 
 /-! Files that modules embed with `include_str`, which Lake does not track. A library that `needs`
