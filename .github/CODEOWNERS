@@ -10,15 +10,26 @@
 /infra/           @nathanrs
 # The adapters' IO and the shell: each area keeps what performs IO in an `IO/` directory.
 /Lanes/**/IO/     @nathanrs
+# Trusted code outside an `IO/` directory (TRUSTED.md): the wire format and its grammar, the
+# template macro, and the declarations of the C.
+/Lanes/Web/Http/Wire.lean           @nathanrs
+/Lanes/Web/Http/Grammar.lean        @nathanrs
+/Lanes/Web/Html/Syntax.lean         @nathanrs
+/Lanes/Lib/Crypto/Native.lean       @nathanrs
+/Lanes/Lib/Crypto/Sign.lean         @nathanrs
+/Lanes/Lib/Crypto/Verify.lean       @nathanrs
 
 # Decisions.
 /docs/decisions/  @nathanrs
 
 # Specs: the applications' (`Spec.lean`), the wire format's
-# (`WireSpec.lean`), the models of what the outside may do (`Lanes/Outside/`), and the
+# (`WireSpec.lean`), the models of what the outside may do (`Lanes/Outside/`, the typed store's,
+# the services' and a shared cache's), which proofs about data rest on (D110), and the
 # behaviours, whose specs sit with them.
 **/*Spec.lean     @nathanrs
 /Lanes/Outside/   @nathanrs
+/Lanes/Db/Model.lean                  @nathanrs
+/Lanes/Services/**/*Model.lean        @nathanrs
+/Lanes/Services/Stripe/Payments.lean  @nathanrs
+/Lanes/Web/Http/SharedCache.lean      @nathanrs
 **/Behaviours/    @nathanrs
-# The behaviours' proofs are evidence, not specs: no owner.
-**/Behaviours/**/*Sound.lean
