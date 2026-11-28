@@ -15,24 +15,26 @@ messages a step sent that are not yet in their receivers' mailboxes, and two gho
 messages in flight in the order the semantics sent them and the outputs not yet handed over.
 `Sched.Step` is what the shell's threads do to it, each step one transition: an input arrives,
 a timer goes off, a worker takes an actor off a run queue or steals one, steps it, pushes one
-message it sent, lets it go, or hands an output over. The decisions are the functions of
-`Lanes.Runtime.Sched` that the shell calls.
+message it sent, lets it go, or hands an output over; or the process restarts, and the next
+one's scheduler starts afresh. The decisions are the functions of `Lanes.Runtime.Sched` that the
+shell calls.
 
 Each transition is zero or one event of `SysState.step` under an environment whose links are
-reliable (`Reliable`, which `Kernel.env` is; `Step.sound`), so
-every run of the model is a run of the semantics, and its outputs are that run's
-(`Run.reachable`). The ghosts are never read by a decision, so the shell does without them.
+reliable (`Reliable`, which `Kernel.env` is) and which allows restarts if the transition is one
+(`Step.sound`), so every run of the model is a run of the semantics, and its outputs are that
+run's (`Run.reachable`). The ghosts are never read by a decision, so the shell does without
+them.
 
-The invariant `Model.Inv` says what makes that true and what makes the scheduler work:
+The invariant `Model.Inv` says what makes that true and what makes the scheduler work
+(`Step.inv`):
 
 - the mailboxes and the messages not yet pushed hold the messages in flight, link by link in
-  the order they were sent (`Coherent`), which is all an ordered link promises: a message at the
-  head of a mailbox is the oldest on its link, so it may be delivered;
-- an actor is held by at most one worker, and is running exactly when one holds it
-  (`Inv.held`, `Inv.unique`);
-- an idle actor has no mail, and a queued one is on a run queue (`Inv.idle`, `Inv.queued`), so
-  no mail waits for a worker that will never come;
-- only an actor that is held has messages not yet pushed.
+  the order they were sent (`Model.Coherent`), which is all an ordered link promises: a message
+  at the head of a mailbox is the oldest on its link, so it may be delivered;
+- what an actor has not pushed, it sent (`Model.OutSrc`);
+- an actor is held by at most one worker, and is running exactly when one holds it; an idle
+  actor has no mail, and a queued one is on a run queue, so no mail waits for a worker that will
+  never come (`Model.Placed`).
 
 A step that stops its actor needs no message to it waiting to be pushed anywhere, since the
 semantics drops all its mail at once; the shell ensures it with a lock that such a step takes
