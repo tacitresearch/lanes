@@ -37,6 +37,18 @@ import Lanes.Semantics
 /-- info: 'Lanes.Batch.run_spread' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Batch.run_spread
 
+/-- info: 'Lanes.Batch.run_ids' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.run_ids
+
+/-- info: 'Lanes.Batch.run_ids_spread' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.run_ids_spread
+
+/-- info: 'Lanes.Batch.history_ops' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.history_ops
+
+/-- info: 'Lanes.Batch.grown_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Batch.grown_eq
+
 -- Lanes.Runtime.KernelSound
 /-- info: 'Lanes.Kernel.exec_inductive' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Kernel.exec_inductive

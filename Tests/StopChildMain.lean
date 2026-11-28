@@ -58,7 +58,7 @@ def run (drain_ms : Nat) : IO Unit := do
     | .reply _ => pure ()
   Lanes.block do
     let server ← serveFronted (Server.system slow) slowBridge
-      { port := 0, ops := { readinessPath := some "/readyz" } } {} onOutput
+      { port := 0, ops := { readinessPath := some "/readyz" } } {} (fun _ => onOutput)
     held.set (some server)
     server.stopOnSignal drain_ms (listening := say s!"listening {server.port.getD 0}")
 
