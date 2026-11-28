@@ -15,6 +15,7 @@ import Tests.Oracle.RateLimit
 import Tests.Oracle.SigV4
 import Tests.Oracle.Time
 import Tests.Oracle.Url
+import Tests.Oracle.WebSocket
 import Tests.Oracle.Xml
 import Tests.Aws.Mail
 import Tests.Aws.CloudFront
@@ -26,9 +27,9 @@ namespace Tests.Oracle
 def packages : List Package :=
   [Base64.package, Ip.package, Time.package, Json.package, MediaType.package, RateLimit.package,
     Url.package, Xml.package, Metrics.package, SigV4.package, Jose.package,
-    Checks.Mail.package, Checks.CloudFront.package, Csv.package, Path.package, Html.package]
+    Checks.Mail.package, Checks.CloudFront.package, Csv.package, Path.package, Html.package, WebSocket.package]
 
-def unitTests : List (String × Bool) := Base64.tests ++ Csv.tests ++ Path.tests ++ Html.tests ++ Ip.tests ++ Jose.tests ++ MediaType.tests ++ RateLimit.tests ++ Time.tests ++ Url.tests
+def unitTests : List (String × Bool) := Base64.tests ++ Csv.tests ++ Path.tests ++ Html.tests ++ WebSocket.tests ++ Ip.tests ++ Jose.tests ++ MediaType.tests ++ RateLimit.tests ++ Time.tests ++ Url.tests
 
 def replayAll : IO (List (String × Bool)) :=
   return (← packages.mapM Package.replay).flatten

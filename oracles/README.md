@@ -34,6 +34,7 @@ every module a row names exists, and so does every path it cites.
 | `oracles/go` | Go's standard library, `golang.org/x/time` and Prometheus's `expfmt` | Go 1.24.7, x/time 0.11.0, prometheus/common 0.67.5 | `oracles/go/go.mod`, `oracles/go/go.sum` | Base64, CSV, paths and globs, HTML's character references, IP addresses, times, JSON, media types, rate limits, URLs, XML, mail addresses, the metrics page; and, with Node and h11 (`oracles/go/requests/requests.py`, by hand), the request reader |
 | `oracles/botocore` | botocore, and `cryptography` for the signatures it is given | 1.44.12, cryptography 50.0.2 | `oracles/botocore/requirements.txt` | Signature Version 4; CloudFront's signed URLs (`oracles/botocore/cloudfront.jsonl`), signed with the published test keys of `oracles/botocore/keys/` |
 | `oracles/jwcrypto` | jwcrypto | 1.6.2 | `oracles/jwcrypto/requirements.txt` | JWS in compact form and JWK Sets |
+| `oracles/websockets` | websockets, its Sans-I/O protocol | 15.0.1 | `oracles/websockets/requirements.txt` | A WebSocket server's side of a connection: frames, fragments, control frames and close codes |
 | `oracles/moto` | moto's server, S3, SES API v2 and SQS | 5.2.6 | `oracles/moto/requirements.txt` | the recorded runs of the object store, multipart, email and queue models, and of `POST` forms |
 | `oracles/google` | Google's OpenID Connect provider: its discovery document and JWK Set | Fetched on 2026-11-27 | the files themselves | Google's sign-in preset (`Tests/Oidc/Google.lean`) |
 | `oracles/postgres` | PostgreSQL | 16 (16.15 recorded) | the CI job's `postgresql-16` | the recorded runs of the key-value and the typed store models, and the typed store's answers against their meaning |
@@ -49,6 +50,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Lib/Crypto/Pbkdf2.lean` | | Not a format: through SCRAM, against RFC 7677 and libpq's recorded session (`Tests/Postgres.lean`) |
 | `Lanes/Lib/Crypto/PublicKey.lean` | `Tests/Signature.lean`, `Tests/Sign.lean` | The DER of keys and signatures against what the `openssl` command writes, and read back from OpenSSL's; a public key's PEM against `openssl pkey -pubout` |
 | `Lanes/Lib/Crypto/Sign.lean` | `Tests/Sign.lean`, `oracles/botocore` | A binding: RFC 6979's signatures, `openssl dgst -sign`, and `cryptography`'s signatures in the CloudFront oracle |
+| `Lanes/Lib/Crypto/Sha1.lean` | | Not a format: FIPS 180-4's examples, and through RFC 6455's handshake example (`Tests/Oracle/WebSocket.lean`) |
 | `Lanes/Lib/Crypto/Sha256.lean` | | Not a format: FIPS 180-4's examples, and OpenSSL on thousands of inputs (`Tests/Crypto.lean`) |
 | `Lanes/Lib/Crypto/Sha512.lean` | | Not a format: FIPS 180-4's examples, as `openssl dgst` computes them (`Tests/Crypto.lean`) |
 | `Lanes/Lib/Crypto/Verify.lean` | `Tests/Signature.lean` | A binding: OpenSSL's check against `Rsa.verifyReference` and keys `openssl` made |
@@ -102,6 +104,7 @@ every module a row names exists, and so does every path it cites.
 | `Lanes/Web/Http/Stream.lean` | | Pieces and parts of a streamed body through the gate, not a format: the bytes are `Conn`'s and `Wire`'s |
 | `Lanes/Web/Http/View.lean` | | Reads answered from the state, not a format |
 | `Lanes/Web/Http/Waiting.lean` | | Request ids, not a format |
+| `Lanes/Web/Http/WebSocket.lean` | `oracles/websockets` | Its frames proved to read back (`WebSocket.decode_encode`); RFC 6455's examples (`Tests/Oracle/WebSocket.lean`). Known: websockets' Sans-I/O layer leaves a text's UTF-8 to the layer above, fails a close inside a fragmented message, and counts a control frame against a fragmented message's limit |
 | `Lanes/Web/Http/Wire.lean` | `oracles/go/requests` | The writer proved against the reader (`Lanes/Web/Http/WireSound.lean`); the responses it reads against `openssl s_server` (`Tests/Tls.lean`) and moto (`oracles/moto`) |
 | `Lanes/Web/Http/WireSpec.lean` | | The spec the wire format is proved against |
 

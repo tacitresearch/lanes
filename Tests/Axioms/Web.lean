@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes.Semantics
 import Lanes.Web.Html.SanitizeSound
+import Lanes.Web.Http.WebSocketSound
 
 /-! The axiom gate (rule 5.5, see `Tests/Axioms.lean`) for the theorems of `Lanes/Web/`. -/
 
@@ -611,6 +612,13 @@ import Lanes.Web.Html.SanitizeSound
 
 /-- info: 'Lanes.Http.Response.readHead_ended' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.Response.readHead_ended
+
+-- Lanes.Web.Http.WebSocketSound
+/-- info: 'Lanes.WebSocket.decode_encode' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.WebSocket.decode_encode
+
+/-- info: 'Lanes.WebSocket.applyMask_applyMask' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.WebSocket.applyMask_applyMask
 
 -- Lanes.Web.Http.WireSound
 /-- info: 'Lanes.Http.Response.read_more' depends on axioms: [propext, Classical.choice, Quot.sound] -/
