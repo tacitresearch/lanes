@@ -26,12 +26,12 @@ lanes_data structure Upload where
   owner : Member
   /-- The size the store gave when it was asked; `none` until it held the file. -/
   size : Option Nat
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data structure State where
   next : FileId := 0
   uploads : List Upload := []
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Request where
   | list (req : ReqId) (who : Member) (at_s : Nat)
@@ -40,7 +40,7 @@ lanes_data inductive Request where
   /-- The browser says it posted the file; `size` is what the store answered when asked. -/
   | seen (req : ReqId) (who : Member) (file : FileId) (size : Option Nat)
   | delete (req : ReqId) (who : Member) (file : FileId)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Answer where
   | shelf (viewer : Member) (files : List Upload) (at_s : Nat)
@@ -50,12 +50,12 @@ lanes_data inductive Answer where
   | deleted (file : FileId)
   | refused (file : FileId)
   | full
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data structure Response where
   req : ReqId
   answer : Answer
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 structure Config where
   /-- Uploads on the shelf at once, begun or seen (rule 2.6). -/

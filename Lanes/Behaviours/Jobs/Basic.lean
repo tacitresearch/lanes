@@ -33,7 +33,7 @@ namespace Lanes.Jobs
 lanes_data inductive Phase where
   | running
   | backoff
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- A job holding one of the slots, from its first attempt to its answer. `attempt` is the
 attempt being made or, while the job backs off, the one that failed; the first is `1`. -/
@@ -42,7 +42,7 @@ lanes_data structure Active (K J : Type) where
   job : J
   attempt : Nat
   phase : Phase
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Outcome (R : Type) where
   | done (r : R)
@@ -50,17 +50,17 @@ lanes_data inductive Outcome (R : Type) where
   | failed (r : R)
   | timedOut
   | refused
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Input (K J R : Type) where
   | submit (key : K) (job : J)
   | result (key : K) (attempt : Nat) (r : R)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Output (K J R : Type) where
   | answer (key : K) (outcome : Outcome R)
   | dispatch (key : K) (attempt : Nat) (job : J)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Msg (K J R : Type) where
   | submit (key : K) (job : J)
@@ -69,7 +69,7 @@ lanes_data inductive Msg (K J R : Type) where
   | expire (key : K)
   /-- The end of a backoff. -/
   | retry (key : K)
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- Every limit is explicit (rule 2.6). -/
 structure Config (R : Type) where

@@ -46,11 +46,6 @@ instance : Hashable Digest := ⟨fun d => hash d.bytes⟩
 
 instance : Repr Digest := ⟨fun d _ => s!"<digest {(Bytes.hex d.bytes).take 8}>"⟩
 
-def Digest.codec : Codec Digest :=
-  Codec.bytes.map (·.bytes) (fun b => some ⟨b⟩) (fun _ => rfl)
-
-instance : Codable Digest := ⟨Digest.codec⟩
-
 /-- A digest as text, so that a request prepared where it arrives can carry it into the bridge
 in place of the password. -/
 def Digest.hex (d : Digest) : String := Bytes.hex d.bytes
@@ -244,10 +239,6 @@ theorem read?_text (s : Stored) : read? s.text = some s := by
     split
     · rename_i rest h; exact absurd h (hn rest)
     · simp only [Digest.ofHex?_hex, Option.map_some]
-
-def codec : Codec Stored := Codec.string.map text read? read?_text
-
-instance : Codable Stored := ⟨codec⟩
 
 end Stored
 

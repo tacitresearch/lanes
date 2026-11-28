@@ -31,13 +31,13 @@ lanes_data structure Call (Q : Type) where
   /-- How long the adapter waits for the answer before it says `unknown`. -/
   deadline_ms : Nat
   request : Q
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Reply (A : Type) where
   | answer (a : A)
   /-- No answer by the deadline: the request may or may not have taken effect. -/
   | unknown
-  deriving DecidableEq, Repr, Hashable, Codable
+  deriving DecidableEq, Repr, Hashable
 
 /-- Which outputs of a system are calls, which inputs answer them, and which inputs are events
 the service reports on its own (webhooks). -/
