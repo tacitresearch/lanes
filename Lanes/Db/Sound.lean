@@ -827,6 +827,47 @@ theorem keeps {α : Type} {t : Txn α} (ht : t.All P) {I : Db → Prop}
 
 end Txn.All
 
+/-! ## What each operation of a table asks
+
+`Txn.All` of a transaction built from a table's operations is proved one operation at a time:
+a read decodes rows, which asks nothing more, and a write is the one operation. -/
+
+section
+variable {P : Op → Prop} {α : Type} (t : TableOf α)
+
+theorem TableOf.decode_all (r : Row) : (t.decode r).All P := by
+  unfold TableOf.decode; split
+  · exact .pure _
+  · exact .abort _
+
+theorem TableOf.get_all (key : Row) (h : P (.get t.table key)) : (t.get key).All P :=
+  Txn.All.bind (Txn.All.single h) fun r => by
+    cases r with
+    | some x => exact Txn.All.map _ (t.decode_all x)
+    | none => exact .pure _
+
+theorem TableOf.scan_all (s : Scan) (h : P (.scan { s with table := t.table })) : (t.scan s).All P :=
+  Txn.All.bind (Txn.All.single h) fun rows => Txn.All.mapM _ t.decode_all rows
+
+theorem TableOf.lookup_all (i : Index) (vals : Row) (limit : Nat)
+    (h : P (.scan { table := t.table, index := some i, eq := vals, limit })) :
+    (t.lookup i vals limit).All P :=
+  Txn.All.bind (Txn.All.single h) fun rows => Txn.All.mapM _ t.decode_all rows
+
+theorem TableOf.insert_all (a : α) (h : P (.insert t.table (t.toRow a))) : (t.insert a).All P :=
+  Txn.All.single h
+
+theorem TableOf.update_all (a : α) (h : P (.update t.table (t.toRow a))) : (t.update a).All P :=
+  Txn.All.single h
+
+theorem TableOf.upsert_all (a : α) (h : P (.upsert t.table (t.toRow a))) : (t.upsert a).All P :=
+  Txn.All.single h
+
+theorem TableOf.delete_all (key : Row) (h : P (.delete t.table key)) : (t.delete key).All P :=
+  Txn.All.single h
+
+end
+
 /-- A unique index of a table stays unique under every transaction whose operations on a table
 of its name are on that table. -/
 theorem Txn.All.unique {α : Type} {t : Txn α} (tbl : Table) {i : Index} (hi : i ∈ tbl.indexes)

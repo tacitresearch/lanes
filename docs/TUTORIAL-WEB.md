@@ -2,7 +2,7 @@
 
 The sequel to `docs/TUTORIAL.md`. It builds a shelf of files: members sign in with an OpenID
 Connect provider, upload files straight from the browser to S3, see everyone's files, and
-delete their own. Then it tests the whole site against fakes, checks and proves one property,
+delete their own. The shelf is a table of PostgreSQL. Then it tests the whole site against fakes, checks and proves one property,
 and says what running it needs. Read the first tutorial before this one.
 
 The code of each step is kept in `Tests/TutorialWeb/`: `lake build` compiles it, and `lake test`
@@ -15,92 +15,85 @@ the test of step 4. Imports there read `Tests.TutorialWeb.` where an app's read 
 lake exe lanes new shelf --dir ../shelf
 cd ../shelf
 lake test
-lake exe shelf 8080   # serves http://127.0.0.1:8080
 ```
 
-This is the counter of the first tutorial. One actor holds the state, and the `Server`
-behaviour runs the spec as that actor. The state lives as long as the process: stop it and
-start it again, and the count is back at zero. The shelf keeps its list of files the same way,
-and the files themselves in S3, which outlives the process. A list that must survive a restart
-belongs in a service outside, such as PostgreSQL (`examples/todo-db`).
+This is the counter of the first tutorial: a stateless app whose data is a table of
+PostgreSQL, each request one pure transaction, and a front that keeps nothing. The shelf keeps
+its list of files the same way, in a table, and the files themselves in S3. Neither is in the
+process, so a restart loses nothing and several instances serve one shelf.
 
-**The spec.** Replace `Shelf/Counter.lean` with `Shelf/Files.lean`. A member is a string the
+**The tables.** Replace `Shelf/Counter.lean` with `Shelf/Files.lean`. A member is a string the
 bridge makes from the identity the sign-in verified (step 2). An upload is begun, then seen in
-the store, then listed:
+the store, then listed. It is keyed by its uploader and its id, so that only a request made as
+its uploader names it; the ids come from a counter that only grows, so that no two uploads share
+an object of the store:
 
 ```lean
 lanes_data structure Upload where
-  id : FileId
-  owner : Member
+  owner : String
+  id : Int64
   /-- The size the store gave when it was asked; `none` until it held the file. -/
-  size : Option Nat
+  size : Option Int64
   deriving DecidableEq, Repr, Hashable
-
-lanes_data structure State where
-  next : FileId := 0
-  uploads : List Upload := []
-  deriving DecidableEq, Repr, Hashable
-
-lanes_data inductive Request where
-  | list (req : ReqId) (who : Member) (at_s : Nat)
-  /-- Begin an upload: the answer is a form to post the file to the store. -/
-  | begin (req : ReqId) (who : Member) (at_s : Nat)
-  /-- The browser says it posted the file; `size` is what the store answered when asked. -/
-  | seen (req : ReqId) (who : Member) (file : FileId) (size : Option Nat)
-  | delete (req : ReqId) (who : Member) (file : FileId)
-  deriving DecidableEq, Repr, Hashable
+  table uploads key owner, id
 ```
 
-What each request does, one at a time. The shelf holds at most `maxFiles` uploads (rule 2.6), so
-a `begin` past it is refused with `full`. A file is listed only once the store said it holds it,
-and only its uploader can have it listed or take it off:
+with a migration that makes them, in `migrations/0001_shelf.sql`, in place of the counter's:
+
+```sql
+CREATE TABLE uploads (
+  owner text COLLATE "C" NOT NULL,
+  id bigint NOT NULL,
+  size bigint,
+  PRIMARY KEY (owner, id)
+);
+CREATE TABLE counters (
+  name text COLLATE "C" NOT NULL PRIMARY KEY,
+  next bigint NOT NULL
+);
+```
+
+At its start the app checks the tables the migrations made against `Shelf.schema`, and refuses
+to start on any difference: a column misspelled here, or one nullable that the declaration
+says is not, stops it before it serves.
+
+**The transactions.** What each request does, as one transaction. The shelf holds at most
+`maxFiles` uploads (rule 2.6), so a `begin` past it is refused with `full`. A file is listed
+only once the store said it holds it, and only its uploader can have it listed or take it off:
+both name the upload by its key, which starts with the member who asks:
 
 ```lean
-def service (config : Config) : Service sig.In sig.Out State where
-  init := {}
-  step s
-    | .list req who at_s => (s, [⟨req, .shelf who (s.uploads.filter (·.size.isSome)) at_s⟩])
-    | .begin req who at_s =>
-      if s.uploads.length < config.maxFiles then
-        ({ next := s.next + 1, uploads := s.uploads ++ [⟨s.next, who, none⟩] },
-          [⟨req, .form who s.next at_s⟩])
-      else (s, [⟨req, .full⟩])
-    | .seen req who file size =>
-      match size with
-      | some n =>
-        if s.holds who file then
-          ({ s with uploads := s.uploads.map fun u =>
-              if u.id == file && u.owner == who then { u with size := some n } else u },
-            [⟨req, .listed file⟩])
-        else (s, [⟨req, .notSeen file⟩])
-      | none => (s, [⟨req, .notSeen file⟩])
-    | .delete req who file =>
-      if s.holds who file then
-        ({ s with uploads := s.uploads.filter fun u => !(u.id == file && u.owner == who) },
-          [⟨req, .deleted file⟩])
-      else (s, [⟨req, .refused file⟩])
+def handler (config : Config) : Handler Request Answer
+  | .list who at_s => do
+    return .shelf who ((← onShelf config).filter (·.size.isSome)) at_s
+  | .begin who at_s => do
+    if config.maxFiles ≤ (← onShelf config).length then return .full
+    let id ← nextId
+    let _ ← uploads.insert { owner := who, id, size := none }
+    return .form who id at_s
+  | .seen who file size =>
+    match size with
+    | some n => do
+      if ← uploads.update { owner := who, id := file, size := some (Int64.ofNat n) } then
+        return .listed file
+      else return .notSeen file
+    | none => return .notSeen file
+  | .delete who file => do
+    if ← uploads.delete [.text who, .int file] then return .deleted file else return .refused file
 ```
 
-**Why one actor.** Every request is one atomic step of one owner. A delete and a listing never
-interleave, so no list shows half a delete, and every claim below is about one function.
+**Why one transaction.** Every request is one atomic step against the database, run at
+`SERIALIZABLE`: a delete and a listing never interleave, so no list shows half a delete, even
+from two instances at once, and every claim below is about one function.
 
 **Why the time is in the request.** The pages carry links signed for the store, and a signature
-names a time. `step` cannot read a clock, so the server writes the time a request arrived into
-it (step 3) and the bridge reads it as `at_s`. The answer carries it back, and the bridge signs
-with it. Every link a page carries is then a function of the request.
+names a time. A transaction cannot read a clock, so the server writes the time a request arrived
+into it (step 3) and the bridge reads it as `at_s`. The answer carries it back, and the bridge
+signs with it. Every link a page carries is then a function of the request.
 
-The bound is proved as the counter's limit was, and you already know the tactic:
-
-```lean
-/-- The shelf never holds more than `maxFiles` uploads. -/
-theorem shelf_bounded (config : Config) :
-    (Server.actor (service config)).Invariant fun s => s.uploads.length ≤ config.maxFiles := by
-  actor_invariant [Server.actor, service]
-```
-
-Move the bridge and the pages from `Main.lean` to `Shelf/Web.lean`, so that the test of step 4
-can import them, and keep only `main` in `Main.lean`. The code of this step is
-`Tests/TutorialWeb/Files.lean`.
+The front is the counter's, with the shelf's requests and answers. Move the bridge and the pages
+from `Shelf/Web.lean`'s counter to the shelf's, so that the test of step 4 can import them, and
+keep only `main` in `Main.lean`. The code of this step is `Tests/TutorialWeb/Files.lean`.
 
 ## 2. Sign in
 
@@ -193,7 +186,7 @@ and S3 refuses a file past it (`EntityTooLarge`). The key is exact, so a member 
 over another's file:
 
 ```lean
-def uploadForm (s : Settings) (file : FileId) (at_s : Nat) : Option S3.Post.Form :=
+def uploadForm (s : Settings) (file : Int64) (at_s : Nat) : Option S3.Post.Form :=
   (S3.Key.of? (s.objectKey file)).map fun key =>
     S3.Post.form s.bucket s.creds (Civil.DateTime.ofUnix at_s)
       { key := .exact key, length := s.length, expiry := s.upload_s }
@@ -232,10 +225,10 @@ def arrive (s : Settings) (signIn : OAuth.SignIn) (r : Http.Request) :
     | none => return .ok r
 ```
 
-The `seen` request then carries `some size` or `none`, and `service` lists only the former. This
-is the only IO of the app, and it is trusted to write the size only from the store's answer;
-step 4 tests that a forged header is not believed. The same check can be an output of the
-system, through `Http.serveFronted`, which takes more code.
+The `seen` request then carries `some size` or `none`, and `handler` lists only the former. This
+is the only IO of the app but the database's, and it is trusted to write the size only from the
+store's answer; step 4 tests that a forged header is not believed. The same check can be an
+output of the system, as the database's calls are, which takes more code.
 
 The pages link each file with a `GET` presigned at the time of the listing, for an hour. A
 delete takes the record off the shelf, not the object out of the bucket: deleting it is a call
@@ -245,9 +238,10 @@ to the store (`S3.handler`). The code of this step is `Tests/TutorialWeb/Web.lea
 
 The test kit (`Lanes.Testing`, `docs/decisions/D77-a-test-kit.md`) runs locally, with no
 network: a fake S3 that checks every signature and every policy as S3 does, a fake identity
-provider, and a browser that keeps cookies and posts forms. Import it from tests only, so no
-binary that serves links it. The site runs as `main` runs it, with the fakes in place of AWS and
-the provider:
+provider, a browser that keeps cookies and posts forms, and the typed store in memory
+(`Lanes.Testing.Store`), which runs each transaction on a database held in the test, as
+`Txn.run` says. Import it from tests only, so no binary that serves links it. The site runs as
+`main` runs it, with the fakes in place of AWS, the provider and PostgreSQL:
 
 ```lean
 def deployment (store : Testing.S3.Fake) (creds : SigV4.Credentials)
@@ -257,6 +251,12 @@ def deployment (store : Testing.S3.Fake) (creds : SigV4.Credentials)
     server := { port := 0 }
     signIn := { providers := [(provider.oidc "id", provider.client origin "id")], secure := false
                 http := { timeout_ms := 5000 } } }
+```
+
+```lean
+  let rows ← Testing.Store.empty schema (handler {})
+  let call := fun (r : Request) => (do return ← rows.call r : Async (Db.Result Answer))
+  let server ← start d call
 ```
 
 Alice and Bob sign in. Alice begins an upload, posts the file with the form her page carries,
@@ -276,97 +276,107 @@ and asks the site to list it. Bob sees it and fetches it through its link:
 ```
 
 The test then posts a file over the limit, which the store refuses, and asks for it to be
-listed, with and without a forged header, which the site refuses. Alice deletes her file; the
-test stops the server, starts it again and finds the shelf empty. Each check is
-a line of `lake test`, such as `tutorial web: another member's delete is refused`. In the app,
-put this in `Shelf/EndToEnd.lean` and run `EndToEnd.live` from the `main` of `Check.lean`. The
-code of this step is `Tests/TutorialWeb/EndToEnd.lean`.
+listed, with and without a forged header, which the site refuses. It stops the server, starts it
+again on the same store and finds the shelf as it was; Alice deletes her file. Each check is a
+line of `lake test`, such as `tutorial web: another member's delete is refused`. In the app, put
+this in `Shelf/EndToEnd.lean` and run `EndToEnd.live` from the `main` of `Check.lean`. The code of
+this step is `Tests/TutorialWeb/EndToEnd.lean`.
 
 ## 5. Check a property, then prove it
 
-**The property: only its uploader takes a file off the shelf.** Check it first (rule 5.1). Alice
-uploads file 0; Bob tries to delete it; Alice deletes it; Alice begins a second upload, which a
-shelf of one refuses while the first is there. The checker sends them in every order and lets
-the actor crash once:
+**The property: only its uploader takes a file off the shelf.** Check it first (rule 5.1), beside
+the store's model, as the counter's check was. Alice uploads file 0; Bob tries to delete it;
+Alice deletes it; Alice begins a second upload, which a shelf of one refuses while the first is
+there. Each request is sent once those it waits for are answered, and the checker tries every
+order that leaves:
 
 ```lean
-def requests : List Request :=
-  [.begin 1 "alice" 0, .seen 2 "alice" 0 (some 5), .delete 3 "bob" 0, .delete 4 "alice" 0,
-    .begin 5 "alice" 0]
+def requests : List (Nat × Request × List Nat) :=
+  [(1, .begin "alice" 0, []), (2, .seen "alice" 0 (some 5), [1]), (3, .delete "bob" 0, [1]),
+    (4, .delete "alice" 0, [2]), (5, .begin "alice" 0, [1])]
 ```
 
-The spec's state does not remember who deleted a file, but the checker's world does: `w.driver`
-is the requests not yet sent. So the property reads: if file 0 was begun and Alice no longer
-holds it, Alice's delete has been sent. Each `always` has a `sometimes` beside it, so a check that
-never reaches a delete fails (rule 5.3):
+The tables do not remember who deleted a file, but the checker's world does: `w.driver.1.toSend`
+is the requests not yet sent. So the property reads: in every database the store may hold, if
+file 0 was begun and Alice no longer holds it, Alice's delete has been sent. Each `always` has a
+`sometimes` beside it, so a check that never reaches a delete fails (rule 5.3):
 
 ```lean
-    [ .always "the shelf holds at most one upload" fun w => (w.state.state ()).uploads.length ≤ 1,
-      .sometimes "the shelf is full" fun w => w.state.outbox.any (·.answer == .full),
-      .sometimes "a file is listed" fun w => (w.state.state ()).uploads.any (·.size.isSome),
+    [ .always "the shelf holds at most one upload" fun w =>
+        w.driver.2.worlds.all fun world => (uploadsOf world.db).length ≤ 1,
+      .sometimes "the shelf is full" fun w => w.driver.1.answered.any (·.2 == .full),
+      .sometimes "a file is listed" fun w =>
+        w.driver.2.worlds.any fun world => (uploadsOf world.db).any (·.size.isSome),
       .always "only its uploader deletes a file" fun w =>
-        (w.state.state ()).holds "alice" 0 || (w.state.state ()).next == 0
-          || !w.driver.contains (.delete 4 "alice" 0),
+        w.driver.2.worlds.all fun world => holds world.db "alice" 0 || !begun world.db
+          || !w.driver.1.toSend.contains (4, .delete "alice" 0, [2]),
       .sometimes "a file is deleted" fun w =>
-        (w.state.state ()).next == 1 && !(w.state.state ()).holds "alice" 0 ]
+        w.driver.2.worlds.any fun world => begun world.db && !holds world.db "alice" 0 ]
 ```
 
 ```text
 PASS (complete): every reachable state explored
-reached "the shelf is full" in 5 steps
-reached "a file is listed" in 5 steps
-reached "a file is deleted" in 5 steps
-states: 12896, transitions: 40631, depth: 16
-coverage: output 16870, input 9831, deliver 6326, crash 4043, start 3561, drop 0 (never fired), duplicate 0 (never fired), restart 0 (never fired), timeout 0 (never fired)
+reached "the shelf is full" in 13 steps
+reached "a file is listed" in 11 steps
+reached "a file is deleted" in 17 steps
+states: 1877, transitions: 4312, depth: 31
+coverage: input 2063, output 1126, deliver 1122, start 1, crash 0 (never fired), drop 0 (never fired), duplicate 0 (never fired), restart 0 (never fired), timeout 0 (never fired)
 ```
 
 Now seed the bug: a delete that does not ask whose file it is.
 
 ```lean
-    | .delete req _ file =>
-      ({ s with uploads := s.uploads.filter (·.id != file) }, [⟨req, .deleted file⟩])
+  | .delete _ file => do
+    match (← onShelf config).find? (·.id == file) with
+    | some u =>
+      let _ ← uploads.delete [.text u.owner, .int file]
+      return .deleted file
+    | none => return .refused file
 ```
 
 ```text
-FAIL: "only its uploader deletes a file" is violated after 5 steps
-  1. input begin 1 "alice" 0
+FAIL: "only its uploader deletes a file" is violated after 11 steps
+  1. input request 1 (begin "alice" 0)
   2. start ()
-  3. deliver outside → (): begin 1 "alice" 0
-  4. input delete 3 "bob" 0
-  5. deliver outside → (): delete 3 "bob" 0
+  3. deliver outside → (): request 1 (begin "alice" 0)
+  4. output call { id := 1, request := begin "alice" 0 }
+  5. input store { id := 1, result := committed (form "alice" 0 0) }
+  6. deliver outside → (): store { id := 1, result := committed (form "alice" 0 0) }
+  7. output answered 1 (form "alice" 0 0)
+  8. input request 3 (delete "bob" 0)
+  9. deliver outside → (): request 3 (delete "bob" 0)
+  10. output call { id := 3, request := delete "bob" 0 }
+  11. input store { id := 3, result := committed (deleted 0) }
   state reached:
-  () [up] { next := 1, uploads := [] }
-  pending output: { req := 1, answer := form "alice" 0 0 }
-  pending output: { req := 3, answer := deleted 0 }
-reached "a file is listed" in 5 steps
-reached "a file is deleted" in 5 steps
-states: 376, transitions: 487, depth: 5
-coverage: input 336, start 85, crash 32, deliver 27, output 7, drop 0 (never fired), duplicate 0 (never fired), restart 0 (never fired), timeout 0 (never fired)
+  () [up] ()
+  in flight: outside → (): store { id := 3, result := committed (deleted 0) }
+reached "a file is listed" in 11 steps
+reached "a file is deleted" in 11 steps
+states: 45, transitions: 54, depth: 11
+coverage: input 31, deliver 15, output 7, start 1, crash 0 (never fired), drop 0 (never fired), duplicate 0 (never fired), restart 0 (never fired), timeout 0 (never fired)
 ```
 
-Alice begins file 0 and Bob deletes it, before she has even uploaded it. The counter's check had
-`Check.refines`; here its monitor makes the check take seconds, and `implements` in
-`Shelf/Proofs.lean` proves the refinement for every run (`Server.implements`).
+Alice begins file 0 and Bob deletes it, before she has even uploaded it.
 
-**The proof.** The check covered two members and five requests. The theorem covers every state,
-every request and every member: a step that leaves `owner` without the upload `file` it had is
-`owner`'s delete of `file`. It is about `step`, which is what the actor runs on every message:
+**The proof.** The check covered two members and five requests. The theorem covers every
+database, every request and every member: a transaction of a request made as `who` leaves every
+upload of another member as it was. It rests on one fact of each transaction, that every write
+it may ask of `uploads` is under a key that starts with `who` (`writes`), and on a theorem of
+Lanes, `Txn.All.others`: a transaction that writes a table only under some keys leaves every
+row of another key as it was:
 
 ```lean
-/-- Only its uploader takes a file off the shelf: if a step leaves `owner` without the upload
-`file` it had, the step was `owner`'s delete of `file`. -/
-theorem only_uploader_deletes (config : Config) (s : State) (r : Request) {owner : Member}
-    {file : FileId} (had : s.holds owner file)
-    (gone : ((service config).step s r).1.holds owner file = false) :
-    ∃ req, r = .delete req owner file := by
-  obtain ⟨u, hu, hk⟩ := List.any_eq_true.mp had
-  cases r <;> simp only [service] at gone <;> (repeat' split at gone) <;>
-    simp_all [State.holds] <;> grind
+/-- **Only its uploader takes a file off the shelf.** A transaction of a request made as `who`
+leaves every upload of another member on the shelf if it was there, and off it if it was not. -/
+theorem only_uploader_deletes (config : Config) (r : Request) {db : Db} {a : Answer} {db' : Db}
+    (h : (handler config r).run db = .ok (a, db')) (u : Upload) (other : u.owner ≠ r.who) :
+    uploads.toRow u ∈ db'.rows uploads.table.name ↔ uploads.toRow u ∈ db.rows uploads.table.name :=
+  Txn.All.others (writes config r) h (by simpa [uploads, Columns.table, Table.keyOf] using other)
 ```
 
-It takes the request apart, splits every `if` and `match` of `service`, and lets `grind` close
-each case. With the bug, the `delete` case is left open: Bob's delete removes Alice's file. Gate
-it as the first tutorial did:
+`writes` takes the request apart and each operation in turn (`TableOf.scan_all`,
+`TableOf.insert_all`, `TableOf.delete_all`, …). With the bug, it cannot be proved: the delete
+names a key read from the table, which may start with anyone. Gate it as the first tutorial did:
 
 ```lean
 /-- info: 'Shelf.only_uploader_deletes' depends on axioms: [propext, Classical.choice, Quot.sound] -/
@@ -380,7 +390,9 @@ bridge's, tested. The code of this step is `Tests/TutorialWeb/Check.lean`,
 ## 6. Run it
 
 The configuration is read once, in `main` (rule 2.5). Nothing secret is in the code or the
-repository:
+repository. The database is named as libpq's variables name it, and at the start `main` runs
+the migrations not yet run and checks the tables (`Postgres.Typed.prepare`); `docs/DEPLOY.md`
+says how to run it as a container, several at once:
 
 ```lean
   let origin := ((← IO.getEnv "LANES_URL").filter (!·.isEmpty)).getD s!"http://localhost:{port}"
@@ -402,6 +414,8 @@ after the port; losing it ends every session and nothing else.
 
 What this shelf leaves out, and where to see it done:
 
-- A list that survives a restart: keep it in PostgreSQL, as `examples/todo-db` keeps its items.
+- Taking the object out of the bucket when its upload is deleted: an effect written in the
+  delete's transaction to an outbox, which a worker performs (`Lanes.Db.Jobs`, as
+  `examples/payments` charges an order).
 - An upload begun and never finished keeps its place on the shelf.
 - Uploads larger than one `POST`: `Lanes.S3.Multipart` and `S3.presignPart`.

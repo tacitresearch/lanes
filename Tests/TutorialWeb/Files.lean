@@ -7,111 +7,131 @@ import Lanes
 /-!
 # A shelf of files
 
-The spec, the actor and its proofs. Members put files on a shared shelf and take their own off.
-This file is logic only: no IO (Lanes rule 2.4).
+The tables, the transactions and the front. Members put files on a shared shelf and take their
+own off. This file is logic only: no IO (Lanes rule 2.4), and no theorems.
 -/
 
 namespace Shelf
 
-open Lanes
-
-abbrev ReqId := Nat
-abbrev FileId := Nat
+open Lanes Lanes.Db
 
 /-- Who signed in, as the bridge names an identity the sign-in verified. -/
 abbrev Member := String
 
+/-- An upload, keyed by its uploader and its id, so that only a request made as its uploader
+names its key. -/
 lanes_data structure Upload where
-  id : FileId
-  owner : Member
+  owner : String
+  id : Int64
   /-- The size the store gave when it was asked; `none` until it held the file. -/
-  size : Option Nat
+  size : Option Int64
   deriving DecidableEq, Repr, Hashable
+  table uploads key owner, id
 
-lanes_data structure State where
-  next : FileId := 0
-  uploads : List Upload := []
+/-- A number that only grows: the next upload's id, so that no two uploads share an object. -/
+lanes_data structure Counter where
+  name : String
+  next : Int64
   deriving DecidableEq, Repr, Hashable
+  table counters key name
+
+def schema : Schema := [uploads.table, counters.table]
 
 lanes_data inductive Request where
-  | list (req : ReqId) (who : Member) (at_s : Nat)
+  | list (who : String) (at_s : Nat)
   /-- Begin an upload: the answer is a form to post the file to the store. -/
-  | begin (req : ReqId) (who : Member) (at_s : Nat)
+  | begin (who : String) (at_s : Nat)
   /-- The browser says it posted the file; `size` is what the store answered when asked. -/
-  | seen (req : ReqId) (who : Member) (file : FileId) (size : Option Nat)
-  | delete (req : ReqId) (who : Member) (file : FileId)
+  | seen (who : String) (file : Int64) (size : Option Nat)
+  | delete (who : String) (file : Int64)
   deriving DecidableEq, Repr, Hashable
 
 lanes_data inductive Answer where
-  | shelf (viewer : Member) (files : List Upload) (at_s : Nat)
-  | form (viewer : Member) (file : FileId) (at_s : Nat)
-  | listed (file : FileId)
-  | notSeen (file : FileId)
-  | deleted (file : FileId)
-  | refused (file : FileId)
+  | shelf (viewer : String) (files : List Upload) (at_s : Nat)
+  | form (viewer : String) (file : Int64) (at_s : Nat)
+  | listed (file : Int64)
+  | notSeen (file : Int64)
+  | deleted (file : Int64)
+  | refused (file : Int64)
   | full
   deriving DecidableEq, Repr, Hashable
 
-lanes_data structure Response where
-  req : ReqId
-  answer : Answer
-  deriving DecidableEq, Repr, Hashable
-
 structure Config where
-  /-- Uploads on the shelf at once, begun or seen (rule 2.6). -/
+  /-- Uploads on the shelf at once, begun or seen (rule 2.6), at most `Scan.limit_max`. -/
   maxFiles : Nat := 100
 
-abbrev sig : Signature := Server.sig Request Response
+/-- The member a request is made as. -/
+def Request.who : Request → Member
+  | .list who _ | .begin who _ | .seen who .. | .delete who _ => who
 
-/-- Whether `who` has the upload `file` on the shelf, begun or seen. -/
-def State.holds (s : State) (who : Member) (file : FileId) : Bool :=
-  s.uploads.any fun u => u.id == file && u.owner == who
+def nextId : Txn Int64 := do
+  let next := ((← counters.get [.text "upload"]).map (·.next)).getD 0
+  let _ ← counters.upsert { name := "upload", next := next + 1 }
+  return next
 
-def service (config : Config) : Service sig.In sig.Out State where
-  init := {}
-  step s
-    | .list req who at_s => (s, [⟨req, .shelf who (s.uploads.filter (·.size.isSome)) at_s⟩])
-    | .begin req who at_s =>
-      if s.uploads.length < config.maxFiles then
-        ({ next := s.next + 1, uploads := s.uploads ++ [⟨s.next, who, none⟩] },
-          [⟨req, .form who s.next at_s⟩])
-      else (s, [⟨req, .full⟩])
-    | .seen req who file size =>
-      match size with
-      | some n =>
-        if s.holds who file then
-          ({ s with uploads := s.uploads.map fun u =>
-              if u.id == file && u.owner == who then { u with size := some n } else u },
-            [⟨req, .listed file⟩])
-        else (s, [⟨req, .notSeen file⟩])
-      | none => (s, [⟨req, .notSeen file⟩])
-    | .delete req who file =>
-      if s.holds who file then
-        ({ s with uploads := s.uploads.filter fun u => !(u.id == file && u.owner == who) },
-          [⟨req, .deleted file⟩])
-      else (s, [⟨req, .refused file⟩])
+/-- The uploads on the shelf, at most `maxFiles`. -/
+def onShelf (config : Config) : Txn (List Upload) :=
+  uploads.scan { table := uploads.table, limit := config.maxFiles }
 
-abbrev system (config : Config) : System sig :=
-  Server.system (service config)
+/-- What each request does. A `begin` past `maxFiles` is refused with `full`. A file is listed
+only once the store said it holds it, and only its uploader can have it listed or take it off:
+both name the upload by its key, which starts with the member. -/
+def handler (config : Config) : Handler Request Answer
+  | .list who at_s => do
+    return .shelf who ((← onShelf config).filter (·.size.isSome)) at_s
+  | .begin who at_s => do
+    if config.maxFiles ≤ (← onShelf config).length then return .full
+    let id ← nextId
+    let _ ← uploads.insert { owner := who, id, size := none }
+    return .form who id at_s
+  | .seen who file size =>
+    match size with
+    | some n => do
+      if ← uploads.update { owner := who, id := file, size := some (Int64.ofNat n) } then
+        return .listed file
+      else return .notSeen file
+    | none => return .notSeen file
+  | .delete who file => do
+    if ← uploads.delete [.text who, .int file] then return .deleted file else return .refused file
 
-/-- The shelf never holds more than `maxFiles` uploads. -/
-theorem shelf_bounded (config : Config) :
-    (Server.actor (service config)).Invariant fun s => s.uploads.length ≤ config.maxFiles := by
-  actor_invariant [Server.actor, service]
+/-! ## The front: it sends each request to the store and answers with what the store answered -/
 
-/-- In every reachable state of the system, under any environment model. -/
-theorem system_bounded (config : Config) (env : EnvModel sig) :
-    (system config).Invariant env fun c => (c.state ()).uploads.length ≤ config.maxFiles :=
-  System.invariant_of_actor (system config) () (shelf_bounded config) env
+abbrev ReqId := Nat
 
-/-- Only its uploader takes a file off the shelf: if a step leaves `owner` without the upload
-`file` it had, the step was `owner`'s delete of `file`. -/
-theorem only_uploader_deletes (config : Config) (s : State) (r : Request) {owner : Member}
-    {file : FileId} (had : s.holds owner file)
-    (gone : ((service config).step s r).1.holds owner file = false) :
-    ∃ req, r = .delete req owner file := by
-  obtain ⟨u, hu, hk⟩ := List.any_eq_true.mp had
-  cases r <;> simp only [service] at gone <;> (repeat' split at gone) <;>
-    simp_all [State.holds] <;> grind
+inductive In where
+  | request (id : ReqId) (r : Request)
+  | store (reply : Db.Reply Answer)
+  deriving DecidableEq, Repr, Hashable
+
+inductive Out where
+  | call (c : Db.Call Request)
+  | answered (id : ReqId) (a : Answer)
+  | failed (id : ReqId)
+  deriving DecidableEq, Repr, Hashable
+
+abbrev sig : Signature where
+  Id := Unit
+  Msg _ := In
+  In := In
+  Out := Out
+
+def step : In → List (Effect sig ())
+  | .request id r => [.emit (.call ⟨id, r⟩)]
+  | .store ⟨id, .committed a⟩ => [.emit (.answered id a)]
+  | .store ⟨id, _⟩ => [.emit (.failed id)]
+
+abbrev system : System sig where
+  State _ := Unit
+  actor _ := { init := (), step := fun _ x => ((), step x) }
+  accept x := ⟨(), x⟩
+
+def port : Db.Port sig Request Answer where
+  call
+    | .call c => some c
+    | _ => none
+  reply r := .store r
+  replied
+    | .store r => some r
+    | _ => none
 
 end Shelf

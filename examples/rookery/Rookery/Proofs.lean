@@ -122,36 +122,6 @@ theorem Good.failures (h : Good config n o) :
 
 end
 
-/-! ## Leaves: one operation of a table -/
-
-section
-variable {P : Op → Prop} {α : Type} (t : TableOf α)
-
-theorem decode_all (r : Row) : (t.decode r).All P := by
-  unfold TableOf.decode; split
-  · exact .pure _
-  · exact .abort _
-
-theorem get_all (key : Row) (h : P (.get t.table key)) : (t.get key).All P :=
-  Txn.All.bind (Txn.All.single h) fun r => by
-    cases r with
-    | some x => exact Txn.All.map _ (decode_all t x)
-    | none => exact .pure _
-
-theorem scan_all (s : Scan) (h : P (.scan { s with table := t.table })) : (t.scan s).All P :=
-  Txn.All.bind (Txn.All.single h) fun rows => Txn.All.mapM _ (decode_all t) rows
-
-theorem lookup_all (i : Index) (vals : Row) (limit : Nat)
-    (h : P (.scan { table := t.table, index := some i, eq := vals, limit })) : (t.lookup i vals limit).All P :=
-  Txn.All.bind (Txn.All.single h) fun rows => Txn.All.mapM _ (decode_all t) rows
-
-theorem insert_all (a : α) (h : P (.insert t.table (t.toRow a))) : (t.insert a).All P := Txn.All.single h
-theorem update_all (a : α) (h : P (.update t.table (t.toRow a))) : (t.update a).All P := Txn.All.single h
-theorem upsert_all (a : α) (h : P (.upsert t.table (t.toRow a))) : (t.upsert a).All P := Txn.All.single h
-theorem delete_all (key : Row) (h : P (.delete t.table key)) : (t.delete key).All P := Txn.All.single h
-
-end
-
 /-! ## Each operation rookery asks is `Good` -/
 
 section
@@ -202,8 +172,8 @@ macro "write_good" : tactic => `(tactic| first
   | exact good_sessions _ rfl)
 
 theorem take_good (c : String) : (take c).All (Good config n) :=
-  Txn.All.bind (get_all _ _ (by read_good)) fun _ =>
-    Txn.All.bind (upsert_all _ _ (by write_good)) fun _ => .pure _
+  Txn.All.bind (TableOf.get_all _ _ (by read_good)) fun _ =>
+    Txn.All.bind (TableOf.upsert_all _ _ (by write_good)) fun _ => .pure _
 
 end
 
@@ -220,7 +190,7 @@ macro "key_good" : tactic => `(tactic| first
   | exact good_sessions _ rfl)
 
 theorem failures_read_good : (Auth.Rows.Failures.read config.failures n).All (Good config n) :=
-  Txn.All.bind (get_all _ _ (by read_good)) fun _ => .pure _
+  Txn.All.bind (TableOf.get_all _ _ (by read_good)) fun _ => .pure _
 
 theorem failures_write_good (hlimit : config.maxFailures < 2 ^ 63) {a : Auth.Attempts}
     (ha : Auth.Attempts.Bounded config.maxFailures a) :
@@ -260,11 +230,11 @@ theorem close_good (id : Int64) : (Auth.Rows.Sessions.close config.sessions id).
 
 theorem ofUser_good (u : String) (limit : Nat) :
     (Auth.Rows.Sessions.ofUser config.sessions u limit).All (Good config n) :=
-  lookup_all _ _ _ _ (good_sessions _ rfl)
+  TableOf.lookup_all _ _ _ _ (good_sessions _ rfl)
 
 theorem accepts_good (id at_s : Int64) :
     (Auth.Rows.Sessions.accepts config.sessions id at_s).All (Good config n) := by
-  refine Txn.All.bind (get_all _ _ (good_sessions _ rfl)) fun r => ?_
+  refine Txn.All.bind (TableOf.get_all _ _ (good_sessions _ rfl)) fun r => ?_
   split
   · dsimp only
     split
@@ -277,13 +247,13 @@ macro_rules
   | `(tactic| txn_good) => `(tactic| first
     | exact Txn.All.pure _
     | exact Txn.All.abort _
-    | exact get_all _ _ (by read_good)
-    | exact scan_all _ _ (by read_good)
-    | exact lookup_all _ _ _ _ (by read_good)
-    | exact insert_all _ _ (by key_good)
-    | exact update_all _ _ (by key_good)
-    | exact upsert_all _ _ (by key_good)
-    | exact delete_all _ _ (by key_good)
+    | exact TableOf.get_all _ _ (by read_good)
+    | exact TableOf.scan_all _ _ (by read_good)
+    | exact TableOf.lookup_all _ _ _ _ (by read_good)
+    | exact TableOf.insert_all _ _ (by key_good)
+    | exact TableOf.update_all _ _ (by key_good)
+    | exact TableOf.upsert_all _ _ (by key_good)
+    | exact TableOf.delete_all _ _ (by key_good)
     | exact take_good _
     | exact failed_good (by assumption)
     | exact succeeded_good (by assumption)
@@ -335,19 +305,19 @@ theorem session_good (at_s sid : Int64) : (session config at_s n sid).All (Good 
 theorem post_good (hmax : config.maxPerWindow < 2 ^ 63) (at_s : Int64) (body : String) :
     (post config at_s n body).All (Good config n) := by
   unfold post
-  refine Txn.All.bind (get_all _ _ (by read_good)) fun _ => ?_
+  refine Txn.All.bind (TableOf.get_all _ _ (by read_good)) fun _ => ?_
   dsimp only
   split
   all_goals
     split
     · exact .pure _
     · next hc =>
-      refine Txn.All.bind (scan_all _ _ (by read_good)) fun _ => ?_
+      refine Txn.All.bind (TableOf.scan_all _ _ (by read_good)) fun _ => ?_
       split
       · exact .pure _
       · refine Txn.All.bind (take_good _) fun _ => ?_
-        refine Txn.All.bind (insert_all _ _ (by key_good)) fun _ => ?_
-        exact Txn.All.bind (upsert_all _ _ (good_windows _ rfl (fun k hk => (Option.some.inj hk).symm)
+        refine Txn.All.bind (TableOf.insert_all _ _ (by key_good)) fun _ => ?_
+        exact Txn.All.bind (TableOf.upsert_all _ _ (good_windows _ rfl (fun k hk => (Option.some.inj hk).symm)
           (window_written hmax _ (Nat.lt_of_not_le hc)))) fun _ => .pure _
 
 theorem follow_good (whom : String) : (follow config n whom).All (Good config n) := by
@@ -358,7 +328,7 @@ theorem postsOf_good (m : String) : (postsOf config m).All (Good config n) := by
 
 theorem timeline_good : (timeline config n).All (Good config n) := by
   unfold timeline
-  refine Txn.All.bind (scan_all _ _ (by read_good)) fun _ => ?_
+  refine Txn.All.bind (TableOf.scan_all _ _ (by read_good)) fun _ => ?_
   exact Txn.All.bind (Txn.All.mapM _ (fun m => postsOf_good m) _) fun _ => .pure _
 
 theorem act_good (hmax : config.maxPerWindow < 2 ^ 63) (at_s : Int64) (op : Action) :
@@ -375,18 +345,18 @@ theorem change_good (hmax : config.maxPerWindow < 2 ^ 63) (at_s : Int64) (m : Me
   unfold change
   refine Txn.All.bind ?_ fun _ => by split; exact .pure _
   unfold Keys.once
-  refine Txn.All.bind (get_all _ _ (by read_good)) fun found => ?_
+  refine Txn.All.bind (TableOf.get_all _ _ (by read_good)) fun found => ?_
   split
   · exact .pure _
-  · refine Txn.All.bind ?_ fun a => Txn.All.bind (insert_all _ _ (by key_good)) fun ok => by
+  · refine Txn.All.bind ?_ fun a => Txn.All.bind (TableOf.insert_all _ _ (by key_good)) fun ok => by
       split
       · exact .pure _
       · exact .abort _
     refine Txn.All.bind (act_good hmax at_s op) fun reply => ?_
     dsimp only
     split
-    · exact Txn.All.bind (delete_all _ _ (by key_good)) fun _ =>
-        Txn.All.bind (update_all _ _ (by key_good)) fun _ => .pure _
+    · exact Txn.All.bind (TableOf.delete_all _ _ (by key_good)) fun _ =>
+        Txn.All.bind (TableOf.update_all _ _ (by key_good)) fun _ => .pure _
     · exact .pure _
 
 theorem api_good (hmax : config.maxPerWindow < 2 ^ 63) (at_s token seq : Int64) (op : Action) :
@@ -394,7 +364,7 @@ theorem api_good (hmax : config.maxPerWindow < 2 ^ 63) (at_s token seq : Int64) 
   unfold api
   have := act_good (config := config) (n := n) hmax at_s op
   have := change_good (config := config) (n := n) hmax at_s
-  refine Txn.All.bind (get_all _ _ (by read_good)) fun _ => ?_
+  refine Txn.All.bind (TableOf.get_all _ _ (by read_good)) fun _ => ?_
   split
   · exact .pure _
   · split
