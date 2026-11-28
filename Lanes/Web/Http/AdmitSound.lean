@@ -1163,6 +1163,141 @@ theorem sim_step {w w' : World sys bridge} {c : SysState (served sys bridge conf
     · simp at hstep
   | shard ev => exact sim_shard h hstep
 
+/-! From the start. -/
+
+theorem rel_boot {w : World sys bridge} {c : SysState (served sys bridge config)} (h : Rel w c)
+    (boot : List σ.Id) :
+    Rel { w with shard := (boot.map Sum.inr).foldl (fun s i => s.startActor .reliable i) w.shard }
+      ((boot.map Sum.inr).foldl (fun c i => c.startActor servedEnv i) c) := by
+  induction boot generalizing w c with
+  | nil => exact h
+  | cons j boot ih => exact ih (rel_start h j)
+
+theorem rel_init : Rel (World.init sys bridge)
+    (SysState.init (served sys bridge config) servedEnv) := by
+  have h0 : Rel ({ shard := SysState.blank (admitted sys bridge) } : World sys bridge)
+      ((SysState.blank (served sys bridge config)).startActor servedEnv (.inl ())) :=
+    { pending := by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, gateActor,
+        SysState.performAll]
+      state := fun _ => by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, gateActor,
+        SysState.performAll]
+      gateUp := by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, gateActor,
+        SysState.performAll]
+      up := fun _ => by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, gateActor,
+        SysState.performAll]
+      gateTimers := by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, gateActor,
+        SysState.performAll]
+      timers := fun _ => by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, gateActor,
+        SysState.performAll]
+      outbox := by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, gateActor,
+        SysState.performAll]
+      sysNet := by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, gateActor,
+        SysState.performAll]
+      gateNet := by simp [SysState.startActor, SysState.settle, SysState.blank, Actor.mapEff, gateActor,
+        SysState.performAll] }
+  have := rel_boot h0 sys.boot
+  have hsink : (sink.boot.map (Sum.inl (β := σ.Id))) = [] := rfl
+  simpa [World.init, SysState.init, List.foldl_cons, hsink] using this
+
+/-- A run of the server from its start is a run of `served sys` from its start, under
+`servedEnv`, with the same requests arriving and the same answers handed over, in the same
+order, and the two in the relation `Rel` at its end. -/
+theorem World.refines {events : List (World.Event σ)} {w : World sys bridge}
+    (hrun : (World.init sys bridge).run config events = some w) :
+    ∃ (events' : List (Lanes.Event (servedSig σ))) (c : SysState (served sys bridge config)),
+      (SysState.init (served sys bridge config) servedEnv).run servedEnv events' = some c
+        ∧ Rel w c
+        ∧ events'.filterMap Lanes.Event.visible = events.filterMap World.Event.visible := by
+  suffices ∀ (events : List (World.Event σ)) (w₀ w : World sys bridge)
+      (c₀ : SysState (served sys bridge config)), Rel w₀ c₀ → w₀.run config events = some w →
+      ∃ events' c, c₀.run servedEnv events' = some c ∧ Rel w c
+        ∧ events'.filterMap Lanes.Event.visible = events.filterMap World.Event.visible from
+    this events _ w _ rel_init hrun
+  intro events
+  induction events with
+  | nil =>
+    intro w₀ w c₀ h hrun
+    simp only [World.run, Option.some.injEq] at hrun
+    subst hrun
+    exact ⟨[], c₀, rfl, h, rfl⟩
+  | cons ev events ih =>
+    intro w₀ w c₀ h hrun
+    simp only [World.run] at hrun
+    cases hstep : w₀.step config ev with
+    | none => simp [hstep] at hrun
+    | some w₁ =>
+      rw [hstep, Option.bind_some] at hrun
+      obtain ⟨evs₁, c₁, hrun₁, h₁, hvis₁⟩ := sim_step h hstep
+      obtain ⟨evs₂, c₂, hrun₂, h₂, hvis₂⟩ := ih w₁ w c₁ h₁ hrun
+      refine ⟨evs₁ ++ evs₂, c₂, ?_, h₂, ?_⟩
+      · rw [SysState.run_append, hrun₁, Option.bind_some, hrun₂]
+      · rw [List.filterMap_append, hvis₁, hvis₂, List.filterMap_cons]
+        cases World.Event.visible ev <;> rfl
+
+namespace World
+
+def arrived (events : List (World.Event σ)) : List ReqId :=
+  events.filterMap fun
+    | .arrive id _ => some id
+    | _ => none
+
+def answered (events : List (World.Event σ)) : List ReqId :=
+  events.filterMap fun
+    | .answer (id, _) => some id
+    | _ => none
+
+end World
+
+/-- The server answers no request more often than it arrived: the gate's theorem
+`served_answered_le_arrived`, of the gate before the shard. -/
+theorem World.answered_le_arrived {events : List (World.Event σ)} {w : World sys bridge}
+    (hrun : (World.init sys bridge).run config events = some w) (id : ReqId) :
+    (World.answered events).count id ≤ (World.arrived events).count id := by
+  obtain ⟨events', c, hrun', -, hvis⟩ := World.refines hrun
+  have hle := _root_.Lanes.Http.served_answered_le_arrived (env := servedEnv) rfl hrun' id
+  let inId : Visible (ReqId × Request) (ReqId × Response) → Option ReqId
+    | .input (id, _) => some id
+    | _ => none
+  let outId : Visible (ReqId × Request) (ReqId × Response) → Option ReqId
+    | .output (id, _) => some id
+    | _ => none
+  have harrived : Served.arrived events' = World.arrived events := by
+    have h1 : Served.arrived events' = (events'.filterMap Lanes.Event.visible).filterMap inId := by
+      simp only [Served.arrived, List.filterMap_filterMap]
+      congr 1
+      funext ev
+      cases ev with
+      | input x => cases x; rfl
+      | output o => cases o; rfl
+      | _ => rfl
+    have h2 : World.arrived events = (events.filterMap World.Event.visible).filterMap inId := by
+      simp only [World.arrived, List.filterMap_filterMap]
+      congr 1
+      funext ev
+      cases ev with
+      | answer a => cases a; rfl
+      | _ => rfl
+    rw [h1, h2, hvis]
+  have hanswered : Served.answered events' = World.answered events := by
+    have h1 : Served.answered events' = (events'.filterMap Lanes.Event.visible).filterMap outId := by
+      simp only [Served.answered, List.filterMap_filterMap]
+      congr 1
+      funext ev
+      cases ev with
+      | input x => cases x; rfl
+      | output o => cases o; rfl
+      | _ => rfl
+    have h2 : World.answered events = (events.filterMap World.Event.visible).filterMap outId := by
+      simp only [World.answered, List.filterMap_filterMap]
+      congr 1
+      funext ev
+      cases ev with
+      | answer a => cases a; rfl
+      | _ => rfl
+    rw [h1, h2, hvis]
+  rw [← harrived, ← hanswered]
+  exact hle
+
 end Front
 
 end Lanes.Http
