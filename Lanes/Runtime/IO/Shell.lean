@@ -110,7 +110,10 @@ structure Journal.Log (sys : System σ) where
   restored : Bool := false
 
 private abbrev Cmd (sys : System σ) :=
-  Batch.Command σ (fun i => IO.Promise (sys.State i)) (IO.Promise Bool)
+  Batch.Command σ (fun ids => IO.Promise (Batch.Peek sys ids)) (IO.Promise Bool)
+
+instance {sys : System σ} {ids : List σ.Id} : Nonempty (Batch.Peek sys ids) :=
+  ⟨⟨ids.map fun i => ⟨i, (sys.actor i).init⟩, by simp [List.map_map, Function.comp_def]⟩⟩
 
 /-- Who is woken when the inbox changes: the shard, which parks, or a sender waiting for room. -/
 private inductive Wake where
@@ -242,8 +245,11 @@ private def loop (rt : Runtime sys) (onOutput : Journal.OutputId → σ.Out → 
     let config : Batch.Config :=
       { now_ms := ← clock, index, fuel := max 1 rt.config.batch, snapshotEvery, spread }
     let held ← waiting.get
+    -- Peeks are answered at the end of the batch wherever they fall (`Batch.run_erase_peeks`), so
+    -- they are put last, where they do not part inputs that are accepted together.
     let batch := if parallel == .off then batch
-      else Batch.group (max 1 (min rt.config.batch rt.config.snapshotEvery)) batch
+      else Batch.group (max 1 (min rt.config.batch rt.config.snapshotEvery))
+          (batch.filter (!·.isPeek)) ++ batch.filter (·.isPeek)
     let start_ns ← IO.monoNanosNow
     let (acts, resolved, still, count) ← kernel.modifyGet fun k =>
       match Batch.run config k written held batch with
@@ -266,7 +272,7 @@ private def loop (rt : Runtime sys) (onOutput : Journal.OutputId → σ.Out → 
       | .record events => rt.record events.toList
       | .handOver outputs => handOver outputs.toList
       | .save image => if let some save := save then save image
-      | .answer _ reply state => reply.resolve state
+      | .answer _ reply peek => reply.resolve peek
     for heard in resolved do heard.resolve true
     waiting.set still
 
@@ -373,13 +379,29 @@ def batches (rt : Runtime sys) : BaseIO Runtime.Batches :=
 def trace (rt : Runtime sys) : BaseIO (Array (Event σ)) :=
   rt.log.get
 
-/-- The current state of actor `i`. For tests; an application sends the actor a message. -/
+/-- The state of actor `i` at the end of the batch that takes this, waiting while the inbox is
+full. For tests; an application reads with `tryPeek`. -/
 def state (rt : Runtime sys) (i : σ.Id) : Async (sys.State i) := do
-  have : Nonempty (sys.State i) := ⟨(sys.actor i).init⟩
   let reply ← IO.Promise.new
-  rt.send (.peek i reply)
-  let some state ← await reply.result? | throw stopped
-  return state
+  rt.send (.peek [i] reply)
+  let some peek ← await reply.result? | throw stopped
+  return peek.get i List.mem_cons_self
+
+/-- Ask for the states of the actors `ids` if the inbox has room, without waiting. They are read
+at the end of the batch that takes the peek, once everything that batch and those before it
+wrote is appended and handed over (`Batch.run_sound`), with every entry before that boundary
+and none after it (`Batch.run_peeks`), and nothing is journalled (`Batch.run_erase_peeks`).
+`reply` is given them on a task of its own, or `none` if the shard stops first. `false` means
+nothing was asked: the shard is busy or has stopped.
+
+The states are then shared with that task: an actor stepped before the task lets go of its
+state starts from a copy of it. -/
+def tryPeek (rt : Runtime sys) (ids : List σ.Id) (reply : Option (Batch.Peek sys ids) → BaseIO Unit) :
+    BaseIO Bool := do
+  let promise ← IO.Promise.new
+  unless ← rt.offer (.peek ids promise) do return false
+  discard <| BaseIO.mapTask (t := promise.result?) reply
+  return true
 
 /-- Stop, and return when the shard has ended. It takes no more commands, finishes those already
 handed over and at most one more batch of work, then ends. Messages still queued between actors
