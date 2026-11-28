@@ -11,6 +11,7 @@ public import Lanes.Check.FingerprintSound
 public import Lanes.Check.ReduceSound
 public import Lanes.Check.SearchSound
 public import Lanes.Check.SystemSound
+public import Lanes.Data.BodySound
 public import Lanes.Lib.Encoding.Json.BasicSound
 public import Lanes.Lib.Encoding.Json.ParserSound
 public import Lanes.Lib.Encoding.Json.PrinterSound
@@ -19,6 +20,7 @@ public import Lanes.Lib.Net.UrlSound
 public import Lanes.Lib.Postgres.ConnSound
 public import Lanes.Lib.Postgres.MessageSound
 public import Lanes.Net.CourierSound
+public import Lanes.Net.HandshakeSound
 public import Lanes.Outside.Store.Sound
 public import Lanes.Proof.JoinSound
 public import Lanes.Proof.MapIOSound

@@ -492,6 +492,52 @@ them by area.
 | `SysState.run` | proved | `Check.systemFingerprinted_violated`, `Check.system_violated`, `Http.Gate.answered_le_handled` and others |
 | `System.Invariant` | spec | a predicate |
 
+## `Lanes/Data/Body.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Codec.Error.Step.text` | tested | `Tests/Body.lean` |
+| `Codec.Error.Problem.text` | tested | `Tests/Body.lean` |
+| `Codec.Error.pathText` | tested | `Tests/Body.lean` |
+| `Codec.Error.instToString` | tested | `Tests/Body.lean` |
+| `Body.fail` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.within` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.writeNat` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.natBytes` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.zigzag` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.unzigzag` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.writeNum` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.writeBlob` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.writeCount` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.readNatFrom` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.readNat` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.readBlob` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.readCount` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.consumes` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.consumesFields` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.Tag.nat` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.Tag.int` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.Tag.string` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.Tag.bytes` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.Tag.list` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.Tag.ctor` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.writeAt` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.writeFields` | spec | used only in statements |
+| `Body.writeItems` | spec | used only in statements |
+| `Body.writeEntries` | spec | used only in statements |
+| `Body.writeTagged` | proved | through `Body.encode`, `Body.write`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.writeTaggedItems` | spec | used only in statements |
+| `Body.readAt` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.readFields` | spec | used only in statements |
+| `Body.readItems` | spec | used only in statements |
+| `Body.readEntries` | spec | used only in statements |
+| `Body.readTagged` | proved | through `Body.decode`, `Body.read`: `Body.decode_encode`, `Body.encode_decode` and others |
+| `Body.readTaggedItems` | spec | used only in statements |
+| `Body.write` | proved | `Body.encode_decode`, `Body.read_eq_ok_iff` |
+| `Body.read` | proved | `Body.read_eq_ok_iff` |
+| `Body.encode` | proved | `Body.decode_encode` |
+| `Body.decode` | proved | `Body.decode_encode`, `Body.encode_decode` |
+
 ## `Lanes/Data/Codec.lean`
 
 | Definition | Status | Evidence |
@@ -504,12 +550,15 @@ them by area.
 | `Codec.map` | proved | its type, `Codec` |
 | `Codec.sigma` | proved | its type, `Codec` |
 | `Codec.subtype` | proved | its type, `Codec` |
+| `Codec.withSchema` | proved | its type, `Codec` |
 | `Codec.bool` | proved | its type, `Codec` |
 | `Codec.fin` | proved | its type, `Codec` |
 | `Codec.int` | proved | its type, `Codec` |
 | `Codec.sum` | proved | its type, `Codec` |
 | `Codec.option` | proved | its type, `Codec` |
-| `Codec.readMany` | tested | `Tests/Codec.lean`, `Tests/Durable.lean`, `Tests/MonitorSpeed.lean` and others |
+| `Codec.padded` | proved | its type, `Codec` |
+| `Codec.hasAtLeast` | tested | `Tests/Body.lean`, `Tests/Codec.lean`, `Tests/Durable.lean` and others |
+| `Codec.readMany` | tested | `Tests/Body.lean`, `Tests/Codec.lean`, `Tests/Durable.lean` and others |
 | `Codec.list` | proved | its type, `Codec` |
 | `Codec.extTreeMap` | proved | its type, `Codec` |
 | `Codable.instByteArray` | proved | its type, `Codable` |
@@ -529,8 +578,16 @@ them by area.
 | `Codec.of` | proved | its type, `Codec` |
 | `Codec.fresh` | none |  |
 | `Codec.tuple` | none |  |
+| `Codec.fieldTuple` | none |  |
 | `Codec.product` | none |  |
 | `Codec.inject` | none |  |
+| `Codec.injectCtor` | none |  |
+| `Codec.nameLit` | none |  |
+| `Codec.typeName` | none |  |
+| `Codec.fieldsTerm` | none |  |
+| `Codec.structTerm` | none |  |
+| `Codec.sumBytes` | none |  |
+| `Codec.sumTerm` | none |  |
 
 ## `Lanes/Data/Declare.lean`
 
@@ -551,6 +608,9 @@ them by area.
 | `Declare.independent` | none |  |
 | `Declare.migrate` | none |  |
 | `Declare.enum` | none |  |
+| `Declare.constantDefaults` | none |  |
+| `Declare.ctorArgs` | none |  |
+| `Declare.ctorBinder` | none |  |
 
 ## `Lanes/Data/Enum.lean`
 
@@ -584,6 +644,45 @@ them by area.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Quorum.isMajority` | proved | `Quorum.majority_inter` |
+
+## `Lanes/Data/Schema.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Schema.Fields.nil` | proved | its type, `Schema.Fields` |
+| `Schema.Fields.cons` | proved | its type, `Schema.Fields` |
+| `Schema.Ctors.nil` | proved | its type, `Schema.Ctors` |
+| `Schema.Ctors.cons` | proved | its type, `Schema.Ctors` |
+| `Schema.Of.nat` | proved | its type, `Schema.Of` |
+| `Schema.Of.int` | proved | its type, `Schema.Of` |
+| `Schema.Of.string` | proved | its type, `Schema.Of` |
+| `Schema.Of.bytes` | proved | its type, `Schema.Of` |
+| `Schema.Of.unit` | proved | its type, `Schema.Of` |
+| `Schema.Of.map` | proved | its type, `Schema.Of` |
+| `Schema.Of.record` | proved | its type, `Schema.Of` |
+| `Schema.Of.variants` | proved | its type, `Schema.Of` |
+| `Schema.Of.list` | proved | its type, `Schema.Of` |
+| `Schema.Of.bool` | proved | its type, `Schema.Of` |
+| `Schema.Of.pair` | proved | its type, `Schema.Of` |
+| `Schema.Of.sum` | proved | its type, `Schema.Of` |
+| `Schema.Of.option` | proved | its type, `Schema.Of` |
+| `Schema.Of.sigma` | proved | its type, `Schema.Of` |
+| `Schema.paren` | tested | `Tests/Schema.lean` |
+| `Schema.name` | tested | `Tests/Schema.lean` |
+| `Schema.names` | tested | `Tests/Schema.lean` |
+| `Schema.named` | tested | `Tests/Schema.lean` |
+| `Schema.namedAll` | tested | `Tests/Schema.lean` |
+| `Schema.namedFields` | tested | `Tests/Schema.lean` |
+| `Schema.namedCtors` | tested | `Tests/Schema.lean` |
+| `Schema.argument` | tested | `Tests/Schema.lean` |
+| `Schema.display` | tested | `Tests/Schema.lean` |
+| `Schema.displayFields` | tested | `Tests/Schema.lean` |
+| `Schema.displayArgs` | tested | `Tests/Schema.lean` |
+| `Schema.displayCtor` | tested | `Tests/Schema.lean` |
+| `Schema.was` | tested | `Tests/Schema.lean` |
+| `Schema.Field.text` | tested | `Tests/Schema.lean` |
+| `Schema.declaration` | tested | `Tests/Schema.lean` |
+| `Schema.text` | tested | `Tests/Schema.lean` |
 
 ## `Lanes/Durable/Disk.lean`
 
@@ -639,17 +738,17 @@ them by area.
 | `Journal.named?` | proved | `Journal.Disk.start_foreign` |
 | `Journal.file` | proved | `Journal.Disk.load_cut`, `Journal.open?_cut`, `Journal.open?_file` |
 | `Journal.open?` | proved | `Journal.Disk.open?_of_read`, `Journal.open?_cut`, `Journal.open?_file` |
-| `Journal.Entry.op?` | proved | through `Journal.ops`: `Journal.recover_handed`, `Journal.recover_kernel` and others |
-| `Journal.Entry.marks` | spec | used only in statements |
+| `Journal.Entry.op?` | proved | through `Batch.flush`, `Batch.grown` and others: `Batch.flush_save`, `Batch.grown_eq` and others |
+| `Journal.Entry.marks` | proved | `Journal.recoverIds_handed`, `Journal.recover_handed` |
 | `Journal.ops` | proved | `Journal.recover_handed`, `Journal.recover_kernel`, `Journal.recover_outputs` and others |
 | `Journal.replay1` | proved | through `Journal.Begun.toFound`, `Journal.recover` and others: `Journal.Begun.resume_upgraded`, `Journal.Disk.Holds.load_append_crash` and others |
 | `Journal.recover` | proved | `Journal.Disk.load_cut`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.begin_torn` and others |
 | `Journal.replay` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and others |
 | `Journal.Entry.savedAt` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` and others |
 | `Journal.since` | proved | through `Journal.Begun.load`, `Journal.Begun.toFound` and others: `Journal.Begun.resume_upgraded`, `Journal.Upgrade.begin_crash` and others |
-| `Journal.resume` | proved | `Journal.Begun.resume_upgraded`, `Journal.resume_eq_recover`, `Journal.resume_eq_replay` |
-| `Journal.turn` | proved | through `Journal.turns`: `Journal.turns_kernel` |
-| `Journal.turnAll` | proved | `Journal.turnAll_eq_exec`, `Journal.turnAll_spread` |
+| `Journal.resume` | proved | `Journal.Begun.resume_upgraded`, `Journal.resumeIds_erase`, `Journal.resume_eq_recover` and others |
+| `Journal.turn` | proved | `Journal.turn_placed` |
+| `Journal.turnAll` | proved | `Journal.turnAll_eq_exec`, `Journal.turnAll_placed`, `Journal.turnAll_spread` |
 | `Journal.turns` | spec | used only in statements |
 
 ## `Lanes/Durable/Migration.lean`
@@ -660,6 +759,23 @@ them by area.
 | `Migration.envelope` | proved | through `Migration.kernel`: `Journal.Upgrade.begin_crash`, `Journal.Upgrade.inv_load` and others |
 | `Migration.image` | proved | through `Migration.kernel`: `Journal.Upgrade.begin_crash`, `Journal.Upgrade.inv_load` and others |
 | `Migration.kernel` | proved | `Journal.Upgrade.begin_crash`, `Journal.Upgrade.inv_load`, `Migration.cell_kernel` and others |
+
+## `Lanes/Durable/OutputId.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Journal.Origin.before` | spec | used only in statements |
+| `Journal.OutputId.key` | checked | `Tests/HttpClient.lean` |
+| `Journal.journalId` | tested | `Tests/Durable.lean` |
+| `Journal.tag` | proved | `Journal.turnAll_placed`, `Journal.turn_placed` |
+| `Journal.apply?` | proved | through `Journal.ids`, `Journal.placed` and others: `Batch.run_ids`, `Journal.ids_append` and others |
+| `Journal.steps` | spec | used only in statements |
+| `Journal.placed` | spec | used only in statements |
+| `Journal.replayIds1` | proved | through `Journal.recoverIds`, `Journal.resumeIds`: `Journal.recoverIds_erase`, `Journal.recoverIds_handed` and others |
+| `Journal.ids` | spec | used only in statements |
+| `Journal.recoverIds` | proved | `Journal.recoverIds_erase`, `Journal.recoverIds_handed`, `Journal.recoverIds_suffix` and others |
+| `Journal.resumeIds` | proved | `Journal.resumeIds_eq_recoverIds`, `Journal.resumeIds_erase` |
+| `Journal.erase` | spec | used only in statements |
 
 ## `Lanes/Durable/Reading.lean`
 
@@ -691,6 +807,8 @@ them by area.
 | `Journal.Upgrade.upgraded` | proved | `Journal.Upgrade.begin_crash`, `Journal.Upgrade.begin_torn`, `Journal.Upgrade.start_torn` |
 | `Journal.Upgrade.start` | proved | `Journal.Upgrade.start_torn` |
 | `Journal.Disk.begin` | proved | `Journal.Upgrade.begin_crash`, `Journal.Upgrade.begin_torn` |
+| `Journal.Upgrade.owed` | tested | `Tests/Durable.lean` |
+| `Journal.Upgrade.label` | proved | `Journal.Upgrade.label_snd` |
 | `Journal.Begun.load` | spec | used only in statements |
 | `Journal.Begun.toFound` | proved | `Journal.Begun.resume_upgraded` |
 | `Journal.Upgrade.past` | spec | used only in statements |
@@ -746,7 +864,7 @@ them by area.
 | `hmac` | trusted | TRUSTED.md: The C |
 | `Bytes.same` | trusted | TRUSTED.md: The C |
 | `randomBytes` | trusted | TRUSTED.md: The C |
-| `Argon2id.derive` | trusted | TRUSTED.md: The C |
+| `Argon2id.derive` | proved | `Auth.Password.verify_phc` |
 | `Argon2id.hash` | trusted | TRUSTED.md: The C |
 
 ## `Lanes/Lib/Crypto/Pbkdf2.lean`
@@ -848,7 +966,7 @@ them by area.
 | `Base64.Alphabet.valueOf` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and others |
 | `Base64.Alphabet.value?` | proved | through `Base64.decode`: `Base64.decode_encode`, `Base64.decode_eq_none_of_length` and others |
 | `Base64.Encoding.std` | proved | `Postgres.Conn.onMessage_binds`, `Postgres.Scram.respond_binds` |
-| `Base64.Encoding.rawStd` | tested | `Tests/Crypto.lean`, `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
+| `Base64.Encoding.rawStd` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
 | `Base64.Encoding.url` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean` |
 | `Base64.Encoding.rawUrl` | tested | `Tests/Oracle/All.lean`, `Tests/Oracle/Base64.lean`, `Tests/Oracle/Jose.lean` and others |
 | `Base64.sextet` | proved | through `Base64.encode`: `Base64.allowed_of_mem_encode`, `Base64.decode_encode` and others |
@@ -1549,6 +1667,35 @@ them by area.
 | `Peers.Action.parcel?` | spec | used only in statements |
 | `Peers.Courier.leftover` | spec | used only in statements |
 
+## `Lanes/Net/Handshake.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Peers.Handshake.magic` | proved | through `Peers.Handshake.Hello.read`, `Peers.Handshake.Hello.write` and others: `Peers.Handshake.Hello.read_write_append`, `Peers.Handshake.Reachable.ready_proved` and others |
+| `Peers.Handshake.version` | proved | `Peers.Handshake.Hello.read_write_append` |
+| `Peers.Handshake.proofSize` | proved | `Peers.Handshake.Reachable.ready_proved` |
+| `Peers.Handshake.Hello.records` | proved | `Peers.Handshake.Hello.read_write_append` |
+| `Peers.Handshake.Hello.write` | proved | `Peers.Handshake.Hello.read_write_append` |
+| `Peers.Handshake.Hello.read` | proved | `Peers.Handshake.Hello.read_write_append`, `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.Role.other` | proved | `Peers.Handshake.Reachable.ready_proved` |
+| `Peers.Handshake.Role.label` | proved | through `Peers.Handshake.hear`, `Peers.Handshake.step`: `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.Refusal.message` | tested | `Tests/Fronted.lean`, `Tests/Peers.lean` |
+| `Peers.Handshake.Refusal.quiet` | tested | `Tests/Fronted.lean`, `Tests/Peers.lean` |
+| `Peers.Handshake.transcript` | proved | `Peers.Handshake.Reachable.ready_proved` |
+| `Peers.Handshake.proofOf` | proved | `Peers.Handshake.Reachable.ready_proved` |
+| `Peers.Handshake.differs` | proved | `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.refuse` | proved | through `Peers.Handshake.hear`, `Peers.Handshake.step`: `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.check` | proved | through `Peers.Handshake.hear`, `Peers.Handshake.step`: `Peers.Handshake.Reachable.ready_proved`, `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.hear` | proved | `Peers.Handshake.hear_differs` |
+| `Peers.Handshake.start` | tested | `Tests/Peers.lean` |
+| `Peers.Handshake.step` | proved | `Peers.Handshake.Reachable.ready_proved` |
+
+## `Lanes/Net/HandshakeSound.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Peers.Handshake.Heard` | spec | a predicate |
+
 ## `Lanes/Net/IO/Node.lean`
 
 | Definition | Status | Evidence |
@@ -1559,6 +1706,7 @@ them by area.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
+| `Peers.Config.minKeyBytes` | trusted | TRUSTED.md: The transport between processes |
 | `Peers.start` | trusted | TRUSTED.md: The transport between processes |
 | `Peers.send` | trusted | TRUSTED.md: The transport between processes |
 | `Peers.stop` | trusted | TRUSTED.md: The transport between processes |
@@ -1917,20 +2065,26 @@ them by area.
 | --- | --- | --- |
 | `Batch.due` | proved | `Batch.due_iff`, `Batch.flush_save` |
 | `Batch.put` | proved | `Batch.flush_save` |
+| `Batch.Act.steps` | spec | used only in statements |
+| `Batch.history` | spec | used only in statements |
+| `Batch.Act.grows` | proved | through `Batch.flush`, `Batch.grown` and others: `Batch.flush_save`, `Batch.grown_eq` and others |
+| `Batch.grown` | proved | `Batch.grown_eq` |
 | `Batch.workWith` | proved | through `Batch.flush`, `Batch.run` and others: `Batch.flush_save`, `Batch.run_handed` and others |
-| `Batch.work` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and others |
-| `Batch.workAll` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Batch.work` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_ids` and others |
+| `Batch.workAll` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_ids` and others |
 | `Batch.flush` | proved | `Batch.flush_save` |
-| `Batch.scan` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_kernel` and others |
-| `Batch.finish` | proved | through `Batch.run`: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Batch.scan` | proved | through `Batch.run`, `Batch.settle`: `Batch.run_handed`, `Batch.run_ids` and others |
+| `Batch.finish` | proved | through `Batch.run`: `Batch.run_handed`, `Batch.run_ids` and others |
 | `Batch.group` | proved | `Batch.group_ins` |
 | `Batch.Command.ins` | spec | used only in statements |
-| `Batch.run` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.run_peek` and others |
-| `Batch.Act.ops` | proved | through `Batch.journal`: `Batch.run_handed`, `Batch.run_kernel` and others |
-| `Batch.Act.outputs` | proved | through `Batch.handed`: `Batch.run_handed` |
+| `Batch.run` | proved | `Batch.run_handed`, `Batch.run_ids`, `Batch.run_ids_spread` and others |
+| `Batch.Act.ops` | proved | through `Batch.journal`: `Batch.history_ops`, `Batch.run_handed` and others |
+| `Batch.Act.outputs` | proved | through `Batch.handed`, `Batch.handedIds`: `Batch.run_handed`, `Batch.run_ids` and others |
+| `Batch.Act.placed` | spec | used only in statements |
 | `Batch.Act.events` | proved | through `Batch.recorded`: `Batch.run_handed` |
-| `Batch.journal` | proved | `Batch.run_handed`, `Batch.run_kernel`, `Batch.settle_kernel` |
+| `Batch.journal` | proved | `Batch.history_ops`, `Batch.run_handed`, `Batch.run_kernel` and others |
 | `Batch.handed` | proved | `Batch.run_handed` |
+| `Batch.handedIds` | spec | used only in statements |
 | `Batch.recorded` | proved | `Batch.run_handed` |
 | `Batch.Act.Sound` | spec | a predicate |
 | `Batch.Sound` | spec | a predicate |
@@ -1973,13 +2127,13 @@ them by area.
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Kernel.cell` | proved | `Batch.run_peek`, `Journal.Upgrade.inv_load`, `Kernel.Plan.fixAll_local` and others |
-| `Kernel.setCell` | proved | through `Kernel.apply`, `Kernel.boot` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Kernel.setCell` | proved | through `Journal.ids`, `Kernel.apply` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
 | `Kernel.abs` | proved | `Kernel.WellFormed.quiet_iff`, `Kernel.WellFormed.wait_forever`, `Kernel.abs_boot` and others |
 | `Kernel.env` | proved | `Kernel.abs_boot`, `Kernel.accept_sound`, `Kernel.exec_reachable` and others |
-| `Kernel.unschedule` | proved | through `Kernel.apply`, `Kernel.boot` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
-| `Kernel.perform` | proved | through `Kernel.apply`, `Kernel.boot` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
-| `Kernel.performAll` | proved | through `Kernel.apply`, `Kernel.boot` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
-| `Kernel.down` | proved | through `Kernel.apply`, `Kernel.boot` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Kernel.unschedule` | proved | through `Journal.ids`, `Kernel.apply` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Kernel.perform` | proved | through `Journal.ids`, `Kernel.apply` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Kernel.performAll` | proved | through `Journal.ids`, `Kernel.apply` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
+| `Kernel.down` | proved | through `Journal.ids`, `Kernel.apply` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
 | `Kernel.settle` | proved | `Kernel.setState_settle` |
 | `Kernel.rest` | proved | through `Kernel.apply`, `Kernel.exec` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
 | `Kernel.takeState` | proved | through `Kernel.apply`, `Kernel.exec` and others: `Batch.run_handed`, `Batch.run_kernel` and others |
@@ -2469,15 +2623,6 @@ them by area.
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
-| `Auth.instDecidableEqDigest` | proved | its type, `Decidable` |
-| `Auth.instHashableDigest` | tested | `Tests/Auth.lean` |
-| `Auth.instReprDigest` | tested | `Tests/Auth.lean` |
-| `Auth.Digest.codec` | proved | its type, `Codec` |
-| `Auth.instCodableDigest` | proved | its type, `Codable` |
-| `Auth.Digest.hex` | tested | `Tests/Auth.lean`, `Tests/Crypto.lean` |
-| `Auth.Digest.ofHex?` | tested | `Tests/Auth.lean` |
-| `Auth.Password.salt` | tested | `Tests/Auth.lean`, `Tests/Crypto.lean` |
-| `Auth.Password.digest` | tested | `Tests/Auth.lean`, `Tests/Crypto.lean` |
 | `Auth.Attempts.codec` | proved | its type, `Codec` |
 | `Auth.instCodableAttempts` | proved | its type, `Codable` |
 | `Auth.Attempts.fail` | proved | `Auth.Attempts.bounded_fail`, `Auth.Attempts.fail_repeat`, `Auth.Attempts.locked_stays` and others |
@@ -2544,17 +2689,57 @@ them by area.
 | `OAuth.refusedResponse` | checked | `Tests/OAuth.lean` |
 | `OAuth.Endpoint.parse` | tested | `Tests/OAuth.lean` |
 
+## `Lanes/Web/Auth/Password.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Auth.instDecidableEqDigest` | proved | its type, `Decidable` |
+| `Auth.instHashableDigest` | tested | `Tests/Auth.lean` |
+| `Auth.instReprDigest` | tested | `Tests/Auth.lean` |
+| `Auth.Digest.codec` | proved | its type, `Codec` |
+| `Auth.instCodableDigest` | proved | its type, `Codable` |
+| `Auth.Digest.hex` | proved | through `Auth.Password.verify`, `Auth.Stored.text`: `Auth.Password.verify_hash`, `Auth.Password.verify_phc` and others |
+| `Auth.Digest.ofHex?` | proved | through `Auth.Stored.read?`: `Auth.Stored.read?_text` |
+| `Auth.Phc.cut` | proved | through `Auth.Phc.parse?`, `Auth.Stored.read?`: `Auth.Phc.parse?_encode`, `Auth.Stored.read?_text` |
+| `Auth.Phc.after` | proved | through `Auth.Phc.parse?`, `Auth.Stored.read?`: `Auth.Phc.parse?_encode`, `Auth.Stored.read?_text` |
+| `Auth.Phc.number?` | proved | through `Auth.Phc.parse?`, `Auth.Stored.read?`: `Auth.Phc.parse?_encode`, `Auth.Stored.read?_text` |
+| `Auth.Phc.encode` | proved | `Auth.Phc.parse?_encode` |
+| `Auth.Phc.parse?` | proved | `Auth.Phc.parse?_encode` |
+| `Auth.Phc.check` | proved | through `Auth.Password.verify`: `Auth.Password.verify_hash`, `Auth.Password.verify_phc` and others |
+| `Auth.Phc.instDecidableEq` | proved | its type, `Decidable` |
+| `Auth.Phc.instRepr` | tested | `Tests/Auth.lean` |
+| `Auth.Stored.text` | proved | `Auth.Stored.read?_text` |
+| `Auth.Stored.read?` | proved | `Auth.Stored.read?_text` |
+| `Auth.Stored.codec` | proved | its type, `Codec` |
+| `Auth.Stored.instCodable` | proved | its type, `Codable` |
+| `Auth.Password.salt` | proved | through `Auth.Password.verify`: `Auth.Password.verify_hash`, `Auth.Password.verify_phc` and others |
+| `Auth.Password.digest` | proved | through `Auth.Password.verify`: `Auth.Password.verify_hash`, `Auth.Password.verify_phc` and others |
+| `Auth.Password.hash` | proved | `Auth.Password.verify_hash` |
+| `Auth.Password.current` | proved | through `Auth.Password.verify`: `Auth.Password.verify_hash`, `Auth.Password.verify_phc` and others |
+| `Auth.Password.verify` | proved | `Auth.Password.verify_hash`, `Auth.Password.verify_phc`, `Auth.Password.verify_raw` |
+
 ## `Lanes/Web/Auth/Token.lean`
 
 | Definition | Status | Evidence |
 | --- | --- | --- |
 | `Hmac.Key.of` | checked | `Tests/OAuth.lean` |
 | `Hmac.Key.mac` | proved | `Auth.checkForm_other`, `Auth.verify_sign_other` |
+| `Auth.Keys.of` | tested | `Tests/TutorialWeb.lean`, `Tests/TutorialWeb/EndToEnd.lean` |
+| `Auth.Keys.find?` | proved | `Auth.checkForm_iff`, `Auth.checkForm_other`, `Auth.verify_eq_some` and others |
+| `Auth.Keys.rotate` | proved | `Auth.verify_rotate` |
 | `Auth.message` | proved | `Auth.checkForm_other`, `Auth.message_inj`, `Auth.verify_sign_other` |
-| `Auth.tag` | proved | through `Auth.checkForm`, `Auth.sign`: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and others |
-| `Auth.sign` | proved | `Auth.verify_eq_some`, `Auth.verify_sign`, `Auth.verify_sign_other` |
-| `Auth.verify` | proved | `Auth.verify_eq_some`, `Auth.verify_sign`, `Auth.verify_sign_other` |
-| `Auth.formToken` | proved | `Auth.checkForm_formToken`, `Auth.checkForm_iff`, `Auth.checkForm_other` |
+| `Auth.tag` | proved | through `Auth.checkForm`, `Auth.sign` and others: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and others |
+| `Auth.decimal` | proved | through `Auth.checkForm`, `Auth.sign` and others: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and others |
+| `Auth.head` | proved | `Auth.verify_sign_other` |
+| `Auth.signWith` | proved | `Auth.verify_eq_some`, `Auth.verify_expired`, `Auth.verify_sign_other` |
+| `Auth.sign` | proved | `Auth.verify_rotate`, `Auth.verify_sign` |
+| `Auth.splitDot` | proved | through `Auth.checkForm`, `Auth.verify`: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and others |
+| `Auth.fields` | proved | through `Auth.checkForm`, `Auth.verify`: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and others |
+| `Auth.verify` | proved | `Auth.verify_eq_some`, `Auth.verify_expired`, `Auth.verify_rotate` and others |
+| `Auth.formHead` | proved | `Auth.checkForm_other` |
+| `Auth.formTokenWith` | proved | `Auth.checkForm_iff`, `Auth.checkForm_other` |
+| `Auth.formToken` | proved | `Auth.checkForm_formToken` |
+| `Auth.formId` | proved | through `Auth.checkForm`: `Auth.checkForm_formToken`, `Auth.checkForm_iff` and others |
 | `Auth.checkForm` | proved | `Auth.checkForm_formToken`, `Auth.checkForm_iff`, `Auth.checkForm_other` |
 
 ## `Lanes/Web/Html/Basic.lean`
@@ -3128,6 +3313,8 @@ them by area.
 | `Http.Client.fetch` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 | `Http.Client.events` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 | `Http.Client.handler` | trusted | TRUSTED.md: The HTTP client adapter's handler |
+| `Http.Client.Call.keyed` | trusted | TRUSTED.md: The HTTP client adapter's handler |
+| `Http.Client.handlerKeyed` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 
 ## `Lanes/Web/IO/Ops.lean`
 
@@ -3468,6 +3655,15 @@ them by area.
 | `Cli.Inventory.load` | none |  |
 | `Cli.Inventory.counts` | none |  |
 | `Cli.Inventory.run` | none |  |
+
+## `LanesCli/Journal.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Cli.Journal.values` | none |  |
+| `Cli.Journal.schemaProgram` | none |  |
+| `Cli.Journal.usage` | none |  |
+| `Cli.Journal.run` | none |  |
 
 ## `LanesCli/Lint.lean`
 

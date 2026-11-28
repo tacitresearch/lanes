@@ -34,6 +34,43 @@ jobs:
         with:
           runner: ${{ vars.LANES_RUNNER }}
 
+  # Whether the change touches anything but prose: when a pull request or a merge queue's group
+  # changes only documentation, `compile` still builds and lints (the lint checks the docs' links,
+  # the generated files and the decisions), and the other jobs are skipped. A push to main and a
+  # run by hand check everything. `docs/TUTORIAL.md` and `docs/TUTORIAL-WEB.md` are run by
+  # `lake test`, and `examples/counter`'s Markdown must match `templates/app`, so they are code.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          MQ_BASE: ${{ github.event.merge_group.base_sha }}
+          MQ_HEAD: ${{ github.event.merge_group.head_sha }}
+        run: |
+          case "$EVENT" in
+            pull_request) changed=$(git diff --name-only "$PR_BASE...$PR_HEAD") ;;
+            merge_group) changed=$(git diff --name-only "$MQ_BASE" "$MQ_HEAD") ;;
+            *) echo "code=true" >> "$GITHUB_OUTPUT"; exit 0 ;;
+          esac
+          prose='^(docs/.*|.*\.md|\.github/ISSUE_TEMPLATE/.*|LICENSE|.*\.(png|svg|jpg))$'
+          code='^(docs/TUTORIAL(-WEB)?\.md|examples/counter/.*|templates/.*)$'
+          if [ -n "$changed" ] && ! grep -vE "$prose" <<<"$changed" | grep -q . \
+              && ! grep -qE "$code" <<<"$changed"; then
+            echo "Only documentation changed: the jobs after compile are skipped."
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          fi
+
   # Order follows AGENTS.md, "Build and checks": build, lint, model checks and tests.
   compile:
     needs: runner
@@ -72,7 +109,8 @@ jobs:
         run: lake exe lanes stats >> "$GITHUB_STEP_SUMMARY"
 
   check:
-    needs: [runner, compile]
+    needs: [runner, changes, compile]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
     timeout-minutes: 30
     steps:
@@ -84,7 +122,8 @@ jobs:
         run: lake exe lanesCheck
 
   oracle:
-    needs: [runner, compile]
+    needs: [runner, changes, compile]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
     timeout-minutes: 30
     steps:
@@ -114,7 +153,8 @@ jobs:
           lake exe oracle --cases 20000 --seed ${{ github.run_id }}
 
   test:
-    needs: [runner, compile]
+    needs: [runner, changes, compile]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
     timeout-minutes: 30
     steps:
@@ -133,31 +173,84 @@ jobs:
           lake test
 
   # The integrations and the small examples, each a package of its own: built with their proofs,
-  # and their checks run.
+  # and their checks run, in three groups at once. Their builds are kept in the Actions cache,
+  # keyed on the toolchain, the manifests and the sources, so a run rebuilds only what changed;
+  # the cache is saved once they are built, before their checks run.
   examples:
-    needs: [runner, compile]
+    needs: [runner, changes, compile]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
-    timeout-minutes: 60
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: small
+            packages: >-
+              integrations/google integrations/github integrations/aws examples/counter
+              examples/bank examples/bank-web examples/kv-cache examples/election examples/watchdog
+          - group: web
+            packages: >-
+              examples/payments examples/migration examples/todo-db examples/sign-in
+              examples/upload examples/reminders
+          - group: videos
+            packages: examples/videos
+    name: examples (${{ matrix.group }})
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           clean: false
-      - uses: ./.github/actions/lean
-      - name: Build and check each small example
+      - id: lean
+        uses: ./.github/actions/lean
+      # On a machine of our own (`warm`) the work directory keeps the builds instead.
+      - id: keys
+        if: steps.lean.outputs.warm != 'true'
+        env:
+          ROOT: ${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'examples/*/lake-manifest.json', 'integrations/*/lake-manifest.json') }}
+          SOURCES: ${{ hashFiles('lakefile.lean', 'Lanes/**', 'native/**', 'examples/**/*.lean', 'examples/**/lakefile.*', 'integrations/**/*.lean', 'integrations/**/lakefile.*', '!**/.lake/**') }}
         run: |
-          for package in integrations/google integrations/github integrations/aws examples/counter \
-              examples/bank examples/bank-web examples/kv-cache examples/election examples/watchdog \
-              examples/payments examples/migration examples/todo-db examples/sign-in \
-              examples/videos examples/upload examples/reminders; do
+          echo "prefix=lake-examples-${{ matrix.group }}-$ROOT-" >> "$GITHUB_OUTPUT"
+          echo "key=lake-examples-${{ matrix.group }}-$ROOT-$SOURCES" >> "$GITHUB_OUTPUT"
+      - id: built
+        if: steps.lean.outputs.warm != 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            examples/*/.lake/build
+            integrations/*/.lake/build
+          key: ${{ steps.keys.outputs.key }}
+          restore-keys: ${{ steps.keys.outputs.prefix }}
+      - name: Build each package
+        env:
+          PACKAGES: ${{ matrix.packages }}
+        run: |
+          for package in $PACKAGES; do
             echo "::group::$package"
             mkdir -p "$package/.lake"
             ln -sfn "$GITHUB_WORKSPACE/.lake/packages" "$package/.lake/packages"
-            (cd "$package" && lake build --wfail && lake test)
+            (cd "$package" && lake build --wfail)
+            echo "::endgroup::"
+          done
+      - if: steps.lean.outputs.warm != 'true' && steps.built.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            examples/*/.lake/build
+            integrations/*/.lake/build
+          key: ${{ steps.keys.outputs.key }}
+      - name: Check each package
+        env:
+          PACKAGES: ${{ matrix.packages }}
+        run: |
+          for package in $PACKAGES; do
+            echo "::group::$package"
+            (cd "$package" && time lake test)
             echo "::endgroup::"
           done
 
   raft-kv:
-    needs: [runner, compile]
+    needs: [runner, changes, compile]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
     timeout-minutes: 90
     defaults:
@@ -186,7 +279,8 @@ jobs:
         run: lake exe raftProcs
 
   ledger:
-    needs: [runner, compile]
+    needs: [runner, changes, compile]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
     timeout-minutes: 90
     defaults:
@@ -213,7 +307,8 @@ jobs:
         run: lake exe ledgerLive
 
   rookery:
-    needs: [runner, compile]
+    needs: [runner, changes, compile]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ fromJSON(needs.runner.outputs.label) }}
     timeout-minutes: 90
     defaults:
@@ -265,6 +360,8 @@ jobs:
 
   # What a user on a Mac does: the build, the tests and a generated app, on GitHub's runner.
   macos:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: macos-latest
     timeout-minutes: 120
     steps:
@@ -297,15 +394,22 @@ jobs:
           kill "$pid"
 
   # The one check branch protection requires. A job that is skipped counts as passed there, so
-  # this job always runs and fails unless every job before it succeeded.
+  # this job always runs. It fails unless `changes` and `compile` succeeded and every other job
+  # succeeded or was skipped: skipped because only documentation changed, since a job whose
+  # needs failed is skipped too, but then a job it needs has failed.
   build:
-    needs: [runner, compile, check, oracle, test, examples, raft-kv, ledger, rookery, macos]
+    needs: [runner, changes, compile, check, oracle, test, examples, raft-kv, ledger, rookery, macos]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Every job passed
         env:
-          RESULTS: ${{ toJSON(needs.*.result) }}
+          RESULTS: ${{ toJSON(needs) }}
         run: |
           echo "$RESULTS"
-          python3 -c 'import json, os, sys; r = json.loads(os.environ["RESULTS"]); sys.exit(0 if r and all(x == "success" for x in r) else 1)'
+          python3 -c '
+          import json, os, sys
+          r = {job: v["result"] for job, v in json.loads(os.environ["RESULTS"]).items()}
+          needed = ("runner", "changes", "compile")
+          ok = all(r.get(j) == "success" for j in needed) and all(x in ("success", "skipped") for x in r.values())
+          sys.exit(0 if ok else 1)'

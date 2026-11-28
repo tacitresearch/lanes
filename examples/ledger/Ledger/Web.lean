@@ -60,9 +60,12 @@ abbrev Sys (config : Config Name) := system Name Digest config
 abbrev In := Request Name Digest
 abbrev Out := Response Name
 
-/-- What the bridge is built with. The key and the pepper are secrets of the deployment. -/
+/-- What the bridge is built with. The keys and the pepper are secrets of the deployment. -/
 structure Settings where
-  key : Hmac.Key
+  keys : Auth.Keys
+  /-- How long a session's cookie is good for, in seconds; the system may end the session
+  sooner. -/
+  session_s : Nat := 30 * 24 * 3600
   password : Auth.Password
   /-- The origin pages are served from, which a cross-site form does not have. -/
   origin : String
@@ -99,16 +102,29 @@ def opened : String := "opened"
 
 /-! ## Sessions -/
 
-/-- The token in a session's cookie. -/
-def sessionToken (s : Settings) (name : Name) (session : Sid) : String :=
-  Auth.sign s.key "session" s!"{session}.{name}"
+/-- A session as its token's payload, and what its form tokens are bound to. -/
+def sessionOf (name : Name) (session : Sid) : String := s!"{session}.{name}"
 
-/-- The user and session a request's cookie names, if its token is ours. -/
-def session? (s : Settings) (r : Http.Request) : Option (String × Name × Sid) := do
+/-- The token in a session's cookie, signed at `at_s`. -/
+def sessionToken (s : Settings) (name : Name) (session : Sid) (at_s : Nat) : String :=
+  Auth.sign s.keys "session" (at_s + s.session_s) (sessionOf name session)
+
+/-- The header `arrive` writes the time a request arrived in, which a client's is dropped. -/
+def arrivedHeader : String := "ledger-arrived"
+
+/-- When the request arrived, in seconds. -/
+def arrived (r : Http.Request) : Nat := ((r.header? arrivedHeader).bind String.toNat?).getD 0
+
+/-- What `arrive` does: the request with the time it arrived, and none a client wrote. -/
+def stamp (now_s : Nat) (r : Http.Request) : Http.Request :=
+  { r with headers := r.headers.filter (·.1 != arrivedHeader) ++ [(arrivedHeader, toString now_s)] }
+
+/-- The user and session a request's cookie names, if its token is ours and has not expired. -/
+def session? (s : Settings) (r : Http.Request) : Option (Name × Sid) := do
   let token ← r.cookie? sessionCookie
-  let payload ← Auth.verify s.key "session" token
+  let payload ← Auth.verify s.keys "session" (arrived r) token
   match payload.splitOn "." with
-  | [sid, name] => return (token, ← Name.ofString? name, ← sid.toNat?)
+  | [sid, name] => return (← Name.ofString? name, ← sid.toNat?)
   | _ => none
 
 /-- The headers `prepare` writes. One a client sends is dropped. -/
@@ -120,7 +136,7 @@ digest, or by `short` when it is too short to digest. -/
 def prepare (s : Settings) (r : Http.Request) : Http.Request :=
   let kept := r.headers.filter fun (name, _) =>
     name != "cookie" && name != verifiedSession && name != passwordDigest
-  let session := (session? s r).map fun (_, name, sid) => (verifiedSession, s!"{sid}.{name}")
+  let session := (session? s r).map fun (name, sid) => (verifiedSession, sessionOf name sid)
   let digest := match r.field? "name" >>= Name.ofString?, r.field? "password" with
     | some name, some password =>
       [(passwordDigest, if password.length < s.minPassword then "short"
@@ -131,13 +147,13 @@ def prepare (s : Settings) (r : Http.Request) : Http.Request :=
     body := if (r.field? "password").isSome
       then (encodeForm (r.form.filter (·.1 != "password"))).toUTF8 else r.body }
 
-/-- The user and session `prepare` verified, and the session's token, signed again. -/
-def verified? (s : Settings) (r : Http.Request) : Option (String × Name × Sid) := do
+/-- The session `prepare` verified, as its form tokens are bound to, and its user and id. -/
+def verified? (r : Http.Request) : Option (String × Name × Sid) := do
   match (← r.header? verifiedSession).splitOn "." with
   | [sid, name] =>
     let name ← Name.ofString? name
     let sid ← sid.toNat?
-    return (sessionToken s name sid, name, sid)
+    return (sessionOf name sid, name, sid)
   | _ => none
 
 def cookie (s : Settings) (value : String) : Cookie :=
@@ -156,13 +172,13 @@ def Layout (title : String) (children : List Html) : Html :=
     <body>{children}</body>
   </html>
 
-def Nav (s : Settings) (token : String) (name : Name) : Html :=
+def Nav (s : Settings) (session : String) (name : Name) : Html :=
   <nav>
     <a href={Routes.home.link ()}>"Accounts"</a>" "
     <a href={Routes.transfers.link ()}>"Transfers"</a>" "
     {if name = s.admin then <a href={Routes.audit.link ()}>"Audit"</a> else Html.empty}
     <form method="post" action={Routes.logOut.link ()} style="display:inline">
-      <input type="hidden" name="csrf" value={Auth.formToken s.key token}/>
+      <input type="hidden" name="csrf" value={Auth.formToken s.keys session}/>
       <button type="submit">{s!"Log out {name}"}</button>
     </form>
   </nav>
@@ -186,10 +202,10 @@ def LoginPage (notice : Option Html := none) : Html :=
       </form>
     </main>]
 
-def AccountsPage (s : Settings) (token : String) (name : Name) : Html :=
-  let csrf := Auth.formToken s.key token
+def AccountsPage (s : Settings) (session : String) (name : Name) : Html :=
+  let csrf := Auth.formToken s.keys session
   Layout "Accounts" [
-    <Nav s={s} token={token} name={name}/>,
+    <Nav s={s} session={session} name={name}/>,
     <main>
       <h1>"Your accounts"</h1>
       <div {Hx.request Routes.accounts ()}
@@ -214,10 +230,10 @@ def AccountsPage (s : Settings) (token : String) (name : Name) : Html :=
       </form>
     </main>]
 
-def ListPage (s : Settings) (token : String) (name : Name) (title : String) (list : Route Unit) :
+def ListPage (s : Settings) (session : String) (name : Name) (title : String) (list : Route Unit) :
     Html :=
   Layout title [
-    <Nav s={s} token={token} name={name}/>,
+    <Nav s={s} session={session} name={name}/>,
     <main>
       <h1>{title}</h1>
       <div {Hx.request list ()}
@@ -299,17 +315,17 @@ def forbidden : Http.Response :=
 /-- A request whose cookie names a session, as an input; or how the bridge answers it. -/
 def signedIn (s : Settings) (id : ReqId) (r : Http.Request) (changes : Bool)
     (op : Http.Request → Except Http.Response Op) : Except Http.Response In :=
-  match verified? s r with
+  match verified? r with
   | none => .error notLoggedIn
-  | some (token, name, session) =>
-    if changes && !(r.sameOrigin s.origin && (r.field? "csrf").any (Auth.checkForm s.key token))
+  | some (session, name, sid) =>
+    if changes && !(r.sameOrigin s.origin && (r.field? "csrf").any (Auth.checkForm s.keys session))
     then .error forbidden
-    else (op r).map (.act id name session)
+    else (op r).map (.act id name sid)
 
-def shell (s : Settings) (r : Http.Request) (view : String → Name → Html) :
+def shell (r : Http.Request) (view : String → Name → Html) :
     Except Http.Response In :=
-  match verified? s r with
-  | some (token, name, _) => .error (page (view token name))
+  match verified? r with
+  | some (session, name, _) => .error (page (view session name))
   | none => .error notLoggedIn
 
 def transferOp (r : Http.Request) : Except Http.Response Op :=
@@ -328,32 +344,32 @@ def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response
   if !r.bodyWithin s.maxBody_bytes then .error (Http.Response.text "too large\n" 413)
   else
     (dispatch [
-      Routes.home.handle fun () r => shell s r (AccountsPage s),
+      Routes.home.handle fun () r => shell r (AccountsPage s),
       Routes.login.handle fun () _ => .error (page (LoginPage)),
       Routes.signUp.handle fun () r =>
         if r.sameOrigin s.origin then (credentials s r).map fun (n, d) => .signUp id n d
         else .error forbidden,
       Routes.logIn.handle fun () r =>
-        if r.sameOrigin s.origin then (credentials s r).map fun (n, d) => .logIn id n d
+        if r.sameOrigin s.origin then (credentials s r).map fun (n, d) => .logIn id n d (arrived r)
         else .error forbidden,
       Routes.logOut.handle fun () r => signedIn s id r true fun _ => .ok .logOut,
       Routes.accounts.handle fun () r => signedIn s id r false fun _ => .ok .accounts,
       Routes.openAccount.handle fun () r => signedIn s id r true openOp,
       Routes.transfer.handle fun () r => signedIn s id r true transferOp,
       Routes.transfers.handle fun () r =>
-        shell s r fun token name => ListPage s token name "Transfers" Routes.transferList,
+        shell r fun session name => ListPage s session name "Transfers" Routes.transferList,
       Routes.transferList.handle fun () r => signedIn s id r false fun _ => .ok .entries,
       Routes.audit.handle fun () r =>
-        shell s r fun token name => ListPage s token name "Audit" Routes.auditList,
+        shell r fun session name => ListPage s session name "Audit" Routes.auditList,
       Routes.auditList.handle fun () r => signedIn s id r false fun _ => .ok .audit
     ] r).getD (.error (Http.Response.text "not found\n" 404))
 
 def encode (s : Settings) : Reply Name → Http.Response
   | .signedUp => page (LoginPage (some <span>"Signed up. Log in."</span>))
   | .nameTaken => page (LoginPage (some (Error "That name is taken."))) 409
-  | .loggedIn name session =>
+  | .loggedIn name session at_s =>
     (Http.Response.redirect (Routes.home.link ())).setCookie
-      (cookie s (sessionToken s name session))
+      (cookie s (sessionToken s name session at_s))
   | .refused => page (LoginPage (some (Error "Wrong name or password."))) 401
   | .locked => page (LoginPage (some (Error "Too many failed log-ins. Try again later."))) 429
   | .loggedOut =>

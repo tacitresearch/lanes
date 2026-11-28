@@ -119,7 +119,9 @@ def shapeOf (type : Expr) : MetaM Shape :=
     | _ => return .value body.getAppFn.constName?
 
 /-- Types whose values carry their specification as fields or constructor arguments. -/
-def specTypes : List Name := [``Decidable, `Lanes.Codec, `Lanes.Codable, `Lanes.Enum]
+def specTypes : List Name :=
+  [``Decidable, `Lanes.Codec, `Lanes.Codable, `Lanes.Enum, `Lanes.Schema.Of, `Lanes.Schema.Fields,
+    `Lanes.Schema.Ctors]
 
 /-- The types a model check's result has. -/
 def reportTypes : List Name := [`Lanes.Check.Report, `Lanes.Check.FuzzReport]

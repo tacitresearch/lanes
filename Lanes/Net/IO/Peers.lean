@@ -7,6 +7,7 @@ module
 public import Std.Async
 public import Lanes.Runtime.IO.Shell
 public import Lanes.Net.Courier
+public import Lanes.Net.Handshake
 
 /-!
 Shards of one system in different processes, joined by TCP. Each process runs `System.shard`
@@ -19,11 +20,16 @@ again from its journal, sent twice. Within one connection parcels arrive in orde
 that runs on this must be correct over `Link.network`, which is what its checks and proofs
 should assume for links between actors on different shards.
 
+Every connection opens with the handshake of `Lanes.Peers.Handshake`: both sides show the same
+version, system and schema, and prove that they hold the key of `Config`. Only then is a
+connection the courier dialed reported `connected`, and are the bytes of one it adopted handed
+on as parcels. The parcels after the handshake are neither signed nor encrypted.
+
 Nothing is decided here. `Lanes.Peers.Courier` decides, a pure function that the model checker
-runs against a network that fails; this file tells it what happened and does what it answers.
-Trusted here: that an event is reported when the thing happened, that an action is done as
-asked, and that nothing arrives which was not sent. There is no authentication: listen only
-where every sender is trusted.
+runs against a network that fails, and `Lanes.Peers.Handshake.step` decides each handshake;
+this file tells them what happened and does what they answer. Trusted here: that an event is
+reported when the thing happened, that an action is done as asked, and that nothing arrives
+which was not sent.
 -/
 
 public section
@@ -42,7 +48,20 @@ structure Config (σ : Signature) where
   home : σ.Id → BaseIO (Option Address)
   id : Codec σ.Id
   msg : ∀ i, Codec (σ.Msg i)
+  /-- The system's name, the same in every process of it. -/
+  system : String
+  /-- What `id` and `msg` write, said in any way, the same in every process: the handshake
+  compares its SHA-256, so change it whenever a message type changes. -/
+  schema : String
+  /-- The key every process of the system shares, of at least `Config.minKeyBytes` bytes. A
+  peer without it is refused. -/
+  key : ByteArray
   limits : Limits := {}
+  /-- Told of each connection refused at its handshake. -/
+  refused : Handshake.Refusal → BaseIO Unit := fun why =>
+    unless why.quiet do discard (IO.eprintln s!"lanes: a peer is refused: {why.message}").toBaseIO
+
+def Config.minKeyBytes : Nat := 16
 
 private abbrev Happened := Event × Option TCP.Socket.Client
 
@@ -66,6 +85,39 @@ private def quietly (action : Async Unit) : Async Unit :=
 private def post (events : CloseableChannel Happened) (event : Event)
     (fresh : Option TCP.Socket.Client := none) : BaseIO Bool :=
   events.trySend (event, fresh)
+
+private def setup (config : Config σ) (role : Handshake.Role) (nonce : ByteArray) :
+    Handshake.Setup :=
+  { role, key := config.key, maxHelloBytes := config.limits.helloBytes
+    ours := { system := config.system, digest := Sha256.hash config.schema.toUTF8, nonce } }
+
+private def hearOnce (socket : TCP.Socket.Client) : Async Handshake.Event := do
+  try
+    match ← socket.recv? 65536 with
+    | some bytes => return .received bytes
+    | none => return .ended
+  catch _ => return .ended
+
+/-- Do the handshake on a new connection, as `Handshake.step` says: the bytes that followed it,
+or why the connection is refused. -/
+private def greet (config : Config σ) (role : Handshake.Role) (socket : TCP.Socket.Client) :
+    Async (Except Handshake.Refusal ByteArray) := do
+  let s := setup config role (← randomBytes Handshake.proofSize.toUSize)
+  let deadline := (← IO.monoMsNow) + config.limits.handshake_ms
+  let (first, actions) := Handshake.start s
+  let mut state := first
+  let mut todo := actions
+  repeat
+    for action in todo do
+      match action with
+      | .write bytes => socket.send bytes
+      | .ready rest => return .ok rest
+      | .refuse why => return .error why
+    let left := deadline - (← IO.monoMsNow)
+    let event ← if left == 0 then pure .timeout
+      else Async.race (hearOnce socket) (do Async.sleep (.ofNat left); pure .timeout)
+    (state, todo) := Handshake.step s state event
+  return .error .ended
 
 /-- Read a connection until it ends, and say so. A connection this side made carries nothing
 back, and is read all the same: that is how a peer that has left is noticed before the next
@@ -99,8 +151,13 @@ private def run (config : Config σ) (deliver : Parcel σ → Async Unit)
           background do
             try
               socket.connect target
-              discard <| post events (.connected conn)
-              listen events conn socket fun _ => pure ()
+              match ← greet config .dialer socket with
+              | .ok _ =>
+                discard <| post events (.connected conn)
+                listen events conn socket fun _ => pure ()
+              | .error why =>
+                config.refused why
+                discard <| post events (.broken conn (← IO.monoMsNow))
             catch _ => discard <| post events (.broken conn (← IO.monoMsNow))
         | _, _ => discard <| post events (.broken conn (← IO.monoMsNow))
       | .write conn bytes =>
@@ -117,8 +174,14 @@ private def run (config : Config σ) (deliver : Parcel σ → Async Unit)
       | .adopt conn =>
         if let some socket := fresh then
           sockets := sockets.insert conn socket
-          background (listen events conn socket fun bytes =>
-            discard <| post events (.received conn bytes))
+          background do
+            match ← (try greet config .acceptor socket catch _ => pure (.error .ended)) with
+            | .ok rest =>
+              unless rest.isEmpty do discard <| post events (.received conn rest)
+              listen events conn socket fun bytes => discard <| post events (.received conn bytes)
+            | .error why =>
+              config.refused why
+              discard <| post events (.broken conn (← IO.monoMsNow))
       | .refuse => if let some socket := fresh then quietly socket.close
       | .deliver parcel => deliver parcel
     if courier.stopped then break
@@ -128,6 +191,9 @@ private def run (config : Config σ) (deliver : Parcel σ → Async Unit)
 def start (config : Config σ) (deliver : Parcel σ → Async Unit) : Async (Peers σ) := do
   let some listen := address config.listen
     | throw (IO.userError s!"lanes: {config.listen.host} is not an IPv4 address")
+  if config.key.size < Config.minKeyBytes then
+    throw (IO.userError s!"lanes: the peers' key has {config.key.size} bytes, and needs at least \
+      {Config.minKeyBytes}")
   let server ← TCP.Socket.Server.mk
   server.bind listen
   server.listen 128

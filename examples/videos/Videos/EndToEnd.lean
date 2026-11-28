@@ -102,11 +102,11 @@ def deployment (bucket : S3.Bucket) (creds : SigV4.Credentials) (provider : Test
                 checkRetry := { maxAttempts := 2, deadline_ms := 3000, base_ms := 50, cap_ms := 50 }
                 transcodeRetry := { maxAttempts := 2, deadline_ms := 3000, base_ms := 50, cap_ms := 50 }
                 deleteRetry := { maxAttempts := 4, deadline_ms := 3000, base_ms := 50, cap_ms := 200 } }
-    settings := { key := .of "the key of the test deployment".toUTF8, origin, secure := false
+    settings := { keys := .of (.of "the key of the test deployment".toUTF8), origin, secure := false
                   bucket, creds, providers := ["hub"], keyPrefix
                   maxUpload_bytes := ⟨maxUpload_bytes, by decide⟩
                   worker := worker.origin, callback := s!"{origin}/transcoded" }
-    server := { port := 0, system := "videos 3"
+    server := { port := 0, system := "videos 4"
                 ops := { readinessPath := some "/readyz", livenessPath := some "/healthz"
                          metricsPath := some "/metrics" } }
     journal := some journal
@@ -308,7 +308,7 @@ def creds : SigV4.Credentials :=
   { accessKeyId := "AKIAIOSFODNN7EXAMPLE", secretAccessKey := ⟨"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"⟩ }
 
 def settings : Web.Settings :=
-  { key := .of "a key".toUTF8, origin, secure := true
+  { keys := .of (.of "a key".toUTF8), origin, secure := true
     bucket := { name := "b", region := "us-east-1", endpoint := S3.Endpoint.aws "us-east-1" }
     creds, worker := "http://worker.test", callback := s!"{origin}/transcoded" }
 
@@ -322,11 +322,11 @@ def withCookie (value : String) (r : Http.Request) : Http.Request :=
 
 def bridgeTests : List (String × Bool) :=
   let watch : Http.Request := { method := .get, path := ["v", "3"] }
-  let token := sessionToken settings 0 7
+  let token := sessionToken settings 0 7 0
   let like (csrf : String) (headers : List (String × String) := []) : Http.Request :=
     withCookie token { method := .post, path := ["v", "3", "like"], headers
                        body := s!"csrf={csrf}".toUTF8 }
-  let good := Auth.formToken settings.key token
+  let good := Auth.formToken settings.keys (sessionOf 0 7)
   [ ("bridge: a verified cookie names its member and session, and is dropped",
       decoded (withCookie token watch) == some (.request (.watch 0 (some (0, 7)) 3) 0)
         && ((bridge settings).prepare (withCookie token watch)).headers.all (·.1 != "cookie")),
@@ -382,12 +382,12 @@ def sharedCacheTests : List (String × Bool) :=
   let viewers : List Viewer := [none, some (0, 7), some (1, 8)]
   let asking (viewer : Viewer) (r : Http.Request) : Http.Request :=
     match viewer with
-    | some (m, session) => withCookie (sessionToken settings m session) r
+    | some (m, session) => withCookie (sessionToken settings m session 0) r
     | none => r
   let card : Card := ⟨1, 0, "a", "t", .public, 2⟩
   let view : View := ⟨card, "about", .mp4, false, [⟨0, 1, "b", "hi"⟩]⟩
   let replies : List Reply :=
-    [.signedIn 0 7, .full, .signedOut, .noSession, .created 1 .mp4 100, .tooMany, .confirmed 1,
+    [.signedIn 0 7 100, .full, .signedOut, .noSession, .created 1 .mp4 100, .tooMany, .confirmed 1,
       .notUploaded 1, .unconfirmed 1, .watch view 100, .notFound, .liked 1 2 true, .commented 1,
       .tooManyComments 1, .uncommented 1, .deleted 1, .feed [card] none,
       .channel 0 "a" [card] [(2, "x", .transcoding), (3, "y", .failed)],

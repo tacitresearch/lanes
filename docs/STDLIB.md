@@ -17,9 +17,9 @@ is how a misread standard shows up.
 
 | Class | Meaning | Packages |
 | --- | --- | --- |
-| a | Lean core, `Std` or Batteries has it (module named) | 37 |
+| a | Lean core, `Std` or Batteries has it (module named) | 36 |
 | b | Pure and needed by applications: build in Lean and prove | 26 |
-| c | Touches the operating system or cryptography: bind (library named) | 11 |
+| c | Touches the operating system or cryptography: bind (library named) | 12 |
 | d | Not needed for Lanes applications (reason given) | 79 |
 | e | Already in Lanes (module named) | 19 |
 
@@ -41,8 +41,8 @@ Three qualifications apply to (a):
   application's correctness rests on such code, the row is (b) and the `Std` module is what is
   used until ours exists.
 - **Bound.** Some `Std` functions are C behind `@[extern]`: `Std.Net.IPv4Addr.ofString` is
-  libuv's `inet_pton`, `IO.getRandomBytes` reads `/dev/urandom`. That is (a) for what touches
-  the OS, but parsing an address is a decision, so `net/netip` is (b).
+  libuv's `inet_pton`. That is (a) for what touches the OS, but parsing an address is a
+  decision, so `net/netip` is (b).
 
 Sizes, counting proofs: small is under 500 lines, medium 500 to 2,000, large over 2,000.
 Priorities are for web applications. P0 is needed by the flagship application: deployed,
@@ -134,7 +134,7 @@ API. P1 is common, P2 rare.
 | `crypto/sha256` | e | OpenSSL's, bound in `Lanes/Lib/Crypto/Native.lean`, with `Lanes.Sha256` (pure Lean, NIST vectors) as its reference (D46) |
 | `crypto/hmac` | e | OpenSSL's, bound in `Lanes/Lib/Crypto/Native.lean`, with `Lanes.Hmac` (pure Lean, RFC 4231 vectors) as its reference (D46) |
 | `crypto/pbkdf2` | e | `Lanes/Lib/Crypto/Pbkdf2.lean`, over OpenSSL's HMAC, for SCRAM-SHA-256 only (RFC 7914 vectors); passwords are digested with Argon2id (D46) |
-| `crypto/rand` | a | `IO.getRandomBytes` (reads `/dev/urandom`, or `BCryptGenRandom` on Windows), as `Lanes.randomBytes`: it needs `/dev` mounted |
+| `crypto/rand` | c | OpenSSL's `RAND_bytes`, bound as `Lanes.randomBytes` (D46): `IO.getRandomBytes` makes no promise that its bytes are fit for keys |
 | `crypto/subtle` | c | OpenSSL's `CRYPTO_memcmp`, bound (D46): compiled Lean promises nothing about timing, so the Lean comparison is only the reference |
 | `crypto/tls` | e | the client, from the OpenSSL Lean's toolchain ships, bound in `native/tls.c` and `Lanes/Web/IO/Tls.lean`; inbound TLS stays at the load balancer or reverse proxy |
 | `crypto/x509`, `crypto/x509/pkix` | e | OpenSSL's, inside the TLS client: the chain verified against the system's roots or a file given, the name or address checked (`Lanes/Web/IO/Tls.lean`); of a certificate, Lean reads only the signature algorithm, for channel binding (`Lanes/Lib/Crypto/Certificate.lean`) |
@@ -267,8 +267,9 @@ Each step depends only on steps above it and on what Lanes has.
    of buckets per key (an address from 2, a user) in a `Std.TreeMap`, with buckets that are full
    dropped so the table stays bounded.
 7. **`fsync`**: done (D46), in `native/lanes.c`, used by `Lanes/Durable/IO/Journal.lean`.
-8. **Bound cryptography**: done (D46), from OpenSSL's libcrypto: Argon2id for `Password.digest`,
-   `CRYPTO_memcmp` for `Bytes.same`, SHA-256 and HMAC-SHA-256.
+8. **Bound cryptography**: done (D46), from OpenSSL's libcrypto: Argon2id for password hashes
+   (`Auth.Phc`, `Password.digest`), `CRYPTO_memcmp` for `Bytes.same`, SHA-256, HMAC-SHA-256 and
+   `RAND_bytes` for `randomBytes`.
 9. **TLS and names in the HTTP client**: done (D67), with the OpenSSL that Lean's toolchain
    links, verifying against the system's roots with the host name checked, and `Std.Async.DNS`
    for names (`Lanes/Web/IO/Client.lean`, `Lanes/Web/IO/Tls.lean`).
@@ -332,5 +333,4 @@ yet proved come after: `Lanes.Json`'s round trip (oracles JSONTestSuite and Go `
   be the next such port (P1).
 - Core has a logical model of IEEE floats (`Float.Model`, binary32 and binary64), so float
   printing and parsing can be stated and proved against it.
-- Address parsing in `Std.Net` and `IO.getRandomBytes` are C behind `@[extern]` (libuv's
-  `inet_pton`, `/dev/urandom`).
+- Address parsing in `Std.Net` is C behind `@[extern]` (libuv's `inet_pton`).

@@ -26,7 +26,7 @@ proved function tells it to.
 | Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame,Reading}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash`, `Journal.Disk.Torn.load_readings` |
 | Migrations | `Lanes/Durable/{Migration,Upgrade}.lean` | `Migration.inv_exec`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.holds`, `Journal.Upgrade.inv_load` |
 | Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left`, `System.Run.Fair.right` |
-| Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent` |
+| Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound,Handshake,HandshakeSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent`, `Peers.Handshake.Reachable.ready_proved` |
 | The gate and the HTTP server | `Lanes/Web/Http/{Gate,Front,FrontSound,Waiting,Conn,ConnSound,Stream,Sse,SseSound,Loopback}.lean`, `Lanes/Semantics/Front.lean`, `Lanes/Web/IO/Server.lean` | `Http.served_answered_le_arrived`, `Http.served_pending_answered`, `Http.Waiting.exec_answered`, `Http.Conn.run_writes`, `Http.Conn.read_streamed`, `Http.Sse.parse_written` |
 | Metrics, health and the access log | `Lanes/Lib/Metrics.lean`, `Lanes/Web/Http/{Ops,OpsSound}.lean`, `Lanes/Web/IO/Ops.lean` | `Metrics.Histogram.observeAll_eq`, `Metrics.readLabelValue_escapeLabel`, `Http.Ops.route?_default`, `Http.Ops.route?_metrics`, `Http.Ops.answer_ready`, `Http.Ops.Access.parse_line`; that none of it reaches a system is trusted and tested |
 | Other adapters | `Lanes/Outside/Basic.lean`, `Lanes/Outside/{Clock,IO/Clock}.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Web/Http/{Grammar,Wire,WireSound}.lean` | `Response.read_wire`, `Request.fields_framing`; conformance tests |
@@ -38,7 +38,7 @@ proved function tells it to.
 | Web | `Lanes/Web/Http/{Basic,Route,RouteSound,Cookie,CookieSound}.lean`, `Lanes/Web/Html/`, `Lanes/Web/Auth/` | `Html.lex_render`, `Html.safeUrl_scheme`, `Http.dispatch_link`, `Http.parseForm_encodeForm`, `Http.readSetCookie_header`, `Auth.verify_eq_some`, `Auth.checkForm_other` |
 | The checker | `Lanes/Check/`, `Lanes/Semantics/{Monitor,MonitorSound}.lean` | `Check.search_sound`, `Check.system_sound_of_respects`, `Check.refines_traces` |
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
-| Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
+| Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | codec laws, the body of a value read back as written and written one way (`Body.read_eq_ok_iff`), `Quorum.majority_inter`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
 | Sign-in with OAuth 2.0 and OpenID Connect | `Lanes/Web/Auth/{Jose,IdToken,OAuth}.lean`, `Lanes/Web/IO/SignIn.lean` | `OAuth.check_ok`, `OAuth.Used.accepted_once`, `OAuth.Used.length_claim`, `OAuth.IdToken.verify_accepted`, `Jose.verify_ok`, `OAuth.Keys.no_fetch_within`; the edge is trusted, tested end to end against a provider run in the test |
 | Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Native.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean`; `native/sign.c`, `Lanes/Lib/Crypto/Sign.lean` | trusted; tested against the Lean references and published vectors |
 | TLS client | `native/tls.c`, `Lanes/Web/IO/Tls.lean` | trusted; tested against `openssl s_server` |
@@ -197,8 +197,15 @@ events (`Lanes/Net/CourierSound.lean`): one write at a time on a connection, wri
 it dialed and only what it was sent, in order and at most once
 (`Peers.Courier.written_sublist_sent`), a bounded queue, everything closed at `stop`
 (`Peers.Courier.stop_closes`), and what it delivers is what its reader makes of the bytes
-(`Peers.Courier.delivered_read`). `Lanes/Net/IO/Peers.lean` only performs. That the running
-processes implement `System.shards` is trusted.
+(`Peers.Courier.delivered_read`). Every connection opens with a handshake,
+`Peers.Handshake.step` (`Lanes/Net/Handshake.lean`), also pure: each side sends the magic, the
+handshake's version, the system's name, the SHA-256 of `Peers.Config.schema` and a fresh nonce,
+refuses a hello that differs (`Peers.Handshake.hear_differs`), and is connected only once the
+other side has sent the HMAC-SHA-256, under the shared `Peers.Config.key`, of its role and of
+both hellos, its own nonce included (`Peers.Handshake.Reachable.ready_proved`), so a replayed
+handshake does not check. The parcels after it are neither signed nor encrypted.
+`Lanes/Net/IO/Peers.lean` only performs. That the running processes implement `System.shards`
+is trusted.
 
 ## The gate and the HTTP server
 
@@ -278,10 +285,14 @@ from, so text stays text (`Html.lex_render`, against a model of the HTML tokeniz
 attributes limited to `Html.allowedSchemes` (`Html.safeUrl_scheme`), and a template macro
 (`Lanes/Web/Html/Syntax.lean`, trusted); htmx attributes taken from routes (`Hx.request_match?`);
 cookies a browser stores with exactly the attributes they name (`Http.readSetCookie_header`,
-against RFC 6265's algorithm); and `Lanes/Web/Auth/`: signed tokens and form tokens that accept
-exactly what was signed for their purpose and session (`Auth.verify_eq_some`,
-`Auth.checkForm_iff`) and another's only through an HMAC collision (`Auth.verify_sign_other`,
-`Auth.checkForm_other`), Argon2id password digests, failed attempts that lock at their limit
+against RFC 6265's algorithm); and `Lanes/Web/Auth/`: signed tokens and form tokens that name
+the key they are checked with, so keys rotate (`Auth.verify_rotate`), and accept exactly what
+was signed for their purpose and session, a token before its expiry (`Auth.verify_eq_some`,
+`Auth.verify_expired`, `Auth.checkForm_iff`), and another's only through an HMAC collision
+(`Auth.verify_sign_other`, `Auth.checkForm_other`); Argon2id password hashes stored as PHC
+strings, which carry their cost and salt and read back as written (`Auth.Phc.parse?_encode`),
+checked under what they carry and asked to be hashed again at a new cost
+(`Auth.Password.verify_phc`); failed attempts that lock at their limit
 (`Auth.Attempts.locked_unlock_repeat`) and sessions that keep the newest (`Auth.Sessions.ids_starts`)
 and end after a lifetime, judged at the time a request arrived, so that one over is never let in
 again (`Auth.Sessions.accepts_iff`, `Auth.Sessions.Ended.run`).
@@ -586,7 +597,17 @@ One process running `Http.serve` on a journal:
 
 After `kill -9`, a start reads the snapshot and the journal (`Journal.Disk.start`), mends a torn
 last write, and replays what came after the snapshot's mark through the same kernel; outputs that
-were produced and not yet handed over are handed over again (`Journal.recover_handed`). With
+were produced and not yet handed over are handed over again (`Journal.recover_handed`). Each
+output carries an id: its journal's, made at random when the journal is begun, and its origin,
+the place in the history of the entry that produced it and its place among that entry's outputs.
+A batch hands an output over with the origin its history gives it (`Batch.run_ids`), however its
+waves are spread (`Batch.run_ids_spread`), and a restart hands it over again with the same one
+(`Journal.recoverIds_suffix`, `Journal.recoverIds_handed`, from a snapshot
+`Journal.resumeIds_eq_recoverIds`), so a driver passes the id on as the idempotency key: in
+`Idempotency-Key` (`Http.Client.handlerKeyed`), as a conditional write to S3 (`S3.Op.put` with
+`ifAbsent`), or as SES's adapter's own record of what it sent (`Aws.Ses.handlerOnce`). A copy of
+the files restored elsewhere, production into staging, starts with `Journal.Store.restored`: it
+hands over nothing it owes and takes a new journal id. With
 peers (`Http.serveShard`), a message to an actor on another shard leaves as a parcel through the
 courier and enters the other process's inbox as an input.
 

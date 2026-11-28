@@ -78,15 +78,15 @@ theorem postsOf_set_self {b : Board N C} {n : N} {p₀ : Profile N C} (h : b.get
   postsOf_of_get? (get?_set_self h p)
 
 /-- A log-in changes no post. -/
-theorem posts_logIn (config : Config) (n : N) (req : ReqId) (p : Profile N C) (c : C) :
-    (logIn config n req p c).1.posts = p.posts := by
+theorem posts_logIn (config : Config) (n : N) (req : ReqId) (p : Profile N C) (c : C) (at_s : Nat) :
+    (logIn config n req p c at_s).1.posts = p.posts := by
   unfold logIn
   split
   · rfl
   · split <;> rfl
 
-theorem logIn_window (config : Config) (n : N) (req : ReqId) (p : Profile N C) (c : C) :
-    (logIn config n req p c).1.window = p.window := by
+theorem logIn_window (config : Config) (n : N) (req : ReqId) (p : Profile N C) (c : C) (at_s : Nat) :
+    (logIn config n req p c at_s).1.window = p.window := by
   unfold logIn
   split
   · rfl
@@ -159,13 +159,13 @@ theorem handle_get?_ne (r : Request N C) (h : m ≠ r.name) :
     · split
       · rfl
       · exact lookup_append_of_ne (Ne.symm h) _ _
-  | logIn req n c =>
+  | logIn req n c at_s =>
     simp only [handle]
     split
     · exact get?_set_ne b h _
     · rfl
   | logOut req n session => exact withSession_get?_ne session fun _ _ => get?_set_ne b h _
-  | newToken req n session => exact withSession_get?_ne session fun _ _ => get?_set_ne b h _
+  | newToken req n session at_s => exact withSession_get?_ne session fun _ _ => get?_set_ne b h _
   | web req n session op =>
     exact withSession_get?_ne session fun _ _ => act_get?_ne config h op
   | api req n token seq op =>
@@ -258,7 +258,7 @@ theorem handle_posts (r : Request N C) :
         rw [postsOf_of_none hn]
         simp only [h]
         exact .same
-  | logIn req n c =>
+  | logIn req n c at_s =>
     simp only [handle, Request.name]
     split
     · next p hp =>
@@ -268,7 +268,7 @@ theorem handle_posts (r : Request N C) :
   | logOut req n session =>
     exact withSession_posts (n := n) session fun p hp => by
       rw [postsOf_set_self hp, postsOf_of_get? hp]; exact .same
-  | newToken req n session =>
+  | newToken req n session at_s =>
     exact withSession_posts (n := n) session fun p hp => by
       rw [postsOf_set_self hp, postsOf_of_get? hp]; exact .same
   | web req n session op => exact withSession_posts session fun p hp => act_posts config hp op

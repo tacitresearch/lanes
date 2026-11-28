@@ -29,10 +29,13 @@ def main (args : List String) : IO Unit := do
   for p in [Google.provider, GitHub.provider] do
     if let some c ← client origin p.name then providers := providers ++ [(p, c)]
   let settings : Videos.Settings :=
-    { key := .of (← randomBytes 32), secure := origin.startsWith "https:" }
+    { keys := .of (.of (← randomBytes 32)), secure := origin.startsWith "https:" }
   let signIn ← SignIn.start { providers, secure := settings.secure }
   let server ← (Http.serve (Server.system (service settings)) (bridge settings origin)
-    { port := port.toUInt16 } (arrive := some signIn.arrive)).block
+    { port := port.toUInt16 } (arrive := some fun r => do
+      match ← signIn.arrive r with
+      | .ok r => return .ok (stamp ((← Http.Ops.wallMs) / 1000) r)
+      | .error answer => return .error answer)).block
   IO.println s!"Videos listening on http://127.0.0.1:{server.port.getD 0}, signing in with \
     {", ".intercalate (providers.map (·.1.name))}"
   (← IO.getStdout).flush

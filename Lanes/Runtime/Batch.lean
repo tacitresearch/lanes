@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Durable.Journal
+public import Lanes.Durable.OutputId
 public import Lanes.Proof.List
 
 /-!
@@ -16,7 +16,8 @@ Of every batch: the journal describes the kernel (`run_kernel`); an output is ha
 once the entries that produce it are appended, a save falls where every output produced has
 been handed over, and a peek sees the kernel the journal describes (`run_sound`); a peek sees
 every input before it and none after (`run_peek`); who waits for the shard to be idle is
-answered when the kernel is quiet (`run_resolved`).
+answered when the kernel is quiet (`run_resolved`). Each output is handed over with its origin
+in the history the batch writes (`run_ids`), however its waves are spread (`run_ids_spread`).
 
 The reply handles are opaque: `P i` answers a peek at actor `i` and `W` an idle, as `W` wakes a
 sleeper in `Mailbox`.
@@ -39,13 +40,17 @@ inductive Command (σ : Signature) (P : σ.Id → Type) (W : Type) where
 inductive Act (sys : System σ) (P : σ.Id → Type) where
   | append (entries : Array (Journal.Entry σ))
   | record (events : Array (Event σ))
-  | handOver (outputs : Array σ.Out)
+  /-- Hand these outputs over, each with its origin, then note a `handed` mark. -/
+  | handOver (outputs : Array (Journal.Origin × σ.Out))
   /-- Save this image of the kernel. The kernel goes on as the image restores it. -/
   | save (image : Kernel.Image sys)
   | answer (i : σ.Id) (reply : P i) (state : sys.State i)
 
 structure Config where
   now_ms : Nat
+  /-- How many entries the shard's history has before the batch, so where the origins of its
+  outputs start. -/
+  index : Nat := 0
   fuel : Nat
   /-- How many entries to write between two saves, if the journal can save. -/
   snapshotEvery : Option Nat
@@ -61,7 +66,7 @@ structure Scan (sys : System σ) (P : σ.Id → Type) (W : Type) where
   acts : Array (Act sys P) := #[]
   entries : Array (Journal.Entry σ) := #[]
   events : Array (Event σ) := #[]
-  outputs : Array σ.Out := #[]
+  outputs : Array (Journal.Origin × σ.Out) := #[]
   worked : Bool := false
 
 structure Result (sys : System σ) [Hashable σ.Id] (P : σ.Id → Type) (W : Type) where
@@ -79,24 +84,47 @@ def due (c : Config) (written : Nat) : Bool :=
 def put (acts : Array (Act sys P)) (skip : Bool) (act : Act sys P) : Array (Act sys P) :=
   if skip then acts else acts.push act
 
+/-- What an act adds to the shard's history, an entry each, as requests of the kernel: the
+entries it appends, the `handed` mark the shell notes after a hand-over, the mark of a save. -/
+def Act.steps : Act sys P → List (Option (Kernel.Op σ))
+  | .append entries => Journal.steps entries.toList
+  | .handOver outputs => if outputs.isEmpty then [] else [none]
+  | .save _ => [some .snapshot]
+  | _ => []
+
+def history (acts : List (Act sys P)) : List (Option (Kernel.Op σ)) := acts.flatMap Act.steps
+
+/-- How many entries an act adds to the history. -/
+def Act.grows : Act sys P → Nat
+  | .append entries => entries.size
+  | .handOver outputs => if outputs.isEmpty then 0 else 1
+  | .save _ => 1
+  | _ => 0
+
+/-- How many entries acts add to the history: `(history acts).length` (`grown_eq`). -/
+def grown (acts : Array (Act sys P)) : Nat :=
+  acts.foldl (init := 0) fun n act => n + act.grows
+
 variable [Hashable σ.Id]
 
-/-- A turn, kept back to be written with the turns after it. -/
-def workWith (turn : Kernel sys → Journal.Turn sys) :
+/-- A turn, kept back to be written with the turns after it. Its outputs are all its last
+entry's (`Journal.turn_placed`), so their origin is where that entry falls in the history. -/
+def workWith (index : Nat) (turn : Kernel sys → Journal.Turn sys) :
     Kernel sys × Scan sys P W → Kernel sys × Scan sys P W
   | (k, ⟨written, waiting, acts, entries, events, outputs, _⟩) =>
     match turn k with
     | { kernel, events := more, outputs := out, entries := new } =>
       (kernel, { written, waiting, acts, entries := entries ++ new
-                 events := events ++ more, outputs := outputs ++ out
+                 events := events ++ more
+                 outputs := outputs ++ Journal.tag (index + grown acts + entries.size + new.length) out
                  worked := true })
 
 def work (c : Config) (input : Option σ.In) : Kernel sys × Scan sys P W → Kernel sys × Scan sys P W :=
-  workWith fun k => Journal.turn k c.now_ms input c.fuel
+  workWith c.index fun k => Journal.turn k c.now_ms input c.fuel
 
 /-- The turn of inputs that arrived together, with `fuel` for each. -/
 def workAll (c : Config) (xs : List σ.In) : Kernel sys × Scan sys P W → Kernel sys × Scan sys P W :=
-  workWith fun k => Journal.turnAll k c.now_ms xs (c.fuel * max 1 xs.length) c.spread
+  workWith c.index fun k => Journal.turnAll k c.now_ms xs (c.fuel * max 1 xs.length) c.spread
 
 /-- Write what was kept back, and save if that many entries are due. -/
 def flush (c : Config) : Kernel sys × Scan sys P W → Kernel sys × Scan sys P W
@@ -181,6 +209,10 @@ def Act.ops : Act sys P → List (Kernel.Op σ)
   | _ => []
 
 def Act.outputs : Act sys P → List σ.Out
+  | .handOver outputs => outputs.toList.map Prod.snd
+  | _ => []
+
+def Act.placed : Act sys P → List (Journal.Origin × σ.Out)
   | .handOver outputs => outputs.toList
   | _ => []
 
@@ -192,6 +224,9 @@ def journal (acts : List (Act sys P)) : List (Kernel.Op σ) := acts.flatMap Act.
 
 def handed (acts : List (Act sys P)) : List σ.Out := acts.flatMap Act.outputs
 
+/-- The outputs handed over, each with its origin. -/
+def handedIds (acts : List (Act sys P)) : List (Journal.Origin × σ.Out) := acts.flatMap Act.placed
+
 def recorded (acts : List (Act sys P)) : List (Event σ) := acts.flatMap Act.events
 
 /-- What an act may do after `before`, from kernel `k`: hand over or record exactly what the
@@ -200,7 +235,8 @@ describes once every output it produced is handed over, and answer with that ker
 def Act.Sound (k : Kernel sys) (before : List (Act sys P)) : Act sys P → Prop
   | .append _ => True
   | .record events => recorded before ++ events.toList = (k.exec (journal before)).events
-  | .handOver outputs => handed before ++ outputs.toList = (k.exec (journal before)).outputs
+  | .handOver outputs =>
+    handed before ++ outputs.toList.map Prod.snd = (k.exec (journal before)).outputs
   | .save image =>
     image = (k.exec (journal before)).kernel.image
       ∧ handed before = (k.exec (journal before)).outputs
@@ -238,7 +274,7 @@ private theorem ops_nil : Journal.ops ([] : List (Journal.Entry σ)) = [] := rfl
 
 private structure Inv (k0 : Kernel sys) (ks : Kernel sys × Scan sys P W) : Prop where
   kernel : ks.1 = (k0.exec (journal ks.2.acts.toList ++ Journal.ops ks.2.entries.toList)).kernel
-  outputs : handed ks.2.acts.toList ++ ks.2.outputs.toList
+  outputs : handed ks.2.acts.toList ++ ks.2.outputs.toList.map Prod.snd
     = (k0.exec (journal ks.2.acts.toList ++ Journal.ops ks.2.entries.toList)).outputs
   events : recorded ks.2.acts.toList ++ ks.2.events.toList
     = (k0.exec (journal ks.2.acts.toList ++ Journal.ops ks.2.entries.toList)).events
@@ -251,11 +287,11 @@ private theorem inv_start (k : Kernel sys) (written : Nat) (waiting : Array (Boo
   events := rfl
   sound := fun before act after h => by simp at h
 
-private theorem inv_workWith (turn : Kernel sys → Journal.Turn sys)
+private theorem inv_workWith (index : Nat) (turn : Kernel sys → Journal.Turn sys)
     (hturn : ∀ k, (turn k).kernel = (k.exec (Journal.ops (turn k).entries)).kernel
       ∧ (turn k).events = (k.exec (Journal.ops (turn k).entries)).events
       ∧ (turn k).outputs = (k.exec (Journal.ops (turn k).entries)).outputs) {k0 : Kernel sys}
-    {ks : Kernel sys × Scan sys P W} (h : Inv k0 ks) : Inv k0 (workWith turn ks) := by
+    {ks : Kernel sys × Scan sys P W} (h : Inv k0 ks) : Inv k0 (workWith index turn ks) := by
   obtain ⟨k, ⟨written, waiting, acts, entries, events, outputs, worked⟩⟩ := ks
   obtain ⟨hk, ho, he, hs⟩ := h
   obtain ⟨tk, te, to⟩ := hturn k
@@ -271,16 +307,16 @@ private theorem inv_workWith (turn : Kernel sys → Journal.Turn sys)
     rw [Journal.ops, List.filterMap_append, ← List.append_assoc, Kernel.exec_append, ← Journal.ops,
       ← Journal.ops, ← hk]
   refine ⟨?_, ?_, ?_, hs⟩ <;>
-    simp only [workWith, Array.toList_appendList, hexec, ← tk, ← te, ← to, ← ho, ← he,
-      List.append_assoc]
+    simp only [workWith, Array.toList_appendList, List.map_append,
+      Journal.tag_snd, hexec, ← tk, ← te, ← to, ← ho, ← he, List.append_assoc]
 
 private theorem inv_work (c : Config) (input : Option σ.In) {k0 : Kernel sys}
     {ks : Kernel sys × Scan sys P W} (h : Inv k0 ks) : Inv k0 (work c input ks) :=
-  inv_workWith _ (fun k => Journal.turn_eq_exec k c.now_ms input c.fuel) h
+  inv_workWith _ _ (fun k => Journal.turn_eq_exec k c.now_ms input c.fuel) h
 
 private theorem inv_workAll (c : Config) (xs : List σ.In) {k0 : Kernel sys}
     {ks : Kernel sys × Scan sys P W} (h : Inv k0 ks) : Inv k0 (workAll c xs ks) :=
-  inv_workWith _ (fun k => Journal.turnAll_eq_exec k c.now_ms xs _ c.spread) h
+  inv_workWith _ _ (fun k => Journal.turnAll_eq_exec k c.now_ms xs _ c.spread) h
 
 private theorem inv_flush (c : Config) {k0 : Kernel sys} {ks : Kernel sys × Scan sys P W}
     (h : Inv k0 ks) :
@@ -317,7 +353,7 @@ private theorem inv_flush (c : Config) {k0 : Kernel sys} {ks : Kernel sys × Sca
     rw [← j1, ← j2]; simp only [a3, toList_put]; split <;> simp [journal, Act.ops]
   have r3 : recorded a3.toList = recorded acts.toList ++ events.toList := by
     rw [← r2]; simp only [a3, toList_put]; split <;> simp [recorded, Act.events]
-  have h3 : handed a3.toList = handed acts.toList ++ outputs.toList := by
+  have h3 : handed a3.toList = handed acts.toList ++ outputs.toList.map Prod.snd := by
     simp only [a3, toList_put]; split <;> simp_all [handed, Act.outputs]
   have s3 : Sound k0 a3.toList := by
     simp only [a3, toList_put]; split
@@ -347,7 +383,7 @@ private theorem inv_flush (c : Config) {k0 : Kernel sys} {ks : Kernel sys × Sca
   · refine ⟨⟨?_, ?_, ?_, s3⟩, rfl, rfl, rfl⟩ <;>
       simp only [ops_nil, List.append_nil, j3, hx]
     · exact hk
-    · rw [h3, ho]
+    · rw [h3, ho]; simp
     · rw [r3, he]
 
 private theorem inv_scan (c : Config) {k0 : Kernel sys} {ks : Kernel sys × Scan sys P W}
@@ -416,7 +452,7 @@ private theorem inv_finish (c : Config) {k0 : Kernel sys} {ks : Kernel sys × Sc
   obtain ⟨k, s⟩ := f
   simp only at hk ho he hs hentries hevents houtputs
   rw [hentries, ops_empty, List.append_nil] at hk ho he
-  rw [houtputs, Array.toList_empty, List.append_nil] at ho
+  rw [houtputs, Array.toList_empty, List.map_nil, List.append_nil] at ho
   rw [hevents, Array.toList_empty, List.append_nil] at he
   exact ⟨hk, ho, he, hs⟩
 
@@ -630,5 +666,198 @@ theorem run_spread (c : Config) (spread : Kernel.Spread) (k : Kernel sys) (writt
     run { c with spread } k written waiting commands = run c k written waiting commands := by
   simp only [run, scan_spread]
   rfl
+
+/-! The origins of the outputs handed over. -/
+
+omit [Hashable σ.Id] in
+private theorem steps_grows (act : Act sys P) : act.steps.length = act.grows := by
+  cases act with
+  | handOver outputs => simp only [Act.steps, Act.grows]; split <;> rfl
+  | append entries => simp [Act.steps, Act.grows, Journal.steps]
+  | _ => rfl
+
+omit [Hashable σ.Id] in
+theorem grown_eq (acts : Array (Act sys P)) : grown acts = (history acts.toList).length := by
+  rw [grown, ← Array.foldl_toList]
+  suffices h : ∀ (l : List (Act sys P)) n,
+      l.foldl (fun n act => n + act.grows) n = n + (history l).length by
+    simpa using h acts.toList 0
+  intro l
+  induction l with
+  | nil => simp [history]
+  | cons a l ih =>
+    intro n
+    rw [List.foldl_cons, ih]
+    simp [history, List.flatMap_cons, steps_grows, Nat.add_assoc]
+
+omit [Hashable σ.Id] in
+/-- The history the acts write asks of the kernel what their journal does. -/
+theorem history_ops (acts : List (Act sys P)) : (history acts).filterMap id = journal acts := by
+  induction acts with
+  | nil => rfl
+  | cons act acts ih =>
+    rw [history, List.flatMap_cons, List.filterMap_append, ← history, ih]
+    show List.filterMap id act.steps ++ journal acts = act.ops ++ journal acts
+    congr 1
+    cases act with
+    | append entries => exact Journal.steps_ops _
+    | handOver outputs => simp only [Act.steps, Act.ops]; split <;> rfl
+    | _ => rfl
+
+private def IdInv (index : Nat) (k0 : Kernel sys) (ks : Kernel sys × Scan sys P W) : Prop :=
+  handedIds ks.2.acts.toList ++ ks.2.outputs.toList
+    = Journal.placed k0 index (history ks.2.acts.toList ++ Journal.steps ks.2.entries.toList)
+
+private theorem placed_marks (k : Kernel sys) (index : Nat) {marks : List (Option (Kernel.Op σ))}
+    (h : ∀ m ∈ marks, m = none ∨ m = some .snapshot) : Journal.placed k index marks = [] := by
+  induction marks generalizing k index with
+  | nil => rfl
+  | cons m rest ih =>
+    rw [Journal.placed, ih _ _ fun m hm => h m (List.mem_cons_of_mem _ hm)]
+    rcases h m List.mem_cons_self with rfl | rfl <;> rfl
+
+private theorem idinv_start (index : Nat) (k : Kernel sys) (written : Nat)
+    (waiting : Array (Bool × W)) : IdInv index k (k, ({ written, waiting } : Scan sys P W)) :=
+  rfl
+
+private theorem idinv_workWith (index : Nat) (turn : Kernel sys → Journal.Turn sys)
+    (hplaced : ∀ k i, Journal.placed k i (Journal.steps (turn k).entries)
+      = Journal.tag (i + (turn k).entries.length) (turn k).outputs)
+    {k0 : Kernel sys} {ks : Kernel sys × Scan sys P W} (h : Inv k0 ks) (hi : IdInv index k0 ks) :
+    IdInv index k0 (workWith index turn ks) := by
+  obtain ⟨k, ⟨written, waiting, acts, entries, events, outputs, worked⟩⟩ := ks
+  have hk := h.kernel
+  unfold IdInv at hi ⊢
+  simp only at hk hi
+  have hops : (history acts.toList ++ Journal.steps entries.toList).filterMap id
+      = journal acts.toList ++ Journal.ops entries.toList := by
+    rw [List.filterMap_append, history_ops, Journal.steps_ops]
+  have hp := hplaced k (index + (history acts.toList ++ Journal.steps entries.toList).length)
+  simp only [workWith]
+  generalize turn k = t at hp ⊢
+  obtain ⟨tk, tev, tout, tent⟩ := t
+  simp only [Array.toList_appendList, Journal.steps_append]
+  rw [← List.append_assoc (history acts.toList), Journal.placed_append, hops, ← hk, hp, ← hi,
+    List.append_assoc, grown_eq]
+  simp [Nat.add_assoc]
+
+private theorem flush_empty (c : Config) (ks : Kernel sys × Scan sys P W) :
+    (flush c ks).2.entries = #[] ∧ (flush c ks).2.outputs = #[] := by
+  obtain ⟨k, ⟨_, _, _, _, _, _, _⟩⟩ := ks
+  simp only [flush]; split <;> exact ⟨rfl, rfl⟩
+
+private theorem idinv_flush (c : Config) {index : Nat} {k0 : Kernel sys}
+    {ks : Kernel sys × Scan sys P W} (hi : IdInv index k0 ks) : IdInv index k0 (flush c ks) := by
+  obtain ⟨k, s⟩ := ks
+  obtain ⟨he, ho⟩ := flush_empty c (k, s)
+  obtain ⟨-, hacts, -⟩ := flush_save c k s
+  unfold IdInv at hi ⊢
+  simp only at hi
+  rw [he, ho, hacts]
+  have hh : handedIds (put (put (put s.acts s.entries.isEmpty (.append s.entries)) s.events.isEmpty
+      (.record s.events)) s.outputs.isEmpty (.handOver s.outputs)).toList
+        = handedIds s.acts.toList ++ s.outputs.toList := by
+    simp only [toList_put]
+    cases hE : s.entries.isEmpty <;> cases hV : s.events.isEmpty <;>
+      cases hO : s.outputs.isEmpty <;> simp_all [handedIds, Act.placed, Array.isEmpty_iff]
+  have hs : history (put (put (put s.acts s.entries.isEmpty (.append s.entries)) s.events.isEmpty
+      (.record s.events)) s.outputs.isEmpty (.handOver s.outputs)).toList
+        = history s.acts.toList ++ Journal.steps s.entries.toList
+          ++ (if s.outputs.isEmpty then [] else [none]) := by
+    simp only [toList_put]
+    cases hE : s.entries.isEmpty <;> cases hV : s.events.isEmpty <;>
+      cases hO : s.outputs.isEmpty <;> simp_all [history, Act.steps, Journal.steps, Array.isEmpty_iff]
+  have hsave : ∀ m ∈ history (if due c (s.written + s.entries.size) then [Act.save (P := P) k.image]
+      else []), m = none ∨ m = some .snapshot := by
+    intro m hm
+    split at hm <;> simp_all [history, Act.steps]
+  have hout : ∀ m ∈ (if s.outputs.isEmpty then [] else [none] : List (Option (Kernel.Op σ))),
+      m = none ∨ m = some .snapshot := by
+    intro m hm
+    split at hm <;> simp_all
+  have hnone : handedIds (if due c (s.written + s.entries.size) then [Act.save (P := P) k.image]
+      else []) = [] := by
+    split <;> rfl
+  simp only [handedIds, history, List.flatMap_append] at hh hs hnone hsave hi ⊢
+  rw [hh, hnone, hs, show Journal.steps ([] : List (Journal.Entry σ)) = [] from rfl]
+  simp only [List.append_nil]
+  rw [Journal.placed_append, placed_marks _ _ hsave, List.append_nil, Journal.placed_append,
+    placed_marks _ _ hout, List.append_nil, ← hi]
+
+private theorem idinv_scan (c : Config) {k0 : Kernel sys} {ks : Kernel sys × Scan sys P W}
+    (h : Inv k0 ks) (hi : IdInv c.index k0 ks) (command : Command σ P W) :
+    IdInv c.index k0 (scan c ks command) := by
+  cases command with
+  | input x =>
+    have hw : IdInv c.index k0 (work c (some x) ks) := idinv_workWith c.index _
+      (fun k i => Journal.turn_placed k c.now_ms (some x) c.fuel i) h hi
+    simp only [scan]
+    generalize work c (some x) ks = w at hw
+    obtain ⟨k, s⟩ := w
+    split
+    · exact idinv_flush c hw
+    · exact hw
+  | inputs xs =>
+    have hw : IdInv c.index k0 (workAll c xs ks) := idinv_workWith c.index _
+      (fun k i => Journal.turnAll_placed k c.now_ms xs (c.fuel * max 1 xs.length) c.spread i) h hi
+    simp only [scan]
+    generalize workAll c xs ks = w at hw
+    obtain ⟨k, s⟩ := w
+    split
+    · exact idinv_flush c hw
+    · exact hw
+  | idle timers waiter =>
+    have hf := idinv_flush c hi
+    simp only [scan]
+    generalize flush c ks = f at hf
+    obtain ⟨k, s⟩ := f
+    exact hf
+  | peek i reply =>
+    have hf := idinv_flush c hi
+    simp only [scan]
+    generalize flush c ks = f at hf
+    obtain ⟨k, s⟩ := f
+    unfold IdInv at hf ⊢
+    simp only [Array.toList_push, handedIds, history, List.flatMap_append] at hf ⊢
+    simpa [Act.placed, Act.steps] using hf
+
+private theorem idinv_foldl (c : Config) {k0 : Kernel sys} (commands : List (Command σ P W)) :
+    ∀ {ks : Kernel sys × Scan sys P W}, Inv k0 ks → IdInv c.index k0 ks →
+      IdInv c.index k0 (commands.foldl (scan c) ks) := by
+  induction commands with
+  | nil => exact fun _ hi => hi
+  | cons command commands ih => exact fun h hi => ih (inv_scan c h command) (idinv_scan c h hi command)
+
+/-- A batch hands each output over with its origin in the history it writes: the entries it
+appends, the `handed` mark the shell notes after each hand-over and the mark of each save, after
+the `c.index` entries the history had. With `Journal.ids_append`, that is the origin the whole
+history gives the output, which a restart gives it again (`Journal.recoverIds_suffix`). -/
+theorem run_ids (c : Config) (k : Kernel sys) (written : Nat) (waiting : Array (Bool × W))
+    (commands : List (Command σ P W)) :
+    handedIds (run c k written waiting commands).acts.toList
+      = Journal.placed k c.index (history (run c k written waiting commands).acts.toList) := by
+  have h := inv_foldl c commands (inv_start k written waiting)
+  have hi := idinv_foldl c commands (inv_start k written waiting) (idinv_start c.index k written waiting)
+  simp only [run, finish]
+  generalize commands.foldl (scan c) (k, { written, waiting }) = ks at h hi
+  have hw : IdInv c.index k (if ks.2.worked then ks else work c none ks) := by
+    split
+    · exact hi
+    · exact idinv_workWith c.index _ (fun k i => Journal.turn_placed k c.now_ms none c.fuel i) h hi
+  have hf := idinv_flush c hw
+  obtain ⟨he, ho⟩ := flush_empty c (if ks.2.worked then ks else work c none ks)
+  generalize flush c (if ks.2.worked then ks else work c none ks) = f at hf he ho
+  obtain ⟨k', s⟩ := f
+  unfold IdInv at hf
+  simp only at hf he ho ⊢
+  rw [he, ho] at hf
+  simpa [Journal.steps] using hf
+
+/-- How the waves of a batch are spread changes no output's id (`run_spread`). -/
+theorem run_ids_spread (c : Config) (spread : Kernel.Spread) (k : Kernel sys) (written : Nat)
+    (waiting : Array (Bool × W)) (commands : List (Command σ P W)) :
+    handedIds (run { c with spread } k written waiting commands).acts.toList
+      = handedIds (run c k written waiting commands).acts.toList := by
+  rw [run_spread]
 
 end Lanes.Batch

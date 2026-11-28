@@ -187,7 +187,8 @@ def readyTest : Async (List (String × Bool)) := do
   let (log, _) ← memory (Tests.Fronted.Fronted {}) [.advance 0, .input (.inr (.note 7)), .batch 64]
   let server ← serveFronted (Server.system Tests.Fronted.desk) Tests.Fronted.bridge
     { port := 0, ops := opsConfig lines } {}
-    (fun | .memo _ => discard <| await release.result? | .reply _ => pure ()) (log := some log)
+    (fun _ out => match out with | .memo _ => discard <| await release.result? | .reply _ => pure ())
+    (log := some log)
   let some port := server.port | return [("ops: the server reports its port", false)]
   let early ← Tests.Web.fetch port "/readyz"
   let alive ← Tests.Web.fetch port "/healthz"
@@ -383,7 +384,7 @@ def stopChild (drain_ms : Nat) : IO Unit := do
     | .reply _ => pure ()
   Lanes.block do
     let server ← serveFronted (Server.system slow) slowBridge
-      { port := 0, ops := { readinessPath := some "/readyz" } } {} onOutput
+      { port := 0, ops := { readinessPath := some "/readyz" } } {} (fun _ => onOutput)
     held.set (some server)
     server.stopOnSignal drain_ms (listening := say s!"listening {server.port.getD 0}")
 

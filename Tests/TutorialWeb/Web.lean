@@ -17,7 +17,9 @@ open scoped Lanes.Html
 
 structure Settings where
   /-- The key session cookies and form tokens are signed with. -/
-  key : Hmac.Key
+  keys : Auth.Keys
+  /-- How long a session's cookie lets its member in, in seconds. -/
+  session_s : Nat := 7 * 24 * 3600
   /-- The site's public origin: cookies are `Secure` when it is `https:`. -/
   origin : String
   bucket : S3.Bucket
@@ -62,16 +64,18 @@ def memberHeader : String := "shelf-member"
 def arrivedHeader : String := "shelf-arrived"
 def storedHeader : String := "shelf-stored"
 
+/-- When the request arrived, in seconds, as `arrive` stamped it. -/
+def arrived (r : Http.Request) : Nat := ((r.header? arrivedHeader).bind String.toNat?).getD 0
+
 /-- What the server makes of a request before the system sees it: the member its cookie names,
-if the cookie is signed with the key, and no cookie, so none is journalled. -/
+if the cookie is signed with a key of the site's and has not expired when the request arrived,
+and no cookie, so none is journalled. -/
 def prepare (s : Settings) (r : Http.Request) : Http.Request :=
   let kept := r.headers.filter fun (name, _) => name != "cookie" && name != memberHeader
-  let member := (r.cookie? s.cookieName).bind (Auth.verify s.key "session")
+  let member := (r.cookie? s.cookieName).bind (Auth.verify s.keys "session" (arrived r))
   { r with headers := kept ++ (member.map (memberHeader, ·)).toList }
 
 def member? (r : Http.Request) : Option Member := r.header? memberHeader
-
-def arrived (r : Http.Request) : Nat := ((r.header? arrivedHeader).bind String.toNat?).getD 0
 
 def stored? (r : Http.Request) : Option Nat := (r.header? storedHeader).bind String.toNat?
 
@@ -102,7 +106,7 @@ def script : String :=
 /-! ## Pages -/
 
 def csrf (s : Settings) (who : Member) : Html :=
-  <input type="hidden" name="csrf" value={Auth.formToken s.key who}/>
+  <input type="hidden" name="csrf" value={Auth.formToken s.keys who}/>
 
 def Layout (children : List Html) : Html :=
   <html lang="en">
@@ -172,7 +176,7 @@ def signed (s : Settings) (r : Http.Request) (f : Member → Request) : Except H
   match member? r with
   | none => .error home
   | some who =>
-    if r.sameOrigin s.origin && (r.field? "csrf").any (Auth.checkForm s.key who) then .ok (f who)
+    if r.sameOrigin s.origin && (r.field? "csrf").any (Auth.checkForm s.keys who) then .ok (f who)
     else .error (.text "forbidden\n" 403)
 
 def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response Request :=
@@ -182,7 +186,8 @@ def decode (s : Settings) (id : ReqId) (r : Http.Request) : Except Http.Response
       | none => .error (page (SignedOut s)),
     Routes.script.handle fun () _ => .error (Http.Response.ofText "text/javascript" script),
     Routes.callback.handle fun _ r => match OAuth.identity? r with
-      | some who => .error (home.setCookie (cookie s (Auth.sign s.key "session" (memberOf who))))
+      | some who => .error (home.setCookie
+          (cookie s (Auth.sign s.keys "session" (arrived r + s.session_s) (memberOf who))))
       | none => .error notFound,
     Routes.begin.handle fun () r => signed s r fun who => .begin id who (arrived r),
     Routes.uploaded.handle fun (file, ()) r => signed s r fun who => .seen id who file (stored? r),
