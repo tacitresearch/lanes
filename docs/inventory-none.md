@@ -9,7 +9,7 @@ of its own. The rules are in `docs/decisions/D47-the-inventory-is-computed.md`.
 
 What they write is checked by Lean like any declaration, and the laws of a codec and of an
 enumeration are fields of its type. That the declaration is the one written is what
-`Tests/Codec.lean` and `Tests/Schema.lean` test, through the command, which names no constant.
+`Tests/Codec.lean` tests, through the command, which names no constant.
 
 - `Declare.params`
 - `Declare.classBinders`
@@ -23,27 +23,15 @@ enumeration are fields of its type. That the declaration is the one written is w
 - `Declare.comparedByBEq`
 - `Declare.independent`
 - `Declare.enum`
-- `Declare.migrate`
-- `Declare.constantDefaults`
 - `Declare.ctorArgs`
 - `Declare.ctorBinder`
-- `Codec.fieldTuple`
-- `Codec.injectCtor`
-- `Codec.nameLit`
-- `Codec.typeName`
-- `Codec.fieldsTerm`
 - `Codec.structTerm`
-- `Codec.sumBytes`
 - `Codec.sumTerm`
 
 ## Without evidence on the day the inventory was introduced (2026-11-26)
 
 Each is to be proved, tested, made private or removed.
 
-
-### `Lanes/Net/CourierSound.lean`
-
-- `Peers.Line.conn?`
 
 ### `Lanes/Proof/Equiv.lean`
 
@@ -93,10 +81,6 @@ Each is to be proved, tested, made private or removed.
 - `Fifo.push`
 - `Fifo.pop?`
 - `Fifo.filter`
-
-### `Lanes/Durable/Frame.lean`
-
-- `Frame.unfinished`
 
 ### `Lanes/Lib/Encoding/Json/Basic.lean`
 

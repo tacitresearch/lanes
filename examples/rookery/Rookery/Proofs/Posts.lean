@@ -7,8 +7,8 @@ Of every request and deadline, for every board and configuration:
 
 - a post stays until a request made as its author asks to delete it (`handle_keeps`,
   `postsOf_fire`), and so through any sequence of them (`run_keeps`): an accepted post is never
-  lost. Through a crash the board keeps its state (`Rookery.Proofs.Refines`), and through
-  `kill -9` the journal gives it back (`Lanes.Journal.recover_kernel`, trusted shell);
+  lost while the process lives. Through a crash as the semantics models it the board keeps its
+  state (`Rookery.Proofs.Refines`); a restart of the process starts it empty;
 - a request made as `n` changes no other account (`handle_get?_ne`): only a post's author can
   delete it;
 - a post deleted stays gone: no request or deadline gives an account a post with that id again

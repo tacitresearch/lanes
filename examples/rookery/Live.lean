@@ -1,11 +1,11 @@
 import Rookery
 
 /-!
-rookery over HTTP, as a browser and a bot use it: `rookery` started as a process on a journal,
-a person and a bot signed up, posts made, followed and read in timelines, a post deleted, a
-bot's post retried, the rate limit reached, the process killed with SIGKILL and started again
-on its journal, and everything read again. Also what must be refused: a delete of another
-account's post, a token that does not verify, a form without its token.
+rookery over HTTP, as a browser and a bot use it: `rookery` started as a process, a person and
+a bot signed up, posts made, followed and read in timelines, a post deleted, a bot's post
+retried, the rate limit reached, a log-out, and the process killed with SIGKILL and started
+again, with a board as new. Also what must be refused: a delete of another account's post, a
+token that does not verify, a form without its token.
 -/
 
 open Lanes Lanes.Http Std Std.Async
@@ -92,8 +92,7 @@ abbrev Process := IO.Process.Child { stdin := .null, stdout := .null, stderr := 
 def start (dir : System.FilePath) : IO Process := do
   let child : Process ← IO.Process.spawn
     { cmd := ".lake/build/bin/rookery"
-      args := #[toString port, (dir / "rookery.journal").toString,
-        (dir / "rookery.secrets").toString, "1000", "2"]
+      args := #[toString port, (dir / "rookery.secrets").toString, "1000", "2"]
       stdin := .null, stdout := .null, stderr := .inherit }
   for _ in [0:200] do
     try
@@ -143,25 +142,20 @@ def run (dir : System.FilePath) : IO (List Bool) := do
   let forged ← api .get "/api/timeline" (String.ofList (token.toList.set 0
     (if token.front == 'f' then 'e' else 'f')))
   let noToken ← call .post "/post" ann.cookie [("body", "no form token")]
-  let journal := (← IO.FS.readBinFile (dir / "rookery.journal")).data.toList
   let beforeKill ← get bob "/timeline"
-  server.kill
-  discard server.wait
-  let again ← start dir
-  let afterKill ← get bob "/timeline"
-  let botAfter ← api .get "/api/timeline" token
-  let stillLimited ← api .post "/api/post" token "{\"text\": \"after the restart\", \"seq\": 5}"
   let annPosts ← api .get "/api/u/ann" token
   let loggedOut ← call .post "/logout" ann.cookie [("csrf", ann.csrf)]
   let afterLogOut ← call .get "/timeline" ann.cookie
+  server.kill
+  discard server.wait
+  let again ← start dir
+  let anew ← signUp "ann" "ann password"
+  let anewTimeline ← match anew with
+    | some ann => get ann "/timeline"
+    | none => pure ""
   again.kill
   discard again.wait
-  let holds (text : String) := (List.range journal.length).any fun k =>
-    text.toUTF8.data.toList.isPrefixOf (journal.drop k)
-  [ check "the journal holds no password, no session cookie and no API token"
-      (!holds "ann password" && !holds "ann%20password" && !holds ann.cookie
-        && !holds bob.cookie && !holds token),
-    check "ann posts twice" (contains first "Posted #0" && contains second "Posted #1"),
+  [ check "ann posts twice" (contains first "Posted #0" && contains second "Posted #1"),
     check "bob follows ann and sees her posts, newest first"
       (contains follows "Following" && ids bobTimeline == [1, 0]),
     check "a post's text is escaped" (contains bobTimeline "&lt;b&gt;escaped&lt;/b&gt;"),
@@ -181,14 +175,13 @@ def run (dir : System.FilePath) : IO (List Bool) := do
     check "an older seq is stale" (stale.status == 409),
     check "a token that does not verify is refused" (forged.status == 401),
     check "a form without its token is refused" (noToken.status == 403),
-    check "after SIGKILL and a restart on the journal the timeline is the same"
-      (afterKill == beforeKill && ids afterKill == [3, 2, 1]),
-    check "the bot's token and the rate limit survive the restart"
-      (botAfter.status == 200 && stillLimited.status == 429),
+    check "bob's timeline has the posts left, newest first" (ids beforeKill == [3, 2, 1]),
     check "the deleted post stays deleted" (!contains (body annPosts) "\"id\":0"
       && contains (body annPosts) "\"id\":1"),
     check "after logging out the cookie opens nothing"
-      (loggedOut.status == 303 && header? afterLogOut "hx-redirect" == some "/login") ].mapM id
+      (loggedOut.status == 303 && header? afterLogOut "hx-redirect" == some "/login"),
+    check "the board lives as long as the process: after SIGKILL and a restart ann signs up anew"
+      (anew.isSome && ids anewTimeline == []) ].mapM id
 
 end Rookery.Live
 

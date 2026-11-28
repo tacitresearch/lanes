@@ -9,3 +9,7 @@ import Lanes.Semantics
 -- Lanes.Data.Codec
 /-- info: 'Lanes.Codec.extTreeMap' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Codec.extTreeMap
+
+-- Lanes.Data.Fifo
+/-- info: 'Lanes.Fifo.length_toList' depends on axioms: [propext] -/
+#guard_msgs in #print axioms Lanes.Fifo.length_toList

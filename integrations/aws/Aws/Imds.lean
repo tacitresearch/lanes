@@ -15,8 +15,7 @@ Two sources, each a few HTTP calls whose answers are read here; the edge
   to live in `X-aws-ec2-metadata-token-ttl-seconds`; then, with the token in
   `X-aws-ec2-metadata-token`, `GET /latest/meta-data/iam/security-credentials/` for the name of
   the instance's role, and `GET` of that name under it for the credentials. IMDSv1, a `GET`
-  without a token, is never used, so an instance that requires tokens (as `infra/app/` makes
-  it) answers.
+  without a token, is never used, so an instance that requires tokens answers.
 - **A container's credentials endpoint** (ECS, and EKS Pod Identity): one `GET` of the URL in
   `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI` (under `http://169.254.170.2`) or
   `AWS_CONTAINER_CREDENTIALS_FULL_URI`, with `AWS_CONTAINER_AUTHORIZATION_TOKEN`, or the

@@ -14,11 +14,10 @@
 # Decisions.
 /docs/decisions/  @nathanrs
 
-# Specs: the applications' (`Spec.lean`; raft-kv's is in `Protocol.lean`), the wire format's
+# Specs: the applications' (`Spec.lean`), the wire format's
 # (`WireSpec.lean`), the models of what the outside may do (`Lanes/Outside/`), and the
 # behaviours, whose specs sit with them.
 **/*Spec.lean     @nathanrs
-/examples/raft-kv/RaftKV/Protocol.lean @nathanrs
 /Lanes/Outside/   @nathanrs
 **/Behaviours/    @nathanrs
 # The behaviours' proofs are evidence, not specs: no owner.

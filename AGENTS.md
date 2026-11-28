@@ -30,7 +30,7 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
 - Run `lake build --wfail`, `lake test`, `lake exe lanesCheck` and `lake exe lanes lint` before
   calling a task done. CI runs them in that order, then `lint --fix` must change nothing, then a
   generated app is built and tested, the small examples are built and checked, and
-  `examples/raft-kv`, `examples/ledger` and `examples/rookery` run as jobs of their own. A pull
+  `examples/rookery` runs as a job of its own. A pull
   request that changes only documentation is built and linted, and the other jobs are skipped
   (the `changes` job of `.github/workflows/ci.yml` says which files count).
 - Lake's artifact cache is on for Lanes, the examples, the integrations and generated apps
@@ -60,8 +60,7 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
 - **Small bounds on every pull request, large bounds on a schedule.** A pull request's checks
   are fast and exhaustive at small bounds: each example's `lake test` takes under a minute, and
   a pull request's CI under ten minutes. A model-checking scenario has a small version, in `lake
-  test`, and its large version, run nightly by `.github/workflows/large.yml` (in
-  `examples/videos`, `Videos.Check.Size` and `lake exe videosTest large`). A small version still
+  test`, and its large version is run on a schedule. A small version still
   reaches every witness it names (rule 5.3), and fails if one is not reached, so it cannot pass
   by exploring nothing. Both are exact: the fingerprinted mode is not a pull request's check. A
   check over its budget is made smaller, never moved to the schedule alone. *Why:* iteration
@@ -79,9 +78,9 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
   number and status line),
   `changelog` (each fragment in `docs/changes/` reads), `inventory` and `inventory-none` (below), `links` (every repository path in backquotes in
   `*.md` and `docs/*.md` exists) and `oracles` (`oracles/README.md` names an oracle, or why there
-  is none, for every protocol module and model, and every path it names exists) and `schema`
-(rule 2.8: every pinned schema against the build's, and the corpus it names). It does not check `no-io-in-step`, `bounded`, `field-leak` or
-  `fn-length`: those need the elaborator. The inventory's checks and `schema` read the built
+  is none, for every protocol module and model, and every path it names exists). It does not
+  check `no-io-in-step`, `bounded`, `field-leak` or
+  `fn-length`: those need the elaborator. The inventory's checks read the built
   modules: run `lake build lanesInventory` before `lake exe lanes lint --fix`.
 - `lake exe lanes inventory` prints every public definition with a status, read from the built
   modules (`docs/decisions/D47-the-inventory-is-computed.md`); no committed file holds it. A theorem makes what it states proved when
@@ -159,7 +158,7 @@ argument.
 (`Lanes.Semantics`, `…Proofs`) are imported only by proof files (lint `layering`). No cycles.
 Each module of `Lanes/` is in one package of `docs/decisions/D99-layered-packages.md`, and imports modules of Lanes only from its
 package and those below it: the semantics and the checker; actors, and the standard library
-beside them; the runtime; durability; the web and PostgreSQL; the umbrella `Lanes`
+beside them; the runtime; the web and PostgreSQL; the umbrella `Lanes`
 (`LanesCli/Layers.lean` gives each file's package, lint `layering`). A definition that a lower
 layer needs moves down, or the lower layer takes it as a parameter. *Why:* executable code
 that imports the proof layer links all of Mathlib (over 150 MB), and a layer that imports one
@@ -194,17 +193,9 @@ liveness and memory bugs, and bounds keep the checker finite.
 Lean cannot express (timing, the operating system), keep a Lean reference beside each binding,
 and count the C in `TRUSTED.md`.
 
-2.8 **A persisted type grows; it does not change.** The schemas of what an application's journal
-and snapshot hold are pinned (a `.schema` file: `Tests/Schemas/`, an example's `schemas/`), and
-files it wrote are kept in the corpus (`Tests/Journals/`). Add a field with a default, add a
-constructor, rename with the former name (`was`); then `lake exe lanes lint --fix` pins the new
-schema, and the diff of the pinned file is reviewed. Lint `schema` fails on what opening would
-refuse (a field with no default, a type changed, two names that take one old name) and on a
-constructor
-removed while a corpus file holds it, naming it. Such a change is a new version of the system,
-with a migration (`from Old := f`, a `migration:` line in the pinned file, `Journal.Upgrade`).
-Never rewrite a file of the corpus: add one (`docs/RELEASING.md`). *Why:* a file outlives the
-binary that wrote it, and a change to a type is cheap only until a file holds it (D97).
+2.8 *Retired.* It pinned the schemas of what a journal and a snapshot held. Actor state is now
+volatile, and the journal is kept on the branch `claude/archive-journal-runtime`; state that must
+outlive the process lives in a service outside, whose model says what it keeps.
 
 3.1 **Let it crash.** An actor in a state its spec does not cover emits `stop` rather than limping
 on; it starts again, through `recover`, on its next message (D5, D18). No defensive fallbacks.
@@ -226,8 +217,9 @@ with its spec and its proof (`Server.implements`).
 3.6 **One message, one atomic transition.** What must touch two actors at once goes through a
 protocol or a single owner, never shared state.
 
-3.7 **Batch at the edges.** The shell batches inputs, journal writes and syncs; `step` still sees
-one message at a time, and a theorem says the batch is unobservable (`Batch.run_kernel`).
+3.7 **Batch at the edges.** The shell batches inputs and the handing over of outputs; `step`
+still sees one message at a time, and a theorem says the batch is unobservable
+(`Batch.run_kernel`).
 
 3.8 **Back-pressure, not unbounded inboxes.** The inbox is bounded (`inboxCapacity`); when it is
 full the sender is refused (`tryInput`, the server's `503`). The kernel's queue between actors
@@ -307,44 +299,19 @@ lanes_data inductive Id (F : Type) where
 ```
 
 - `Codable` gives `Entry.codec : Codec N → Codec C → Codec (Entry N C)` and an instance;
-  `Codec.of T` is the instance's codec, and its law holds by construction. A codec also carries
-  its type's `Schema`: a table of the named types it uses, each declared once with the names of
-  its fields and constructors, their defaults and former names, where every use of a named type
-  is a reference by its name; and a map each way to `Value`, with the law
-  `ofValue (toValue a) = some a` (`Lanes/Data/Schema.lean`); `lake exe lanes journal schema
-  --type T` prints it. `Body.write`
-  and `Body.read` turn a `Value` into bytes and back with its schema, under `Codec.Limits`, and
-  each value has one body (`Body.read_eq_ok_iff`); `Body.encode` and `Body.decode` do it for a
-  type, through its `Schema.Of` (`Body.decode_encode`). Data written under an older schema is
-  read by name: `Schema.Plan.of` matches the writer's schema with the reader's once, each pair of
-  named types once, refusing
-  what cannot be read with a `Codec.Error` that names it, and `Body.decodeWith` reads each value
-  through the plan (`Lanes/Data/Match.lean`; `Schema.Plan.of_insertIdx`,
-  `Schema.Plan.of_rename`). The journal and the snapshot are written so, in format 2 of the
-  files (`Lanes/Durable/Format.lean`): a header, a manifest and the schema, then one body per
-  entry, read through the plan from the file's schema. `lake exe lanes journal dump <file>`
-  prints a file by the names in its schema, and `lanes journal verify <file> [--type T]` checks
-  it, and that `T`'s schema reads it (`Lanes/Durable/Inspect.lean`). Every
-  field's type needs `Codable`: `Nat`, `Int`, `String`, `Bool`, `Unit`, `ByteArray`, `Fin n`,
+  `Codec.of T` is the instance's codec, and its law holds by construction
+  (`Lanes/Data/Codec.lean`). Every field's type needs `Codable`: `Nat`, `Int`, `String`, `Bool`, `Unit`, `ByteArray`, `Fin n`,
   `Option`, `List`, pairs, sums, sigma types, subtypes, `Std.ExtTreeMap`, and types declared
   this way.
 - `Enum` lists every value. `LawfulBEq` compares a structure field by field, for one that holds a
   function on an `Enum` type and so has no `DecidableEq`.
 - Arguments are `(x y : T)` or `(x : T := default)`, fields `x : T` or `x : T := default`,
-  each with an optional docstring; a constructor may be a keyword (`| open`). A default names
-  no other field. A renamed field, argument or constructor keeps its former names after its
-  name, `height (was y) : Int`, `| path (was line)`, `(closed (was shut) : Bool)`, so that data
-  written under them can be read by name (`docs/decisions/D103-lanes-data-aliases.md`). A value with a property is a subtype,
+  each with an optional docstring; a constructor may be a keyword (`| open`). A value with a
+  property is a subtype,
   read back only if the property holds. A field whose type names an earlier field is refused.
   `extends` and indices are not accepted: write those with `structure` or `inductive` and the
-  codec with `Codec.struct%` or `Codec.sum%`. A recursive type has no codec: a schema can say it
-  (a named type may refer to itself), but a codec is a value, and neither `lanes_data` nor the
-  macros can define one that refers to itself.
-- A line `from Old := f` after `deriving` says how a value of the type's previous version
-  becomes one of this: it gives `T.migrate` and a `Migrate Old T` instance. A deploy that
-  changes a persisted type keeps the old version's types, codecs and step functions in a module
-  of their own, and reads its files through a `Journal.Upgrade` whose `Migration` proves that
-  the migrated states satisfy the new actors' inductive invariants (`examples/migration`).
+  codec with `Codec.struct%` or `Codec.sum%`. A recursive type has no codec: a codec is a value,
+  and neither `lanes_data` nor the macros can define one that refers to itself.
 
 ## Proofs
 
