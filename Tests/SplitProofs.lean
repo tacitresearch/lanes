@@ -16,7 +16,7 @@ namespace Tests.SplitProofs
 
 open Lanes Tests.Fixtures.Bank
 
-variable {A : Type} [DecidableEq A] [Fintype A] {opening : Nat}
+variable {A : Type} [DecidableEq A] [Enum A] {opening : Nat}
 
 theorem conserved_of_equiv {env : EnvModel (sig A)} (a b : SysState (bank A opening))
     (h : SysState.Equiv env a b) (ha : Conserved a) : Conserved b := by

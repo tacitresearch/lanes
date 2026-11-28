@@ -110,7 +110,9 @@ def card (s : Bag α) : Nat :=
   lift List.length (fun _ _ h => h.length_eq) s
 
 /-- `t` is `s` and something more. -/
-instance : LE (Bag α) := ⟨fun s t => ∃ u, t = s + u⟩
+protected def Le (s t : Bag α) : Prop := ∃ u, t = s + u
+
+instance : LE (Bag α) := ⟨Bag.Le⟩
 
 section Basic
 
@@ -154,6 +156,9 @@ theorem cons_eq_singleton_add (a : α) (s : Bag α) : a ::ₘ s = {a} + s := by
 
 theorem singleton_add (a : α) (s : Bag α) : {a} + s = a ::ₘ s :=
   (cons_eq_singleton_add a s).symm
+
+@[simp] theorem coe_singleton_add (a : α) (s : Bag α) : (([a] : List α) : Bag α) + s = a ::ₘ s :=
+  singleton_add a s
 
 @[simp] theorem cons_add (a : α) (s t : Bag α) : a ::ₘ s + t = a ::ₘ (s + t) := by
   rw [cons_eq_singleton_add, cons_eq_singleton_add, add_assoc]
@@ -211,16 +216,25 @@ variable {a b : α} {s t u s' t' : Bag α} {l₁ l₂ : List α}
 
 theorem le_def : s ≤ t ↔ ∃ u, t = s + u := Iff.rfl
 
-theorem le_refl (s : Bag α) : s ≤ s := ⟨0, (add_zero s).symm⟩
+@[simp] theorem le_refl (s : Bag α) : s ≤ s := ⟨0, (add_zero s).symm⟩
 
 theorem le_rfl : s ≤ s := le_refl s
 
 theorem le_of_eq (h : s = t) : s ≤ t := h ▸ le_refl s
 
+/-- An inequality between equal bags. -/
+theorem le_congr (h : s ≤ t) (hs : s' = s) (ht : t = t') : s' ≤ t' := hs ▸ ht ▸ h
+
+theorem le_trans_eq (h : s ≤ t) (ht : t = u) : s ≤ u := ht ▸ h
+
 theorem le_trans (h₁ : s ≤ t) (h₂ : t ≤ u) : s ≤ u := by
   obtain ⟨v, rfl⟩ := h₁
   obtain ⟨w, rfl⟩ := h₂
   exact ⟨v + w, add_assoc _ _ _⟩
+
+theorem Le.trans (h₁ : s ≤ t) (h₂ : t ≤ u) : s ≤ u := le_trans h₁ h₂
+
+theorem Le.trans_eq (h : s ≤ t) (ht : t = u) : s ≤ u := ht ▸ h
 
 instance : Std.IsPreorder (Bag α) where
   le_refl := le_refl
@@ -329,7 +343,7 @@ theorem erase_le_erase (a : α) (h : s ≤ t) : s.erase a ≤ t.erase a := by
   · rw [erase_of_not_mem ha, erase_add_right_neg u ha]
     exact le_add_right _ _
 
-theorem map_erase_of_mem [DecidableEq β] (f : α → β) (h : a ∈ s) :
+theorem map_erase_of_mem [DecidableEq β] (f : α → β) (s : Bag α) (h : a ∈ s) :
     map f (s.erase a) = (map f s).erase (f a) := by
   conv => rhs; rw [← cons_erase h]
   simp

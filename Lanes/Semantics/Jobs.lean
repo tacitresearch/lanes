@@ -118,7 +118,7 @@ theorem active_leaves (config : Config R) (hcrash : env.mayCrash () = false) (ke
     (P := fun c => ∃ a : Active K J, (c.up () = true ∧ entry (c.state ()) key = some a)
       ∧ left config a = n) ?_ (fun _ h => h) ?_
   · intro c ⟨⟨hup, hkey⟩, hf⟩
-    obtain ⟨a, ha⟩ := Option.ne_none_iff_exists'.mp (entry_eq_none.not.mpr (not_not.mpr hkey))
+    obtain ⟨a, ha⟩ := Option.ne_none_iff_exists'.mp ((not_congr entry_eq_none).mpr (Classical.not_not.mpr hkey))
     refine ⟨a, ⟨hup, ha⟩, ?_⟩
     simpa [f, ha] using hf
   refine System.LeadsTo.exists_left fun a => ?_
@@ -136,7 +136,7 @@ theorem answered_of_leaves {c c' : SysState (system (K := K) (J := J) config)}
     {ev : Event (sig K J R)} (hstep : c.step env ev = some c') {key : K}
     (hin : key ∈ keys (c.state ())) (hout : key ∉ keys (c'.state ())) :
     ∃ outcome, Output.answer key outcome ∈ c'.outbox := by
-  obtain ⟨a, ha⟩ := Option.ne_none_iff_exists'.mp (entry_eq_none.not.mpr (not_not.mpr hin))
+  obtain ⟨a, ha⟩ := Option.ne_none_iff_exists'.mp ((not_congr entry_eq_none).mpr (Classical.not_not.mpr hin))
   have hhandle (c₀ : SysState (system (K := K) (J := J) config)) (hs : c₀.state = c.state)
       (i : Unit) (msg : Jobs.Msg K J R) (hgone : key ∉ keys ((c₀.handle env i msg).state ())) :
       ∃ outcome, Output.answer key outcome ∈ (c₀.handle env i msg).outbox := by
@@ -176,14 +176,14 @@ theorem answered_of_leaves {c c' : SysState (system (K := K) (J := J) config)}
 /-- The jobs actor answers every job it admits: in a fair run in which it is not crashed, a job
 active while it is up has an answer handed over at a later position. -/
 theorem active_answered (config : Config R) (hcrash : env.mayCrash () = false) (key : K)
-    {r : (system (K := K) (J := J) config).Run env} (hfair : r.Fair) {n : ℕ}
+    {r : (system (K := K) (J := J) config).Run env} (hfair : r.Fair) {n : Nat}
     (hup : (r.state n).up () = true) (hkey : key ∈ keys ((r.state n).state ())) :
     ∃ m, n ≤ m ∧ ∃ outcome, r.event m = some (.output (.answer key outcome)) := by
   obtain ⟨m, hm, hgone⟩ := System.LeadsTo.iff.mp (active_leaves config hcrash key)
     r hfair n ⟨hup, hkey⟩
   have hleaves : ∃ k, n ≤ k ∧ key ∈ keys ((r.state k).state ()) ∧
       key ∉ keys ((r.state (k + 1)).state ()) := by
-    induction m, hm using Nat.le_induction with
+    induction m, hm using le_induction with
     | base => exact absurd hkey hgone
     | succ m hm ih =>
       by_cases hin : key ∈ keys ((r.state m).state ())
@@ -202,7 +202,7 @@ crashed, a step that delivers a submission, or a duplicate of one, is followed b
 an answer to its key. The answer may be to an earlier submission of the same key that is still
 active, which this one then joins. -/
 theorem submitted_answered (config : Config R) (hcrash : env.mayCrash () = false)
-    {r : (system (K := K) (J := J) config).Run env} (hfair : r.Fair) {n : ℕ}
+    {r : (system (K := K) (J := J) config).Run env} (hfair : r.Fair) {n : Nat}
     {e : Envelope (sig K J R)} {key : K} {job : J}
     (hev : r.event n = some (.deliver e) ∨ r.event n = some (.duplicate e))
     (hmsg : e.msg = .submit key job) :

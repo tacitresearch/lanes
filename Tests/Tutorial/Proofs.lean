@@ -6,7 +6,7 @@ import Lanes.Semantics
 import Tests.Tutorial.Counter
 
 /-!
-Proofs that need the proof layer (CSLib, Mathlib). Nothing executable imports this file, so the
+Proofs that need the proof layer (`Lanes.Semantics`). Nothing executable imports this file, so the
 application binary stays small.
 -/
 

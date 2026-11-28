@@ -49,17 +49,17 @@ structure Once (In Out S K : Type) where
   /-- The state of the sequential spec. -/
   value : S
   /-- The inputs that have arrived. -/
-  arrived : Set In
+  arrived : In → Prop
   /-- The keys of the inputs that have taken effect. -/
-  taken : Set K
+  taken : K → Prop
   /-- The outputs given, each of which may be handed over any number of times. -/
-  answered : Set Out
+  answered : Out → Prop
 
 /-- Input `x` takes effect. -/
 def Once.take (svc : Service In Out S) (key : In → K) (t : Once In Out S K) (x : In) :
     Once In Out S K :=
-  ⟨(svc.step t.value x).1, t.arrived, insert (key x) t.taken,
-    t.answered ∪ {out | out ∈ (svc.step t.value x).2}⟩
+  ⟨(svc.step t.value x).1, t.arrived, fun k => k = key x ∨ t.taken k,
+    fun out => t.answered out ∨ out ∈ (svc.step t.value x).2⟩
 
 /--
 The transition system of a service whose requests are named by `key`: an input arrives
@@ -68,32 +68,33 @@ given is handed over (visible) and stays given.
 -/
 def once (svc : Service In Out S) (key : In → K) : Spec (Once In Out S K) (Option (Visible In Out))
     where
-  init t := t = ⟨svc.init, ∅, ∅, ∅⟩
+  init t := t = ⟨svc.init, fun _ => False, fun _ => False, fun _ => False⟩
   Tr t label t' :=
     match label with
-    | some (.input x) => t' = { t with arrived := insert x t.arrived }
-    | some (.output out) => out ∈ t.answered ∧ t' = t
+    | some (.input x) => t' = { t with arrived := fun y => y = x ∨ t.arrived y }
+    | some (.output out) => t.answered out ∧ t' = t
     | some (.fire t) => t.elim
-    | none => ∃ x ∈ t.arrived, key x ∉ t.taken ∧ t' = t.take svc key x
+    | none => ∃ x, t.arrived x ∧ ¬t.taken (key x) ∧ t' = t.take svc key x
 
 /-- `t'` has arrived, taken and answered everything `t` has. -/
 structure Once.Grows (t t' : Once In Out S K) : Prop where
   /-- What has arrived stays arrived. -/
-  arrived : t.arrived ⊆ t'.arrived
+  arrived : ∀ ⦃x⦄, t.arrived x → t'.arrived x
   /-- What has taken effect stays taken. -/
-  taken : t.taken ⊆ t'.taken
+  taken : ∀ ⦃k⦄, t.taken k → t'.taken k
   /-- What has been answered stays answered. -/
-  answered : t.answered ⊆ t'.answered
+  answered : ∀ ⦃out⦄, t.answered out → t'.answered out
 
 namespace Once.Grows
 
 /-- A state grows to itself. -/
 theorem refl (t : Once In Out S K) : t.Grows t :=
-  ⟨subset_rfl, subset_rfl, subset_rfl⟩
+  ⟨fun _ h => h, fun _ h => h, fun _ h => h⟩
 
 /-- Growing twice is growing. -/
 theorem trans {t₁ t₂ t₃ : Once In Out S K} (h₁ : t₁.Grows t₂) (h₂ : t₂.Grows t₃) : t₁.Grows t₃ :=
-  ⟨h₁.arrived.trans h₂.arrived, h₁.taken.trans h₂.taken, h₁.answered.trans h₂.answered⟩
+  ⟨fun _ h => h₂.arrived (h₁.arrived h), fun _ h => h₂.taken (h₁.taken h),
+    fun _ h => h₂.answered (h₁.answered h)⟩
 
 end Once.Grows
 
@@ -105,14 +106,14 @@ theorem once_grows {t t' : Once In Out S K} {μ : Option (Visible In Out)} (h : 
   match μ, h with
   | some (.input x), h =>
     subst h
-    exact ⟨Set.subset_insert _ _, subset_rfl, subset_rfl⟩
+    exact ⟨fun _ h => .inr h, fun _ h => h, fun _ h => h⟩
   | some (.output _), ⟨_, h⟩ =>
     subst h
     exact .refl _
   | some (.fire t), _ => exact t.elim
   | none, ⟨x, _, _, h⟩ =>
     subst h
-    exact ⟨subset_rfl, Set.subset_insert _ _, Set.subset_union_left⟩
+    exact ⟨fun _ h => h, fun _ h => .inr h, fun _ h => .inl h⟩
 
 /-- Internal steps of `once` grow its state. -/
 theorem once_grows_τSTr {t t' : Once In Out S K} (h : (svc.once key).lts.τSTr t t') : t.Grows t' := by
@@ -121,7 +122,7 @@ theorem once_grows_τSTr {t t' : Once In Out S K} (h : (svc.once key).lts.τSTr 
   | tail _ htr ih => exact ih.trans (once_grows (μ := none) htr)
 
 /-- An arrived input whose key has not taken effect may take effect. -/
-theorem once_take {t : Once In Out S K} {x : In} (hx : x ∈ t.arrived) (hk : key x ∉ t.taken) :
+theorem once_take {t : Once In Out S K} {x : In} (hx : t.arrived x) (hk : ¬t.taken (key x)) :
     (svc.once key).lts.τSTr t (t.take svc key x) :=
   .single ⟨x, hx, hk, rfl⟩
 
@@ -141,18 +142,18 @@ What the memo of `Once.actor` says of the spec's keys taken: a key taken has a n
 its client's last remembered, and a number remembered has been taken, with effects `covered`,
 which is what the spec has already accounted for.
 -/
-structure Agrees (memo : Memo C E) (taken : Set (C × Nat)) (covered : E → Prop) : Prop where
+structure Agrees (memo : Memo C E) (taken : C × Nat → Prop) (covered : E → Prop) : Prop where
   /-- A key taken is no later than its client's last remembered. -/
-  below : ∀ c n, (c, n) ∈ taken → ∃ last effs, memo.find? c = some (last, effs) ∧ n ≤ last
+  below : ∀ c n, taken (c, n) → ∃ last effs, memo.find? c = some (last, effs) ∧ n ≤ last
   /-- A number remembered has been taken, and what was done is accounted for. -/
-  remembered : ∀ c n effs, memo.find? c = some (n, effs) → (c, n) ∈ taken ∧ ∀ e ∈ effs, covered e
+  remembered : ∀ c n effs, memo.find? c = some (n, effs) → taken (c, n) ∧ ∀ e ∈ effs, covered e
 
 namespace Agrees
 
-variable {memo : Memo C E} {taken : Set (C × Nat)} {covered : E → Prop}
+variable {memo : Memo C E} {taken : C × Nat → Prop} {covered : E → Prop}
 
 /-- An empty memo agrees with no key taken. -/
-theorem empty : Agrees ({} : Memo C E) ∅ covered :=
+theorem empty : Agrees ({} : Memo C E) (fun _ => False) covered :=
   ⟨fun _ _ h => h.elim, fun _ _ _ h => by simp at h⟩
 
 /-- Agreement survives accounting for more. -/
@@ -163,7 +164,7 @@ theorem mono (h : Agrees memo taken covered) {covered' : E → Prop}
 
 /-- A request the memo has not seen has not taken effect. -/
 theorem fresh (h : Agrees memo taken covered) {c : C} {n : Nat} (hs : memo.seen c n = .fresh) :
-    (c, n) ∉ taken := by
+    ¬taken (c, n) := by
   intro hmem
   obtain ⟨last, effs, hf, hle⟩ := h.below c n hmem
   simp only [seen, hf] at hs
@@ -188,13 +189,13 @@ theorem again (h : Agrees memo taken covered) {c : C} {n : Nat} {effs : List E}
 /-- Acting on a request not seen, and taking its key, keeps agreement. -/
 theorem record (h : Agrees memo taken covered) {c : C} {n : Nat} {effs : List E}
     (hs : memo.seen c n = .fresh) (heffs : ∀ e ∈ effs, covered e) :
-    Agrees (memo.record c n effs) (insert (c, n) taken) covered := by
+    Agrees (memo.record c n effs) (fun p => p = (c, n) ∨ taken p) covered := by
   refine ⟨fun c' n' hmem => ?_, fun c' n' effs' hf => ?_⟩
   · by_cases hc : c' = c
     · subst hc
       refine ⟨n, effs, find?_record_self .., ?_⟩
-      rcases Set.mem_insert_iff.mp hmem with heq | hmem
-      · exact le_of_eq (Prod.mk.inj heq).2
+      rcases hmem with heq | hmem
+      · exact Nat.le_of_eq (Prod.mk.inj heq).2
       · obtain ⟨last, effs'', hf, hle⟩ := h.below c' n' hmem
         simp only [seen, hf] at hs
         split at hs
@@ -203,16 +204,16 @@ theorem record (h : Agrees memo taken covered) {c : C} {n : Nat} {effs : List E}
           · cases hs
           · omega
     · rw [find?_record_of_ne _ _ _ hc]
-      rcases Set.mem_insert_iff.mp hmem with heq | hmem
+      rcases hmem with heq | hmem
       · exact absurd (Prod.mk.inj heq).1 hc
       · exact h.below c' n' hmem
   · by_cases hc : c' = c
     · subst hc
       rw [find?_record_self] at hf
       obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj hf)
-      exact ⟨Set.mem_insert _ _, heffs⟩
+      exact ⟨.inl rfl, heffs⟩
     · rw [find?_record_of_ne _ _ _ hc] at hf
-      exact ⟨Set.mem_insert_of_mem _ (h.remembered c' n' effs' hf).1,
+      exact ⟨.inr (h.remembered c' n' effs' hf).1,
         (h.remembered c' n' effs' hf).2⟩
 
 end Agrees
@@ -229,8 +230,8 @@ variable [DecidableEq In] [DecidableEq Out] {C : Type} [DecidableEq C]
 /-- What an effect of the server leaves is accounted for in `t`, and it arms no timer. -/
 def Covered (t : Service.Once In Out S (C × Nat)) :
     Effect (Server.sig In Out) () → Prop
-  | .send _ msg => (msg : In) ∈ t.arrived
-  | .emit out => out ∈ t.answered
+  | .send _ msg => t.arrived (msg : In)
+  | .emit out => t.answered out
   | .after .. => False
   | _ => True
 
@@ -253,9 +254,9 @@ structure Sim (c : SysState (server svc key)) (t : Service.Once In Out S (C × N
   /-- The server's state is the spec's value. -/
   value : t.value = (c.state ()).1
   /-- Every request in flight has arrived. -/
-  net : ∀ e ∈ c.net, (e.msg : In) ∈ t.arrived
+  net : ∀ e ∈ c.net, t.arrived (e.msg : In)
   /-- Every output waiting has been given. -/
-  outbox : ∀ out ∈ c.outbox, out ∈ t.answered
+  outbox : ∀ out ∈ c.outbox, t.answered out
   /-- No timer is armed. -/
   timers : ∀ m, m ∉ c.timers ()
   /-- The memo agrees with the keys taken. -/
@@ -284,7 +285,7 @@ theorem Sim.grow {c : SysState (server svc key)} {t t' : Service.Once In Out S (
 omit [DecidableEq C] in
 /-- Every effect of the service's step on `x` is an output it gives. -/
 theorem covered_step {t : Service.Once In Out S (C × Nat)} (s : S) (x : In)
-    (h : ∀ out ∈ (svc.step s x).2, out ∈ t.answered) :
+    (h : ∀ out ∈ (svc.step s x).2, t.answered out) :
     ∀ eff ∈ ((Server.actor svc).step s x).2, Covered t eff := by
   intro eff heff
   obtain ⟨out, hout, rfl⟩ := List.mem_map.mp heff
@@ -302,31 +303,31 @@ theorem Once.server_implements {In Out C : Type} [DecidableEq In] [DecidableEq O
     [DecidableEq C] (svc : Service In Out S) (key : In → C × Nat)
     (env : EnvModel (Server.sig In Out)) : (server svc key).ImplementsOnce env svc key := by
   refine System.Refines.of_handles (inv := fun _ => True) (fun _ _ => trivial) Sim
-    ⟨⟨svc.init, ∅, ∅, ∅⟩, rfl, rfl, by simp [SysState.init, SysState.blank],
+    ⟨⟨svc.init, fun _ => False, fun _ => False, fun _ => False⟩, rfl, rfl, by simp [SysState.init, SysState.blank],
       by simp [SysState.init, SysState.blank], by simp [SysState.init, SysState.blank],
       Memo.Agrees.empty⟩ (fun c c' t h hl => ?_) ?_ ?_ ?_ ?_
   · exact ⟨by rw [hl.state]; exact h.value, fun e he => h.net e (hl.net.subset he),
       fun o ho => h.outbox o (hl.outbox ▸ ho), fun m hm => h.timers m (hl.timers () m hm),
       by rw [hl.state]; exact h.memo⟩
   · intro c t x _ h
-    have hg : t.Grows { t with arrived := insert x t.arrived } :=
-      ⟨Set.subset_insert _ _, subset_rfl, subset_rfl⟩
+    have hg : t.Grows { t with arrived := fun y => y = x ∨ t.arrived y } :=
+      ⟨fun _ h => .inr h, fun _ h => h, fun _ h => h⟩
     refine ⟨_, .single rfl, h.value, fun e he => ?_, h.outbox, h.timers,
       h.memo.mono fun _ he => he.mono hg⟩
     rcases List.mem_append.mp he with he | he
     · exact hg.arrived (h.net e he)
     · obtain rfl := List.mem_singleton.mp he
-      exact Set.mem_insert _ _
+      exact .inl rfl
   · intro c t out _ h hmem
     exact ⟨t, .single ⟨h.outbox out hmem, rfl⟩, h.value, h.net,
       fun o ho => h.outbox o (List.mem_of_mem_erase ho), h.timers, h.memo⟩
   · rintro c t net ⟨⟩ x _ h hnet hpend
     obtain ⟨src, hmem⟩ := hpend.resolve_right (h.timers x)
-    have harrived : x ∈ t.arrived := h.net _ hmem
+    have harrived : t.arrived x := h.net _ hmem
     have hval := h.value
     have hmemo := h.memo
-    rw [← Prod.mk.eta (p := c.state ())]
-    rw [← Prod.mk.eta (p := c.state ())] at hval hmemo
+    rw [← Prod.eta (c.state ())]
+    rw [← Prod.eta (c.state ())] at hval hmemo
     generalize (c.state ()).1 = s at hval hmemo ⊢
     generalize (c.state ()).2 = memo at hval hmemo ⊢
     have hkey : (fun x => some (key x)) x = some ((key x).1, (key x).2) := rfl
@@ -400,7 +401,6 @@ theorem showing_sTr {t t' : S} {v' : Visible In Out' T} {v : Visible In Out T}
 
 end Spec
 
-open Cslib in
 /--
 What `sys` refines with the outputs `output` shows as nothing allowed at any time,
 `sys.filterMapIO id output` refines with them hidden: every step of the system behind the

@@ -8,8 +8,7 @@ public import Lanes.Core.FairScheduler
 public import Lanes.Core.Run
 public import Lanes.Core.Step
 public import Lanes.Semantics.System
-public import Cslib.Foundations.Semantics.LTS.OmegaExecution
-public import Cslib.Foundations.Data.OmegaSequence.Temporal
+public import Lanes.Semantics.Seq
 
 /-!
 # Liveness: infinite runs, fairness and leads-to
@@ -42,10 +41,10 @@ runtime provides. This asks less of a run than firing every timer that stays pen
 timer has one more thing to show: that the timer is left alone. Fairness says "eventually" and
 gives no bound.
 
-CSLib provides the infinite sequences (`ωSequence`), infinite executions of a transition system
-(`LTS.OmegaExecution`) and leads-to along one sequence (`ωSequence.LeadsTo`), and they are used
-here. It has no transition system with stuttering and no fairness of events (the one in its FLP
-development is of processes in that algorithm), so those two are defined here.
+`Lanes.Semantics.Seq` and `Lanes.Semantics.Lts` provide the infinite sequences
+(`ωSequence`, functions from positions), infinite executions of a transition system
+(`LTS.OmegaExecution`) and leads-to along one sequence (`ωSequence.LeadsTo`). The transition
+system with stuttering and the fairness of events are defined here.
 
 ## Main definitions
 
@@ -79,13 +78,11 @@ development is of processes in that algorithm), so those two are defined here.
 
 namespace Lanes
 
-open Cslib
-
 variable {σ : Signature}
 
 /-- `spec` with a stuttering step: the label `none` changes nothing. A state with nothing
 enabled then still has infinite executions. -/
-def Spec.stutter {State Label : Type*} (spec : Spec State Label) : LTS State (Option Label) where
+def Spec.stutter {State Label : Type _} (spec : Spec State Label) : LTS State (Option Label) where
   Tr s μ s' :=
     match μ with
     | none => s' = s
@@ -204,7 +201,7 @@ structure Run (sys : System σ) (env : EnvModel σ) where
 
 namespace Run
 
-variable {r : sys.Run env} {n : ℕ}
+variable {r : sys.Run env} {n : Nat}
 
 /-- The run that stutters forever. -/
 def idle (sys : System σ) (env : EnvModel σ) : sys.Run env where
@@ -226,7 +223,7 @@ theorem step_none (h : r.event n = none) : r.state (n + 1) = r.state n := by
   simpa [Spec.stutter, h] using r.exec n
 
 /-- Every state of a run is reachable, so invariants hold along runs. -/
-theorem reachable (r : sys.Run env) (n : ℕ) : sys.Reachable env (r.state n) := by
+theorem reachable (r : sys.Run env) (n : Nat) : sys.Reachable env (r.state n) := by
   induction n with
   | zero => exact r.init ▸ .init
   | succ n ih =>
@@ -235,22 +232,22 @@ theorem reachable (r : sys.Run env) (n : ℕ) : sys.Reachable env (r.state n) :=
     | some ev => exact .step ev ih (step_some h)
 
 /-- The step taken at position `n` starts the wait for `ob` again. -/
-def Restarts (r : sys.Run env) (n : ℕ) (ob : Obligation σ) : Prop :=
+def Restarts (r : sys.Run env) (n : Nat) (ob : Obligation σ) : Prop :=
   ∃ ev, r.event n = some ev ∧ ob.Restarted (r.state n) ev
 
 /-- Weak fairness of a set of obligations: if from some position on, at every position one of
 them is due and the step taken there does not restart it, then one of them is taken at that
 position or a later one. -/
-def WeakFair (r : sys.Run env) (obs : Set (Obligation σ)) : Prop :=
-  ∀ n, (∀ m, n ≤ m → ∃ ob ∈ obs, ob.Due env (r.state m) ∧ ¬r.Restarts m ob) →
-    ∃ m, n ≤ m ∧ ∃ ob ∈ obs, r.event m = some ob.event
+def WeakFair (r : sys.Run env) (obs : Obligation σ → Prop) : Prop :=
+  ∀ n, (∀ m, n ≤ m → ∃ ob, obs ob ∧ ob.Due env (r.state m) ∧ ¬r.Restarts m ob) →
+    ∃ m, n ≤ m ∧ ∃ ob, obs ob ∧ r.event m = some ob.event
 
 /-- A fair run is weakly fair to each obligation on its own. -/
 def Fair (r : sys.Run env) : Prop :=
-  ∀ ob : Obligation σ, r.WeakFair {ob}
+  ∀ ob : Obligation σ, r.WeakFair (· = ob)
 
 /-- Fairness, without the sets: an obligation that stays due and is not restarted is taken. -/
-theorem fair_iff : r.Fair ↔ ∀ (ob : Obligation σ) (n : ℕ),
+theorem fair_iff : r.Fair ↔ ∀ (ob : Obligation σ) (n : Nat),
     (∀ m, n ≤ m → ob.Due env (r.state m) ∧ ¬r.Restarts m ob) →
       ∃ m, n ≤ m ∧ r.event m = some ob.event := by
   simp [Fair, WeakFair]
@@ -265,7 +262,7 @@ theorem Fair.taken (hfair : r.Fair) {ob : Obligation σ}
 included. The runtime's runs are not like this: an actor that keeps arming a timer again keeps
 it from firing. -/
 def Impatient (r : sys.Run env) : Prop :=
-  ∀ (ob : Obligation σ) (n : ℕ), (∀ m, n ≤ m → ob.Due env (r.state m)) →
+  ∀ (ob : Obligation σ) (n : Nat), (∀ m, n ≤ m → ob.Due env (r.state m)) →
     ∃ m, n ≤ m ∧ r.event m = some ob.event
 
 /-- Fairness asks less than firing every timer that stays pending. -/
@@ -275,9 +272,9 @@ theorem Impatient.fair (h : r.Impatient) : r.Fair :=
 /-- In a fair run, an emitted output is eventually handed over. -/
 theorem Fair.output_taken (hfair : r.Fair) {out : σ.Out} (hout : out ∈ (r.state n).outbox) :
     ∃ m, n ≤ m ∧ r.event m = some (.output out) := by
-  by_contra hnever
+  refine Classical.byContradiction fun hnever => ?_
   refine hnever (hfair.taken (ob := .output out) (fun m hm => ?_) fun _ _ ⟨_, _, h⟩ => h)
-  induction m, hm using Nat.le_induction with
+  induction m, hm using le_induction with
   | base => exact hout
   | succ m hm ih =>
     cases hev : r.event m with
@@ -294,16 +291,16 @@ theorem Fair.delivered (hfair : r.Fair) {e : Envelope σ}
     (hlossless : (env.link e.src e.dst).lossy = false)
     (hup : ∀ m, n ≤ m → (r.state m).up e.dst = true) (he : e ∈ (r.state n).net) :
     ∃ m, n ≤ m ∧ (r.event m = some (.deliver e) ∨ r.event m = some (.duplicate e)) := by
-  induction hk : (beforeFirst e (r.state n).net).length using Nat.strong_induction_on
+  induction hk : (beforeFirst e (r.state n).net).length using Nat.strongRecOn
     generalizing n with
   | _ k ih =>
-  by_contra hnever
-  have hnot (m : ℕ) (hm : n ≤ m) :
+  refine Classical.byContradiction fun hnever => ?_
+  have hnot (m : Nat) (hm : n ≤ m) :
       r.event m ≠ some (.deliver e) ∧ r.event m ≠ some (.duplicate e) :=
     ⟨fun h => hnever ⟨m, hm, .inl h⟩, fun h => hnever ⟨m, hm, .inr h⟩⟩
-  have hkeep (m : ℕ) (hm : n ≤ m) : e ∈ (r.state m).net ∧
+  have hkeep (m : Nat) (hm : n ≤ m) : e ∈ (r.state m).net ∧
       (beforeFirst e (r.state m).net).Sublist (beforeFirst e (r.state n).net) := by
-    induction m, hm using Nat.le_induction with
+    induction m, hm using le_induction with
     | base => exact ⟨he, List.Sublist.refl _⟩
     | succ m hm ih =>
       cases hev : r.event m with
@@ -313,13 +310,13 @@ theorem Fair.delivered (hfair : r.Fair) {e : Envelope σ}
           (hup (m + 1) (by omega)) (fun h => (hnot m hm).1 (h ▸ hev))
           (fun h => (hnot m hm).2 (h ▸ hev))
         exact ⟨hmem, hsub.trans ih.2⟩
-  have hsame (m : ℕ) (hm : n ≤ m) : beforeFirst e (r.state m).net = beforeFirst e (r.state n).net := by
+  have hsame (m : Nat) (hm : n ≤ m) : beforeFirst e (r.state m).net = beforeFirst e (r.state n).net := by
     refine (hkeep m hm).2.eq_of_length ?_
-    by_contra hlen
+    refine Classical.byContradiction fun hlen => ?_
     have hlt := Nat.lt_of_le_of_ne (hkeep m hm).2.length_le hlen
     obtain ⟨m', hm', h⟩ := ih _ (hk ▸ hlt) (fun m'' hm'' => hup m'' (by omega)) (hkeep m hm).1 rfl
     exact hnever ⟨m', by omega, h⟩
-  have hnext (m : ℕ) (hm : n ≤ m) : (r.state m).nextOnLink env e = (r.state n).nextOnLink env e := by
+  have hnext (m : Nat) (hm : n ≤ m) : (r.state m).nextOnLink env e = (r.state n).nextOnLink env e := by
     simp only [SysState.nextOnLink, hsame m hm]
   obtain ⟨hwhere, hdst, -⟩ := SysState.nextOnLink_spec (env := env) he
   obtain ⟨m, hm, hev⟩ := hfair.taken (ob := .deliver ((r.state n).nextOnLink env e))
@@ -349,12 +346,12 @@ theorem Fair.handled (hfair : r.Fair) {e : Envelope σ}
     (hrecovers : ∀ s, ((sys.actor e.dst).recover s).2.any Effect.isStop = false)
     (he : e ∈ (r.state n).net) :
     ∃ m, n ≤ m ∧ (r.event m = some (.deliver e) ∨ r.event m = some (.duplicate e)) := by
-  by_contra hnever
-  have hnot (m : ℕ) (hm : n ≤ m) :
+  refine Classical.byContradiction fun hnever => ?_
+  have hnot (m : Nat) (hm : n ≤ m) :
       r.event m ≠ some (.deliver e) ∧ r.event m ≠ some (.duplicate e) :=
     ⟨fun h => hnever ⟨m, hm, .inl h⟩, fun h => hnever ⟨m, hm, .inr h⟩⟩
-  have hkeep (m : ℕ) (hm : n ≤ m) : e ∈ (r.state m).net := by
-    induction m, hm using Nat.le_induction with
+  have hkeep (m : Nat) (hm : n ≤ m) : e ∈ (r.state m).net := by
+    induction m, hm using le_induction with
     | base => exact he
     | succ m hm ih =>
       cases hev : r.event m with
@@ -362,9 +359,9 @@ theorem Fair.handled (hfair : r.Fair) {e : Envelope σ}
       | some ev =>
         exact SysState.mem_net_of_step ih (step_some hev) hlossless hcrash hruns hrecovers
           (fun h => (hnot m hm).1 (h ▸ hev)) (fun h => (hnot m hm).2 (h ▸ hev))
-  have hstays (k : ℕ) (hk : (r.state k).up e.dst = true) (m : ℕ) (hm : k ≤ m) :
+  have hstays (k : Nat) (hk : (r.state k).up e.dst = true) (m : Nat) (hm : k ≤ m) :
       (r.state m).up e.dst = true := by
-    induction m, hm using Nat.le_induction with
+    induction m, hm using le_induction with
     | base => exact hk
     | succ m hm ih =>
       cases hev : r.event m with
@@ -374,7 +371,7 @@ theorem Fair.handled (hfair : r.Fair) {e : Envelope σ}
   · obtain ⟨k, hk, hupk⟩ := hup
     obtain ⟨m, hm, h⟩ := hfair.delivered hlossless (hstays k hupk) (hkeep k hk)
     exact hnever ⟨m, by omega, h⟩
-  · have hdown (m : ℕ) (hm : n ≤ m) : (r.state m).up e.dst = false := by
+  · have hdown (m : Nat) (hm : n ≤ m) : (r.state m).up e.dst = false := by
       simpa using fun h => hup ⟨m, hm, h⟩
     obtain ⟨m, hm, hev⟩ := hfair.taken (ob := .start e.dst)
       (fun m hm => ⟨hdown m hm, List.any_eq_true.mpr ⟨e, hkeep m hm, by simp⟩⟩)
@@ -390,7 +387,7 @@ end Run
 /-- `P` leads to `Q`: in every fair run, at every position where `P` holds, `Q` holds at that
 position or a later one. -/
 def LeadsTo (sys : System σ) (env : EnvModel σ) (P Q : SysState sys → Prop) : Prop :=
-  ∀ r : sys.Run env, r.Fair → r.state.LeadsTo {c | P c} {c | Q c}
+  ∀ r : sys.Run env, r.Fair → r.state.LeadsTo P Q
 
 namespace LeadsTo
 
@@ -423,10 +420,10 @@ theorem ensures_of_invariant (hI : sys.Invariant env I) (ob : Obligation σ)
       never_restarted) :
     sys.LeadsTo env P Q := by
   intro r hfair n hP
-  by_contra hnever
-  have hQ (m : ℕ) (hm : n ≤ m) : ¬Q (r.state m) := fun h => hnever ⟨m, hm, h⟩
-  have hP (m : ℕ) (hm : n ≤ m) : P (r.state m) := by
-    induction m, hm using Nat.le_induction with
+  refine Classical.byContradiction fun hnever => ?_
+  have hQ (m : Nat) (hm : n ≤ m) : ¬Q (r.state m) := fun h => hnever ⟨m, hm, h⟩
+  have hP (m : Nat) (hm : n ≤ m) : P (r.state m) := by
+    induction m, hm using le_induction with
     | base => exact hP
     | succ m hm ih =>
       cases hev : r.event m with
@@ -434,7 +431,7 @@ theorem ensures_of_invariant (hI : sys.Invariant env I) (ob : Obligation σ)
       | some ev =>
         exact (step _ ev _ (hI _ (r.reachable m)) ih (hQ m hm) (Run.step_some hev)).resolve_right
           (hQ (m + 1) (by omega))
-  have hquiet (m : ℕ) (hm : n ≤ m) : ¬r.Restarts m ob := fun ⟨ev, hev, hrestarted⟩ =>
+  have hquiet (m : Nat) (hm : n ≤ m) : ¬r.Restarts m ob := fun ⟨ev, hev, hrestarted⟩ =>
     hQ (m + 1) (by omega)
       (quiet _ ev _ (hI _ (r.reachable m)) (hP m hm) (hQ m hm) (Run.step_some hev) hrestarted)
   obtain ⟨m, hm, hev⟩ := hfair.taken
@@ -476,20 +473,20 @@ theorem mono (hP : ∀ c, P' c → P c) (hQ : ∀ c, Q c → Q' c) (h : sys.Lead
   mono_of_invariant (I := fun _ => True) (fun _ _ => trivial) (fun c _ => hP c) (fun c _ => hQ c) h
 
 /-- What each of a family of starts leads to, their union leads to. -/
-theorem exists_left {α : Type*} {P : α → SysState sys → Prop}
+theorem exists_left {α : Type _} {P : α → SysState sys → Prop}
     (h : ∀ x, sys.LeadsTo env (P x) Q) : sys.LeadsTo env (fun c => ∃ x, P x c) Q :=
   iff.mpr fun r hfair n ⟨x, hx⟩ => iff.mp (h x) r hfair n hx
 
 /-- Leads-to by a measure that goes down: if `P` with measure `n` leads to `Q`, or to `P` with
 a smaller measure, then `P` leads to `Q`. -/
-theorem induction (f : SysState sys → ℕ)
+theorem induction (f : SysState sys → Nat)
     (h : ∀ n, sys.LeadsTo env (fun c => P c ∧ f c = n) fun c => Q c ∨ (P c ∧ f c < n)) :
     sys.LeadsTo env P Q := by
   refine iff.mpr fun r hfair n hP => ?_
   suffices hk : ∀ k n, P (r.state n) → f (r.state n) = k → ∃ m, n ≤ m ∧ Q (r.state m) from
     hk _ n hP rfl
   intro k
-  induction k using Nat.strong_induction_on with
+  induction k using Nat.strongRecOn with
   | _ k ih =>
     intro n hP hf
     obtain ⟨m, hm, hQ | ⟨hP', hlt⟩⟩ := iff.mp (h k) r hfair n ⟨hP, hf⟩

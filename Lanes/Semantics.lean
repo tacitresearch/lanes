@@ -27,6 +27,6 @@ public import Lanes.Semantics.Sums
 public import Lanes.Semantics.System
 
 /-!
-The Lanes proof layer: the semantics as a CSLib transition system, refinement, and liveness under
+The Lanes proof layer: the semantics as a transition system, refinement, and liveness under
 fairness. Import this in proof files. Executable application code imports `Lanes` alone.
 -/

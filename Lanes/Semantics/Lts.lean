@@ -101,18 +101,21 @@ inductive MTr (lts : LTS State Label) : State → List Label → State → Prop 
     lts.Tr s1 μ s2 → lts.MTr s2 μs s3 → lts.MTr s1 (μ :: μs) s3
 
 /-- One step is a run. -/
-theorem MTr.single {s1 s2 : State} {μ : Label} (h : lts.Tr s1 μ s2) : lts.MTr s1 [μ] s2 :=
+theorem MTr.single (lts : LTS State Label) {s1 s2 : State} {μ : Label} (h : lts.Tr s1 μ s2) :
+    lts.MTr s1 [μ] s2 :=
   .stepL h .refl
 
 /-- A run, then a step, is a run. -/
-theorem MTr.stepR {s1 s2 s3 : State} {μs : List Label} {μ : Label} (h1 : lts.MTr s1 μs s2)
+theorem MTr.stepR (lts : LTS State Label) {s1 s2 s3 : State} {μs : List Label} {μ : Label}
+    (h1 : lts.MTr s1 μs s2)
     (h2 : lts.Tr s2 μ s3) : lts.MTr s1 (μs ++ [μ]) s3 := by
   induction h1 with
-  | refl => exact .single h2
+  | refl => exact .single lts h2
   | stepL h _ ih => exact .stepL h (ih h2)
 
 /-- Runs compose. -/
-theorem MTr.comp {s1 s2 s3 : State} {μs1 μs2 : List Label} (h1 : lts.MTr s1 μs1 s2)
+theorem MTr.comp (lts : LTS State Label) {s1 s2 s3 : State} {μs1 μs2 : List Label}
+    (h1 : lts.MTr s1 μs1 s2)
     (h2 : lts.MTr s2 μs2 s3) : lts.MTr s1 (μs1 ++ μs2) s3 := by
   induction h1 with
   | refl => exact h2
