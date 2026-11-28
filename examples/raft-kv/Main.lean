@@ -10,6 +10,9 @@ One node of the key-value store as a process:
     raftNode new <id> <http-port> <journal> <peer-port>...    its first start
     raftNode <id> <http-port> <journal> <peer-port>...        every later one
 
+with the key the nodes share in `RAFT_KV_KEY`, at least 16 bytes: a node refuses a connection
+from a process without it.
+
 The node is the shard of the cluster that hosts it, behind an HTTP front, with the other nodes
 reached over TCP at the given ports on this machine, the `id`th being its own. `PUT /kv/<key>`
 with the value as body writes, `GET /kv/<key>` reads. Only the leader answers; another node
@@ -46,7 +49,8 @@ def bridge {n : Nat} (self : Fin n) : Http.Bridge (sig (Fin n) Command Answer) w
 
 def usage : String :=
   "usage: raftNode [new] [--snapshot-every <entries>] <id> <http-port> <journal> <peer-port>...\n"
-    ++ "  new   this node has never run: begin its journal. Without it the journal must be there."
+    ++ "  new   this node has never run: begin its journal. Without it the journal must be there.\n"
+    ++ "  RAFT_KV_KEY, in the environment, is the key the nodes share."
 
 /--
 How many journal entries a node writes between two saves of its state. A save cuts the journal,
@@ -85,7 +89,7 @@ def Args.parse (args : List String) : Option Args := do
 def hasJournal (path : System.FilePath) : IO Bool := do
   if ← path.pathExists then return (← path.metadata).byteSize > 0 else return false
 
-def serve {n : Nat} (args : Args) (self : Fin n) : IO UInt32 := do
+def serve {n : Nat} (args : Args) (self : Fin n) (key : ByteArray) : IO UInt32 := do
   let raft : Config := { electionTimeout_ms := 300 + 150 * self.val, heartbeat_ms := 50 }
   let http : Http.ServerConfig :=
     { port := args.httpPort.toUInt16, gate := { requestTimeout_ms := 1500 } }
@@ -102,7 +106,8 @@ def serve {n : Nat} (args : Args) (self : Fin n) : IO UInt32 := do
   let (server, _) ← (Http.serveShard (TextCluster n raft) (· == self) (bridge self)
     { listen := { port := (args.ports[self.val]?.getD 0).toUInt16 }
       home := fun i => return args.ports[i.val]?.map fun port => { port := port.toUInt16 }
-      id := Codec.fin, msg := message n } http { snapshotEvery := args.snapshotEvery }
+      id := Codec.fin, msg := message n, system := peerSystem n, schema := peerSchema n, key }
+    http { snapshotEvery := args.snapshotEvery }
     (log := some log)).block
   IO.println s!"raft-kv node {self} of {n} on http://127.0.0.1:{server.port.getD 0}"
   (← IO.getStdout).flush
@@ -111,12 +116,13 @@ def serve {n : Nat} (args : Args) (self : Fin n) : IO UInt32 := do
 
 def main (args : List String) : IO UInt32 := do
   let some args := Args.parse args | do IO.eprintln usage; return 2
+  let some key ← IO.getEnv "RAFT_KV_KEY" | do IO.eprintln usage; return 2
   if h : args.id < args.ports.length then
     if args.create && (← hasJournal args.journal) then
       IO.eprintln (s!"raftNode: {args.journal} is there already, so this node has run: "
         ++ "start it without `new`")
       return 1
-    try serve args ⟨args.id, h⟩
+    try serve args ⟨args.id, h⟩ key.toUTF8
     catch e =>
       IO.eprintln s!"raftNode: {e}"
       unless args.create || (← hasJournal args.journal) do
