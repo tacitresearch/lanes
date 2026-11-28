@@ -211,49 +211,22 @@ def serve (creds : SigV4.Credentials) (bucket region : String) (objects : Object
 
 /-! ## Forms posted under a policy -/
 
-/-- Where `pat` is in `data`, from `start`. -/
-def find? (data pat : ByteArray) (start : Nat) : Option Nat := Id.run do
-  for i in [start:data.size + 1 - pat.size] do
-    if (List.range pat.size).all fun j => data[i + j]! == pat[j]! then return some i
-  return none
-
-def split (data sep : ByteArray) : List ByteArray := Id.run do
-  let mut parts := #[]
-  let mut from_ := 0
-  for _ in [0:data.size + 1] do
-    match find? data sep from_ with
-    | some i =>
-      parts := parts.push (data.extract from_ i)
-      from_ := i + sep.size
-    | none => break
-  return (parts.push (data.extract from_ data.size)).toList
-
 structure FormPart where
   name : String
   filename : Option String
   value : ByteArray
 
-def quoted (header name : String) : Option String := do
-  let rest ← (header.splitOn (name ++ "=\""))[1]?
-  (rest.splitOn "\"").head?
-
 def formParts (contentType : String) (body : ByteArray) : Option (List FormPart) := do
-  let boundary ← (contentType.splitOn "boundary=")[1]?
-  let chunks := split ("\r\n".toUTF8 ++ body) ("\r\n--" ++ boundary).toUTF8
-  (chunks.drop 1).dropLast.mapM fun chunk => do
-    let headEnd ← find? chunk "\r\n\r\n".toUTF8 0
-    let head ← String.fromUTF8? (chunk.extract 0 headEnd)
-    let disposition ← (head.splitOn "\r\n").find? (·.toLower.startsWith "content-disposition")
-    return { name := ← quoted disposition "name", filename := quoted disposition "filename"
-             value := chunk.extract (headEnd + 4) chunk.size }
+  let boundary ← Request.boundary?
+    { method := .post, path := [], headers := [("content-type", contentType)] }
+  let parts ← (Multipart.parse {} boundary body).toOption
+  parts.mapM fun p => return { name := ← p.name?, filename := p.filename?, value := p.body }
 
 /-- A body as a browser's `FormData` sends it: the fields, then the file. -/
 def formBody (boundary : String) (fields : List (String × String)) (filename : String)
     (file : ByteArray) : ByteArray :=
-  let field (n v : String) := s!"--{boundary}\r\nContent-Disposition: form-data; name=\"{n}\"\r\n\r\n{v}\r\n"
-  (String.join (fields.map fun (n, v) => field n v)).toUTF8
-    ++ s!"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\nContent-Type: application/octet-stream\r\n\r\n".toUTF8
-    ++ file ++ s!"\r\n--{boundary}--\r\n".toUTF8
+  Multipart.write boundary ((fields.map fun (n, v) => Multipart.Part.field n v)
+    ++ [Multipart.Part.file "file" filename "application/octet-stream" file])
 
 /-- An object's ETag, as S3 makes one put whole: the MD5 of its body. -/
 def etag (body : ByteArray) : String := "\"" ++ Bytes.hex (Md5.hash body) ++ "\""

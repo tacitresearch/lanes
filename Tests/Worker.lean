@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes
 import Lanes.Services.Postgres
+import Lanes.Services.Aws
 import Tests.PostgresLive
 
 /-!
@@ -144,7 +145,8 @@ structure Driver where
 
 instance : BEq Driver := instBEqOfDecidableEq
 
-def driver (ticks : List Int64) (keys : List String) : Outside wsig Driver where
+def driver {R : Type} [DecidableEq R] (ticks : List Int64) (keys : List String) :
+    Outside (Worker.sig String Queue.Enqueued String R) Driver where
   init := { ticks, keys }
   allow d
     | .tick t => if d.ticks.head? = some t then some { d with ticks := d.ticks.tail } else none
@@ -213,10 +215,88 @@ def report (name : String) (r : Check.Report W (Event wsig)) : String :=
   | some (.unreached ps) => s!"{name}: FAIL never reached {ps}"
   | some (.deadlock _) => s!"{name}: FAIL deadlock"
 
+/-! ## Beside SES, which takes no key
+
+The worker sending email from an outbox through SES's model (`Aws.Ses.outside`, through
+`Aws.Ses.jobPort`), in which every send is an effect of its own. With one attempt per job, no
+message is sent twice, with a crash, a restart and lost answers, and a job whose attempt had no
+answer is failed. With two, a message may be sent twice. -/
+
+abbrev ssig := Worker.sig String Queue.Enqueued String Aws.Ses.Answer
+
+instance : ssig.Inspect := {}
+
+def sesConfig (attempts : Nat) : Worker.Config Aws.Ses.Answer :=
+  { jobs := { batch_max := 2, attempts_max := attempts, lease_ms := 100, backoff_ms := 10 }
+    attempt_ms := 50, claim_ms := 50, classify := Aws.Ses.classify }
+
+abbrev mailer (attempts : Nat) : System ssig :=
+  Worker.system (Q := String) (A := Queue.Enqueued) (W := String) (sesConfig attempts)
+
+instance (attempts : Nat) : (mailer attempts).Inspect := {}
+
+def sesHandler (attempts : Nat) : Handled := beside app (queue.handler (sesConfig attempts).jobs)
+
+abbrev Ses := Rpc.State (Effects.Model Empty Aws.Ses.Ref Email.Status Aws.Ses.Message)
+
+abbrev SD := (Driver × Db.State (String ⊕ Req) (Queue.Enqueued ⊕ Ans String)) × Ses
+
+instance : BEq Ses := instBEqOfDecidableEq
+
+def sesWorld (attempts : Nat) (render : String → Aws.Ses.Message) (ticks : List Int64)
+    (keys : List String) : Outside ssig SD :=
+  ((driver ticks keys).both (Db.outside {} (sesHandler attempts) start Worker.storePort)
+    fun x => x matches .tick _ | .submit _).both (Aws.Ses.outside (Aws.Ses.jobPort render))
+    fun x => !(x matches .ran ..)
+
+def sesSamples (attempts : Nat) (losses : Bool) (d : SD) : List (Worker.In String Queue.Enqueued String Aws.Ses.Answer) :=
+  d.1.1.ticks.head?.toList.map .tick ++ d.1.1.keys.map .submit
+    ++ Db.samples (sesHandler attempts) Worker.storePort false losses d.1.2
+    ++ d.1.1.attempts.flatMap fun (id, lease) =>
+      [.ran id lease (.answer (.sent s!"m-{id}-{lease}")), .ran id lease .unknown]
+
+/-- The messages SES may have sent, one for each send. -/
+def sends (w : Lanes.World (mailer n) SD) : List Aws.Ses.Message :=
+  w.driver.2.server.slots.map (·.request)
+
+def failedIn (w : Lanes.World (mailer n) SD) : Bool :=
+  w.driver.1.2.worlds.any fun world => (jobsOf world.db).any (·.status == .failed)
+
+def sesCheck (attempts : Nat) (render : String → Aws.Ses.Message) (losses : Bool) (maxCrashes : Nat)
+    (maxRestarts : Nat) (properties : List (Check.Property (Lanes.World (mailer attempts) SD))) :=
+  Check.system (mailer attempts)
+    { env := { mayCrash := fun _ => true, mayRestart := true }
+      driver := (sesWorld attempts render [0, 200] ["a"]).driver (sesSamples attempts losses)
+      maxCrashes, maxRestarts }
+    properties {}
+
+def sesTests : List (String × Bool) :=
+  match Aws.Ses.Message.of? "noreply@example.com" ["a@example.com"] "Hello" (.text "Hello") with
+  | .error _ => [("worker beside ses: the message", false)]
+  | .ok m =>
+    let render (_ : String) := m
+    let onceProps : List (Check.Property (Lanes.World (mailer 1) SD)) :=
+      [ .always "no message sent twice" fun w => (sends w).length ≤ 1,
+        .sometimes "a job is done" fun w => w.driver.1.2.worlds.any fun world =>
+          (jobsOf world.db).any (·.status == .done),
+        .sometimes "a job failed: its attempt had no answer" failedIn ]
+    let crashed := sesCheck 1 render false 1 1 onceProps
+    let lost := sesCheck 1 render true 0 0 onceProps
+    let twice := sesCheck 2 render false 0 0
+      [ .sometimes "a message sent twice" fun w => (sends w).length == 2 ]
+    [ (s!"worker beside ses: with one attempt a job's message is sent at most once, with a crash "
+          ++ s!"and a restart, and a job not answered is failed ({crashed.states} states)",
+        crashed.ok && crashed.witnesses.length == 2),
+      (s!"worker beside ses: the same when the store loses answers and lost commits take effect "
+          ++ s!"late ({lost.states} states)",
+        lost.ok && lost.witnesses.length == 2),
+      (s!"worker beside ses: with two attempts a message may be sent twice ({twice.states} states)",
+        twice.ok && twice.witnesses.length == 1) ]
+
 def tests : List (String × Bool) :=
   let plain := check [0, 200] ["a"] false 1 1
   let lost := check [0, 200] ["a"] true 0
-  transactionTests ++
+  transactionTests ++ sesTests ++
   [ (s!"worker: only jobs that committed are attempted, each under its key once at the service, "
         ++ s!"a job done was taken; with a crash and a restart ({plain.states} states)",
       plain.ok && plain.witnesses.length == 2),
