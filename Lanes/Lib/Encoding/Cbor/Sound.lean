@@ -237,7 +237,10 @@ theorem special_simple (v : Simple) {info : Nat} (hi : info = headInfo v.val.toN
   split
   · congr
     exact UInt8.ofNat_toNat
-  · omega
+  · rename_i hn
+    apply absurd _ hn
+    subst hi; unfold headInfo; simp only
+    split <;> (try split) <;> (try split) <;> (try split) <;> omega
 
 mutual
 theorem item_encode (cfg : Config) (hL : cfg.maxLength < 2 ^ 64) : (v : Cbor) → (d : Nat) →

@@ -169,7 +169,7 @@ def special (info n : Nat) : Except Error Cbor :=
   else if info = 26 then .ok (.float (ofSingle n.toUInt32))
   else if info = 27 then .ok (.float n.toUInt64)
   else if info = 31 then .error .unexpectedBreak
-  else if h : n < 20 ∨ (32 ≤ n ∧ n < 256) then
+  else if h : (info < 20 ∧ n < 20) ∨ (info = 24 ∧ 32 ≤ n ∧ n < 256) then
     .ok (.simple ⟨n.toUInt8, by
       rcases h with h | h
       · exact .inl (UInt8.lt_iff_toNat_lt.mpr (by simp; omega))
