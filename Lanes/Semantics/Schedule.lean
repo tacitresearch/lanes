@@ -289,7 +289,7 @@ theorem ends_of_step {c c' : SysState (system (K := K) (P := P) config)}
 the scheduler is not crashed, a job held while it is up has its end handed over at a later
 position, as an answer to its id (a success, a dead letter, a cancellation) or as its notice. -/
 theorem held_ends (config : Config K P A) (hcrash : env.mayCrash () = false) (key : K)
-    {r : (system (K := K) (P := P) config).Run env} (hfair : r.Fair) {n : ℕ}
+    {r : (system (K := K) (P := P) config).Run env} (hfair : r.Fair) {n : Nat}
     (hup : (r.state n).up () = true) {j : Job K P}
     (hj : entry ((r.state n).state ()).jobs key = some j) (hp : j.work.periodic = false) :
     ∃ m, n ≤ m ∧ ((∃ o, r.event m = some (.output (.answer key o))) ∨
@@ -300,14 +300,14 @@ theorem held_ends (config : Config K P A) (hcrash : env.mayCrash () = false) (ke
     mem_keys.mpr ⟨j, (entry_some hj).1, (entry_some hj).2⟩
   have hleaves : ∃ k, n ≤ k ∧ key ∈ keys ((r.state k).state ()).jobs ∧
       key ∉ keys ((r.state (k + 1)).state ()).jobs := by
-    induction m, hm using Nat.le_induction with
+    induction m, hm using le_induction with
     | base => exact absurd hin hgone
     | succ m hm ih =>
       by_cases hin' : key ∈ keys ((r.state m).state ()).jobs
       · exact ⟨m, hm, hin', hgone⟩
       · exact ih hin'
   obtain ⟨k, hk, hin', hout⟩ := hleaves
-  obtain ⟨j', hj'⟩ := Option.ne_none_iff_exists'.mp (entry_eq_none.not.mpr (not_not.mpr hin'))
+  obtain ⟨j', hj'⟩ := Option.ne_none_iff_exists'.mp ((not_congr entry_eq_none).mpr (Classical.not_not.mpr hin'))
   cases hev : r.event k with
   | none => exact absurd (System.Run.step_none hev ▸ hin') hout
   | some ev =>
@@ -459,13 +459,13 @@ theorem attach_held_leaves {τ : Signature} (sys : System τ) (config : Config K
 /-- Beside any system, the job held under `key` at position `n` is the same job at `k`: the
 same work and payload. Or it left at a position between, where it was still that job. -/
 theorem attach_held_same {τ : Signature} {sys : System τ} {use : Use τ K P A}
-    {env : EnvModel (joinSig (sig K P A) τ)} {r : (attach sys config use).Run env} {n : ℕ}
+    {env : EnvModel (joinSig (sig K P A) τ)} {r : (attach sys config use).Run env} {n : Nat}
     {key : K} {j : Job K P} (hj : entry ((r.state n).state (.inl ()) : State K P).jobs key = some j)
-    (k : ℕ) (hk : n ≤ k) :
+    (k : Nat) (hk : n ≤ k) :
     (∃ j', entry ((r.state k).state (.inl ()) : State K P).jobs key = some j' ∧ Same j j') ∨
       ∃ i j', n ≤ i ∧ i < k ∧ entry ((r.state i).state (.inl ()) : State K P).jobs key = some j' ∧
         Same j j' ∧ key ∉ keys ((r.state (i + 1)).state (.inl ()) : State K P).jobs := by
-  induction k, hk using Nat.le_induction with
+  induction k, hk using le_induction with
   | base => exact .inl ⟨j, hj, rfl, rfl, rfl⟩
   | succ k hk ih =>
     rcases ih with ⟨j', hj', hsame⟩ | ⟨i, j', hi, hik, hj', hsame, hout⟩
@@ -506,7 +506,7 @@ theorem attach_end_handled {τ : Signature} (sys : System τ) (config : Config K
     (hcrashes : ∀ j, env.mayCrash (.inr j) = false)
     (hruns : ∀ j s msg, ((sys.actor j).step s msg).2.any Effect.isStop = false)
     (hrecovers : ∀ j s, ((sys.actor j).recover s).2.any Effect.isStop = false) (key : K)
-    {r : (attach sys config use).Run env} (hfair : r.Fair) {n : ℕ}
+    {r : (attach sys config use).Run env} (hfair : r.Fair) {n : Nat}
     (hup : (r.state n).up (.inl ()) = true) {j : Job K P}
     (hj : entry ((r.state n).state (.inl ()) : State K P).jobs key = some j)
     (hp : j.work.periodic = false) :
@@ -532,7 +532,7 @@ theorem attach_end_handled {τ : Signature} (sys : System τ) (config : Config K
           (h : (Effect.emits (step config ((r.state k).state (.inl ())) msg).2).filter
             (tells key) = [out]) :
           (.emit out : Eff K P A) ∈ (step config ((r.state k).state (.inl ())) msg).2 :=
-        Effect.mem_emits.mp (List.mem_of_mem_filter (by rw [h]; exact List.mem_singleton_self out))
+        Effect.mem_emits.mp ((List.mem_filter.mp (by rw [h]; exact List.mem_singleton_self out)).1)
       obtain ⟨out, x, hemit, hx, hend⟩ : ∃ out x, (.emit out : Eff K P A) ∈
           (step config ((r.state k).state (.inl ())) msg).2 ∧ use.wiring.toRight out = some x ∧
           ((∃ o, o.isEnd = true ∧ x = use.answer key o) ∨
@@ -557,7 +557,7 @@ theorem attach_answer_handled {τ : Signature} (sys : System τ) (config : Confi
     (hcrashes : ∀ j, env.mayCrash (.inr j) = false)
     (hruns : ∀ j s msg, ((sys.actor j).step s msg).2.any Effect.isStop = false)
     (hrecovers : ∀ j s, ((sys.actor j).recover s).2.any Effect.isStop = false) (key : K)
-    {r : (attach sys config use).Run env} (hfair : r.Fair) {n : ℕ}
+    {r : (attach sys config use).Run env} (hfair : r.Fair) {n : Nat}
     (hup : (r.state n).up (.inl ()) = true) {j : Job K P}
     (hj : entry ((r.state n).state (.inl ()) : State K P).jobs key = some j) {retry : Retry}
     (hwork : j.work = .call retry) :

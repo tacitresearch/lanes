@@ -22,7 +22,7 @@ namespace Tests.Fixtures.Bank
 
 open Lanes
 
-variable {A : Type} [DecidableEq A] [Fintype A] {opening : Nat}
+variable {A : Type} [DecidableEq A] [Enum A] {opening : Nat}
 
 /-- The money a message in flight carries. -/
 def inFlight (e : Envelope (sig A)) : Int :=
@@ -33,7 +33,7 @@ def inFlight (e : Envelope (sig A)) : Int :=
 /-- Money is conserved, and no account has a timer pending. The second part makes the first
 inductive: a timeout would otherwise be a step to account for. -/
 def Conserved (c : SysState (bank A opening)) : Prop :=
-  (∑ a : A, (c.state a).balance) + (c.net.map inFlight).sum = Fintype.card A * opening ∧
+  (Enum.sum fun a : A => (c.state a).balance) + (c.net.map inFlight).sum = Enum.card A * opening ∧
     ∀ a : A, c.timers a = []
 
 /-- What handling a message does to the whole state: the money moved, and nothing else that
@@ -41,19 +41,20 @@ def Conserved (c : SysState (bank A opening)) : Prop :=
 theorem handle_spec (env : EnvModel (sig A)) (c : SysState (bank A opening)) (a : A)
     (msg : Msg A) :
     let c' := c.handle env a msg
-    (∑ b : A, (c'.state b).balance) + (c'.net.map inFlight).sum
-        = (∑ b : A, (c.state b).balance) + (c.net.map inFlight).sum
+    (Enum.sum fun b : A => (c'.state b).balance) + (c'.net.map inFlight).sum
+        = (Enum.sum fun b : A => (c.state b).balance) + (c.net.map inFlight).sum
           + (match msg with | .credit amount => (amount : Int) | _ => 0)
       ∧ c'.timers = c.timers := by
   cases msg with
   | transfer req dst amount =>
     by_cases h : (amount : Int) ≤ (c.state a).balance
     · simp [SysState.handle, SysState.settle, SysState.perform, Effect.isStop, bank, account, h,
-        sum_update (fun _ (s : Account) => s.balance), inFlight]
+        Enum.sum_update (fun _ (s : Account) => s.balance), inFlight]
+      omega
     · simp [SysState.handle, SysState.settle, SysState.perform, Effect.isStop, bank, account, h]
   | credit amount =>
     simp [SysState.handle, SysState.settle, bank, account,
-      sum_update (fun _ (s : Account) => s.balance)]
+      Enum.sum_update (fun _ (s : Account) => s.balance)]
     omega
   | query req =>
     simp [SysState.handle, SysState.settle, SysState.perform, Effect.isStop, bank, account]
@@ -101,7 +102,7 @@ theorem money_conserved (env : EnvModel (sig A)) (henv : env.Faultless) :
       obtain ⟨_, _, rfl⟩ := SysState.step_start.mp hstep
       refine ⟨?_, ?_⟩
       · simpa [SysState.startActor, SysState.settle, Effect.isStop, bank, account,
-          sum_update (fun _ (s : Account) => s.balance)] using hsum
+          Enum.sum_update (fun _ (s : Account) => s.balance)] using hsum
       · simpa [SysState.startActor, SysState.settle, Effect.isStop, bank, account] using htimers
 
 end Tests.Fixtures.Bank

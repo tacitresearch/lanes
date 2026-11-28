@@ -39,11 +39,9 @@ internal steps of the spec. The rules here make that usable for a `System`.
 
 namespace Lanes
 
-open Cslib
-
 universe u v w
 
-variable {S₁ : Type u} {S₁' : Type w} {S₂ : Type v} {L₁ L₂ : Type*}
+variable {S₁ : Type u} {S₁' : Type w} {S₂ : Type v} {L₁ L₂ : Type _}
 
 namespace Refines
 

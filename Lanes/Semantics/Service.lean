@@ -7,7 +7,7 @@ module
 public import Lanes.Core.Step
 public import Lanes.Behaviours.Server
 public import Lanes.Semantics.System
-public import Mathlib.Data.Multiset.AddSub
+public import Lanes.Semantics.Bag
 
 /-!
 # Implementing a service
@@ -47,9 +47,9 @@ structure Abs (In Out S : Type) where
   /-- The state of the sequential spec. -/
   value : S
   /-- Inputs that have arrived and not yet taken effect. -/
-  pending : Multiset In
+  pending : Bag In
   /-- Outputs produced and not yet delivered. -/
-  outbox : Multiset Out
+  outbox : Bag Out
 
 /--
 The transition system of a service: an input arrives (visible), a pending input takes effect
@@ -104,8 +104,8 @@ theorem Only.stable {svc : Service In Out S T} {A : In → Prop} {V : S → Prop
     svc.Stable (Only A V O) := by
   rintro a x hx ⟨hpending, hvalue, houtbox⟩
   obtain ⟨hvalue', houtbox'⟩ := h a.value x (hpending x hx) hvalue
-  refine ⟨fun y hy => hpending y (Multiset.mem_of_mem_erase hy), hvalue', fun o ho => ?_⟩
-  rcases Multiset.mem_add.mp ho with ho | ho
+  refine ⟨fun y hy => hpending y (Bag.mem_of_mem_erase hy), hvalue', fun o ho => ?_⟩
+  rcases Bag.mem_add.mp ho with ho | ho
   · exact houtbox o ho
   · exact houtbox' o ho
 
@@ -128,14 +128,14 @@ theorem Took.stable {svc : Service In Out S T} {K : Type} {id : In → K} {oid :
     svc.Stable fun a => Only A W O a ∧ Took id oid x₀ V a := by
   rintro a x hx ⟨honly, hcount, htook⟩
   refine ⟨Only.stable hOnly a x hx honly,
-    (Multiset.count_le_of_le _ (Multiset.erase_le _ _)).trans hcount, fun o ho hid₀ => ?_⟩
+    Nat.le_trans (Bag.count_le_of_le _ (Bag.erase_le _ _)) hcount, fun o ho hid₀ => ?_⟩
   have hgone : x₀ ∉ a.pending.erase x₀ := by
-    rw [← Multiset.count_eq_zero, Multiset.count_erase_self]
+    rw [← Bag.count_eq_zero, Bag.count_erase_self]
     omega
-  rcases Multiset.mem_add.mp ho with ho | ho
+  rcases Bag.mem_add.mp ho with ho | ho
   · obtain ⟨hnot, hvalue⟩ := htook o ho hid₀
     have hne : x ≠ x₀ := fun h => hnot (h ▸ hx)
-    exact ⟨fun h => hnot (Multiset.mem_of_mem_erase h), hkeep _ x (honly.1 x hx) hne hvalue⟩
+    exact ⟨fun h => hnot (Bag.mem_of_mem_erase h), hkeep _ x (honly.1 x hx) hne hvalue⟩
   · obtain rfl := hA x (honly.1 x hx) ((hid _ x o ho).symm.trans hid₀)
     exact ⟨hgone, h₀ _⟩
 
@@ -214,18 +214,18 @@ theorem implements (svc : Service In Out S) (env : EnvModel (sig In Out))
     | input x =>
       obtain rfl := SysState.step_input.mp hstep
       refine .inr ?_
-      simp [Service.spec, abs, ← Multiset.coe_add, add_comm]
+      simp [Service.spec, abs, ← Bag.coe_add, Bag.add_comm]
     | deliver e =>
       obtain ⟨_, hdeliverable, rfl⟩ := SysState.step_deliver.mp hstep
       have hmem := SysState.mem_of_deliverable hdeliverable
       obtain ⟨src, ⟨⟩, msg⟩ := e
       refine .inr ⟨msg, ?_, ?_⟩
-      · exact Multiset.mem_coe.mpr (List.mem_map.mpr ⟨_, hmem, rfl⟩)
+      · exact Bag.mem_coe.mpr (List.mem_map.mpr ⟨_, hmem, rfl⟩)
       · rw [handle_eq]
         simp only [abs, update_self, Service.Abs.mk.injEq, true_and]
         refine ⟨?_, by simp⟩
-        rw [← Multiset.map_coe, ← Multiset.map_coe, ← Multiset.coe_erase]
-        exact Multiset.map_erase_of_mem _ _ (Multiset.mem_coe.mpr hmem)
+        rw [← Bag.map_coe, ← Bag.map_coe, ← Bag.coe_erase]
+        exact Bag.map_erase_of_mem _ _ (Bag.mem_coe.mpr hmem)
     | duplicate e =>
       obtain ⟨_, hdup, _⟩ := SysState.step_duplicate.mp hstep
       simp [henv.noDuplicates] at hdup

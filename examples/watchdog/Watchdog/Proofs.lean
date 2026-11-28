@@ -62,8 +62,8 @@ theorem pinged_step : (pinged config).step {} (.deliver ping) = some (quiet conf
 
 /-- The keeper's timer fires and its ping is delivered, forever. -/
 def pinging (config : Config) : (system config).Run {} where
-  state := ⟨fun k => if k % 2 = 0 then quiet config else pinged config⟩
-  event := ⟨fun k => some (if k % 2 = 0 then .timeout .keeper .tick else .deliver ping)⟩
+  state k := if k % 2 = 0 then quiet config else pinged config
+  event k := some (if k % 2 = 0 then .timeout .keeper .tick else .deliver ping)
   init := init_eq_quiet.symm
   exec k := by
     rcases Nat.mod_two_eq_zero_or_one k with h | h
@@ -72,29 +72,29 @@ def pinging (config : Config) : (system config).Run {} where
     · have h' : (k + 1) % 2 = 0 := by omega
       simpa [Spec.stutter, System.sem, h, h'] using pinged_step
 
-theorem pinging_state_even (n : ℕ) : (pinging config).state (2 * n) = quiet config := by
+theorem pinging_state_even (n : Nat) : (pinging config).state (2 * n) = quiet config := by
   simp [pinging]
 
-theorem pinging_event_even (n : ℕ) :
+theorem pinging_event_even (n : Nat) :
     (pinging config).event (2 * n) = some (.timeout .keeper .tick) := by
   simp [pinging]
 
-theorem pinging_state_odd (n : ℕ) : (pinging config).state (2 * n + 1) = pinged config := by
+theorem pinging_state_odd (n : Nat) : (pinging config).state (2 * n + 1) = pinged config := by
   simp [pinging]
 
-theorem pinging_event_odd (n : ℕ) : (pinging config).event (2 * n + 1) = some (.deliver ping) := by
+theorem pinging_event_odd (n : Nat) : (pinging config).event (2 * n + 1) = some (.deliver ping) := by
   simp [pinging]
 
 /-- The dog is up and its timer is pending, at every position. -/
-theorem pinging_silence_due (n : ℕ) : silence.Due {} ((pinging config).state n) := by
+theorem pinging_silence_due (n : Nat) : silence.Due {} ((pinging config).state n) := by
   rcases Nat.mod_two_eq_zero_or_one n with h | h <;>
     simp [pinging, h, Obligation.Due, quiet, pinged]
 
-theorem pinging_never_barks (n : ℕ) : (pinging config).event n ≠ some bark := by
+theorem pinging_never_barks (n : Nat) : (pinging config).event n ≠ some bark := by
   rcases Nat.mod_two_eq_zero_or_one n with h | h <;> simp [pinging, h, bark]
 
 /-- Each delivery of a ping arms the dog's timer again. -/
-theorem pinging_restarts (n : ℕ) : (pinging config).Restarts (2 * n + 1) silence :=
+theorem pinging_restarts (n : Nat) : (pinging config).Restarts (2 * n + 1) silence :=
   ⟨_, pinging_event_odd n, by
     simp [pinging_state_odd, Obligation.Restarted, SysState.arms, Effect.timeouts, ping, dog]⟩
 
@@ -187,8 +187,8 @@ theorem silence_due_of_step {c c' : SysState (system config)} {ev : Event sig}
 pings: there the timer of a keep-alive fires though it is kept alive. -/
 theorem impatient_barks {r : (system config).Run {}} (h : r.Impatient) :
     ∃ n, r.event n = some bark := by
-  by_contra hnever
-  have hdue (n : ℕ) : silence.Due {} (r.state n) := by
+  refine Classical.byContradiction fun hnever => ?_
+  have hdue (n : Nat) : silence.Due {} (r.state n) := by
     induction n with
     | zero =>
       rw [r.init, init_eq_quiet]
