@@ -43,6 +43,7 @@ different lines. The numbers give the order in which they were taken.
 - [D92. The checker at scale: a hash that sees order, a fingerprinted mode, reductions](D92-checker-scale.md)
 - [D82. CloudFront signed URLs and cookies, and signatures made with a private key](D82-cloudfront-signed-urls.md)
 - [D25. Composition is a join, and what survives it is projection](D25-composition-is-a-join.md)
+- [D97. A data format that outlives its version: one schema per file, values read by name](D97-data-format.md)
 - [D89. What one side of a join sends the other is handled there, in every fair run](D89-deliveries-across-a-join.md)
 - [D50. A parser is proved against its RFC and tested against Go, and every difference is decided](D50-differential-tests-against-go.md)
 - [D24. Durability is a journal of what the kernel was asked, replayed](D24-durability-is-a-journal-of-what.md)
