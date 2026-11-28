@@ -114,8 +114,9 @@ def Fake.discovery (f : Fake) : String :=
 
 def yes (j : Json) (key : String) : Bool := (j.getObjValAs? Bool key).toOption == some true
 
-/-- An identity of the user API's answers, as GitHub's integration reads GitHub's: the user's
-`id`, the primary address if it is verified, the `name` or else the `login`. -/
+/-- An identity of the user API's answers, as the GitHub preset reads GitHub's
+(`Lanes/Services/Oidc/GitHub.lean`): the user's `id`, the primary address if it is verified, the
+`name` or else the `login`. -/
 def readUser (issuer : String) : List Json → Except String Identity
   | [user, emails] => do
     let subject ← match user.getObjValAs? Nat "id" with

@@ -135,7 +135,7 @@ abbrev Ledger := Sched.Ledger (IO.Promise Unit) (IO.Promise Bool)
 
 end Runtime
 
-private def shards : Nat := 64
+private def stripes : Nat := 64
 
 /-- A running system. Start one with `Runtime.start` or `Runtime.startWith`, hand it inputs with
 `input` or `tryInput`, and end it with `stop`. By `Sched.Run.reachable`, nothing it does takes
@@ -213,16 +213,16 @@ private def moment (rt : Runtime sys) (w : Nat) : BaseIO Moment := do
 private def record (rt : Runtime sys) (events : List (Event σ)) : BaseIO Unit := do
   if rt.config.record then rt.log.modify (· ++ events.toArray)
 
-private def shardOf (rt : Runtime sys) (i : σ.Id) :
+private def stripeOf (rt : Runtime sys) (i : σ.Id) :
     IO.Ref (Std.DHashMap σ.Id fun i => IO.Ref (Box sys i)) :=
   rt.boxes.1[(hash i).toNat % rt.boxes.1.size]'(Nat.mod_lt _ rt.boxes.2)
 
 /-- The box of `i`, made the first time it is asked for. -/
 private def box (rt : Runtime sys) (i : σ.Id) : BaseIO (IO.Ref (Box sys i)) := do
-  let shard := rt.shardOf i
-  if let some b := (← shard.get).get? i then return b
+  let stripe := rt.stripeOf i
+  if let some b := (← stripe.get).get? i then return b
   let fresh ← IO.mkRef ({ slot := Sched.Slot.fresh sys i } : Box sys i)
-  shard.modifyGet fun t =>
+  stripe.modifyGet fun t =>
     match t.get? i with
     | some b => (b, t)
     | none => (fresh, t.insert i fresh)
@@ -395,7 +395,7 @@ private def serve (rt : Runtime sys) (w : Nat) (onOutput : σ.Out → Async Unit
         && (sys.actor i).fresh s.cell.state
       ((q, rest, bx.readers, s.cell.state), { slot := s, readers := [], retired := rest })
   answer readers state
-  if retired then (rt.shardOf i).modify (·.erase i)
+  if retired then (rt.stripeOf i).modify (·.erase i)
   if again then rt.enqueue w i
   if tally.gone != 0 || tally.before != tally.after then
     let (room, idle) ← rt.ledgerDo
@@ -520,7 +520,7 @@ def startWith (sys : System σ) [Hashable σ.Id] (config : Runtime.Config := {})
     IO.mkRef (bytes.foldl (fun (x : UInt64) b => (x <<< 8) ||| b.toUInt64) 0)
   let busy ← (List.range workers).toArray.mapM fun _ => IO.mkRef none
   let first ← IO.mkRef ∅
-  let rest ← (List.range (shards - 1)).toArray.mapM fun _ => IO.mkRef ∅
+  let rest ← (List.range (stripes - 1)).toArray.mapM fun _ => IO.mkRef ∅
   let rt : Runtime sys := {
     config, workers
     boxes := ⟨#[first] ++ rest, by simp; omega⟩
@@ -624,8 +624,8 @@ private def stateOf (rt : Runtime sys) (i : σ.Id) : BaseIO (Task (Option (sys.S
 /-- The started actors that `every` holds of. -/
 private def startedWhere (rt : Runtime sys) (every : σ.Id → Bool) : BaseIO (List σ.Id) := do
   let mut ids := []
-  for shard in rt.boxes.1 do
-    for ⟨i, b⟩ in (← shard.get).toList do
+  for stripe in rt.boxes.1 do
+    for ⟨i, b⟩ in (← stripe.get).toList do
       if every i && (← b.get).slot.cell.up then ids := i :: ids
   return ids
 

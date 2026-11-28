@@ -91,11 +91,11 @@ semantics, the checker and the proofs below are about every system of actors.
 | The proof layer | `Lanes/Semantics/` | refinement, specs, fairness, leads-to |
 | Data and the standard library | `Lanes/Data/`, `Lanes/Lib/` | `Json.Fields.readObject_object`, `Json.Codec.ofAlts`, `Bytes.same_iff`, `Json.parse_iff`, `Url.parse_print` |
 | Structured logs | `Lanes/Lib/{Log,LogSound}.lean`, `Lanes/Runtime/IO/Log.lean` | `Log.render_oneLine`, `Log.parse_render`; writing a line is trusted |
-| Forms and uploads | `Lanes/Lib/Mime/{Multipart,MultipartSound}.lean`, `Lanes/Web/Http/Basic.lean` | `Multipart.parse_write`, `Multipart.parse_tooLarge`, `Multipart.length_le_of_parse`, `Multipart.headers_le_of_parse`, `Multipart.filename?_file`; compared with Go's `mime/multipart` |
+| Forms and uploads | `Lanes/Web/Http/{Multipart,MultipartSound}.lean`, `Lanes/Web/Http/Basic.lean` | `Multipart.parse_write`, `Multipart.parse_tooLarge`, `Multipart.length_le_of_parse`, `Multipart.headers_le_of_parse`, `Multipart.filename?_file`; compared with Go's `mime/multipart` |
 | Compression | `Lanes/Lib/Compress/{Checksum,Inflate,Deflate,Gzip}.lean`, `Lanes/Web/Http/Compress.lean` | `Inflate.size_le`, `Gzip.size_le`, `Zlib.size_le`; compared with Go's `compress/flate`, `gzip` and `zlib` |
 | Sign-in with OAuth 2.0 and OpenID Connect | `Lanes/Web/Auth/{Jose,IdToken,OAuth}.lean`, `Lanes/Web/IO/SignIn.lean`, the presets `Lanes/Services/Oidc/` | `OAuth.check_ok`, `OAuth.Used.accepted_once`, `OAuth.Used.length_claim`, `OAuth.IdToken.verify_accepted`, `Jose.verify_ok`, `OAuth.Keys.no_fetch_within`; the edge is trusted, tested end to end against a provider run in the test |
 | Bound C | `native/lanes.c`, `Lanes/Lib/Crypto/Native.lean`, `Lanes/Outside/IO/FileSystem.lean`; `native/verify.c`, `Lanes/Lib/Crypto/Verify.lean`; `native/sign.c`, `Lanes/Lib/Crypto/Sign.lean` | trusted; tested against the Lean references and published vectors |
-| TLS client | `native/tls.c`, `Lanes/Web/IO/Tls.lean` | trusted; tested against `openssl s_server` |
+| TLS client | `native/tls.c`, `Lanes/Lib/Net/IO/Tls.lean` | trusted; tested against `openssl s_server` |
 
 ## Actors and the semantics
 
@@ -605,7 +605,7 @@ adapter has something to decide, it is a pure function with its theorems (rule 3
   (`SharedCache.serve_of_leaks`).
 
 Where: `Lanes/Outside/`, `Lanes/Outside/{Rpc,Idempotent,Events,Queue,Cache,Clock,Throttle}.lean`,
-`Lanes/Outside/Effects/`, `Lanes/Outside/IO/Clock.lean`, `Lanes/Web/IO/{Client,Tls}.lean`,
+`Lanes/Outside/Effects/`, `Lanes/Outside/IO/Clock.lean`, `Lanes/Web/IO/Client.lean`, `Lanes/Lib/Net/IO/Tls.lean`,
 `Lanes/Web/Http/{Wire,WireSound}.lean`, `Lanes/Web/Http/SharedCache.lean`, `Lanes/Proof/Outputs.lean`.
 
 ### Claims
@@ -868,7 +868,7 @@ Where: `Lanes/Services/Aws/`, its tests in `Tests/Aws/`.
 
 | Claim | Evidence | Premises | Status |
 | --- | --- | --- | --- |
-| The AWS integration never hands out credentials within `skew_ms` of their expiry, nor any that no answer gave | `Aws.Refresh.current_fresh`, `Aws.Refresh.current_answered`, `Lanes/Services/Aws/Refresh.lean`; gate `Tests/Axioms/Services.lean`; model-checked, `Tests/Aws/Refresh.lean` | The wall clock is right to within `skew_ms`; the edge reads the state it keeps (TRUSTED, "The AWS credentials' IO") | proved |
+| The AWS service never hands out credentials within `skew_ms` of their expiry, nor any that no answer gave | `Aws.Refresh.current_fresh`, `Aws.Refresh.current_answered`, `Lanes/Services/Aws/Refresh.lean`; gate `Tests/Axioms/Services.lean`; model-checked, `Tests/Aws/Refresh.lean` | The wall clock is right to within `skew_ms`; the edge reads the state it keeps (TRUSTED, "The AWS credentials' IO") | proved |
 | Credentials held are fetched again at the margin before they expire, and an answer within the deadline replaces them while they are still handed out | `Aws.Refresh.refresh_in_time`, `Aws.Refresh.accept_due`; gate `Tests/Axioms/Services.lean`; model-checked against a service that answers in time | `Config.Valid`; the edge ticks when the machine asks; the service answers within the deadline with credentials of more than the margin | proved; the edge trusted, tested against a fake metadata service |
 | The wait between failed fetches of credentials stays within `maxBackoff_ms`, and a failed fetch is tried again within it | `Aws.Refresh.backoff_le`, `Aws.Refresh.retry_within`; gate `Tests/Axioms/Services.lean` | `Config.Valid` for the retry | proved |
 | Credentials come from the environment's keys first, then a container's endpoint, and the metadata service is asked only when neither is there and it is not turned off | `Aws.Imds.chain_keys`, `Aws.Imds.chain_container`, `Aws.Imds.chain_instance`; gate `Tests/Axioms/Services.lean`; `Tests/Aws/Imds.lean` | The edge reads the variables `Imds.chain` names (TRUSTED, "The AWS credentials' IO") | proved |
@@ -1065,8 +1065,10 @@ Where: `Lanes/Db/{Jobs,JobsSound,Worker,WorkerSound,Once,OnceSound}.lean`,
 
 `Server.system spec` runs a service's spec as one actor. `Once.actor` acts once on a request its
 client names by identity and sequence number, and answers a repeat with what it did, one entry
-per client. Its memo lives as long as the process: across a restart, acting once is an
-idempotency key stored in the transaction (`docs/decisions/D114-outbox-jobs.md`).
+per client. Its memo lives as long as the process, so it is for a request whose effect is on
+the actor's own state; one whose effect is in the database or outside, or that another instance
+may take again, is acted on under an idempotency key stored in the transaction (`Keys.once`,
+`docs/decisions/D114-outbox-jobs.md`).
 
 Where: `Lanes/Behaviours/Server.lean`, `Lanes/Behaviours/Once/`,
 `Lanes/Semantics/{Service,Once}.lean`.
@@ -1277,7 +1279,7 @@ that reference as its body, so its theorems (`Bytes.same_iff`) are about the ref
 is trusted is that the C computes the same, which `Tests/Crypto.lean` tests.
 
 TLS is a client from OpenSSL, the copy Lean's toolchain ships and links into every executable
-(`native/tls.c`, declared in `Lanes/Web/IO/Tls.lean`; `docs/decisions/D67-a-tls-client-from-the-openssl-lean-ships.md`).
+(`native/tls.c`, declared in `Lanes/Lib/Net/IO/Tls.lean`; `docs/decisions/D67-a-tls-client-from-the-openssl-lean-ships.md`).
 It does no IO: the client hands it the bytes that arrive and sends those it gives back, so what
 is sent and what the bytes mean stay the pure writer and reader. The certificate is always
 verified, against the system's trust store or a file given, and so is the name or address it is
@@ -1329,7 +1331,7 @@ Where: `Lanes/Testing/`.
 ## Tooling
 
 The `lanes` command (`LanesCli/`) creates an application (`lanes new`, which writes
-`templates/app/`, its types declared with `lanes_data`), checks the text of a project
+`templates/app/`, its table declared with `lanes_data`), checks the text of a project
 (`lanes lint`, `LanesCli/Lint.lean`: the rules `AGENTS.md` lists, among them that every
 repository path a doc cites exists), writes what is derived from other files (`--fix`,
 `LanesCli/Generated.lean`: the line counts of `TRUSTED.md`, the index of decisions and

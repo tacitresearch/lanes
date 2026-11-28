@@ -184,7 +184,7 @@ MUTANTS = [
     ("postgres client: after the handshake, bytes are sent in the clear",
      "Lanes/Services/Postgres/IO/Client.lean",
      "  | some t => t.write bytes; s.flush t", "  | some _ => s.socket.send bytes"),
-    ("tls: the trust store given is not the one used", "Lanes/Web/IO/Tls.lean",
+    ("tls: the trust store given is not the one used", "Lanes/Lib/Net/IO/Tls.lean",
      "  | .file path => pure path", "  | .file _ => pure (systemFiles.headD \"\")"),
     ("https client: the call is made in the clear", "Lanes/Web/IO/Client.lean",
      "        converseTls socket address request (← Tls.Session.start config.trust call.host) read",

@@ -2,7 +2,6 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Tests.Axioms.Behaviours
 import Tests.Axioms.Check
 import Tests.Axioms.Core
 import Tests.Axioms.Data

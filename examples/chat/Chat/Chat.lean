@@ -15,7 +15,7 @@ open Lanes
 
 abbrev ReqId := Nat
 
-lanes_data inductive Request where
+inductive Request where
   /-- A socket asks to join. -/
   | join (req : ReqId)
   /-- The member `socket` says a line. -/
@@ -24,7 +24,7 @@ lanes_data inductive Request where
   | leave (req socket : ReqId)
   deriving DecidableEq, Repr, Hashable
 
-lanes_data inductive Reply where
+inductive Reply where
   | accepted
   | full
   /-- The request is taken. -/
@@ -33,7 +33,7 @@ lanes_data inductive Reply where
   | line (text : String)
   deriving DecidableEq, Repr, Hashable
 
-lanes_data structure Out where
+structure Out where
   req : ReqId
   reply : Reply
   deriving DecidableEq, Repr, Hashable

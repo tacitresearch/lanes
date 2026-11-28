@@ -6,7 +6,7 @@ module
 
 public import Std
 public import Lanes.Lib.Net.Percent
-public import Lanes.Lib.Mime.Multipart
+public import Lanes.Web.Http.Multipart
 
 /-!
 # HTTP requests and responses as data

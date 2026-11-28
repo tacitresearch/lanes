@@ -59,7 +59,7 @@ PostgreSQL, in the checker beside a model of the store, and in the proofs.
 Add a request to `Tut/Counter.lean`:
 
 ```lean
-lanes_data inductive Request where
+inductive Request where
   | increment
   | decrement
   | read

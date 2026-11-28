@@ -9,7 +9,7 @@ public import Lanes.Runtime.IO.Shell
 public import Lanes.Outside.Basic
 public import Lanes.Web.Http.Compress
 public import Lanes.Web.Http.Sse
-public import Lanes.Web.IO.Tls
+public import Lanes.Lib.Net.IO.Tls
 public import Lanes.Lib.Net.Url
 
 /-!

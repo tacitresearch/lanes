@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Lib.Mime.MediaType
+public import Lanes.Web.Http.MediaType
 
 /-!
 # Multipart bodies
@@ -17,7 +17,7 @@ delimiter and after the line of the last is ignored, as RFC 2046 says, and so ar
 delimiter.
 Header names are kept in lowercase. `write` writes parts.
 
-Proved, in `Lanes/Lib/Mime/MultipartSound.lean`: `parse` reads back what `write` writes, for
+Proved, in `Lanes/Web/Http/MultipartSound.lean`: `parse` reads back what `write` writes, for
 parts whose header names are lowercase tokens, whose values are plain text with no blank at
 either end, and whose bytes do not hold the delimiter (`Multipart.parse_write`); and `parse`
 refuses what is over its limits: a body over `bytes_max` (`Multipart.parse_tooLarge`), and it

@@ -6,10 +6,10 @@ import Lanes
 import Tests.Fixtures.Bank
 
 /-!
-Tests of the runtime shell: run a system on a real thread with recording on, then replay the
-recorded events through `SysState.run`. `Kernel.exec_reachable` proves the kernel's events are a
-run of the semantics; these tests check that the shell passes them on and wires inputs, the
-clock, outputs and stopping correctly.
+Tests of the runtime shell: run a system on its worker threads with recording on, then replay
+the recorded events through `SysState.run`. `Sched.Run.reachable` proves every run of the
+scheduler's model is a run of the semantics; these tests check that the shell's threads perform
+its transitions, and wire inputs, the clock, outputs and stopping correctly.
 -/
 
 namespace Tests.Runtime

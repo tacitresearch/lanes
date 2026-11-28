@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Lib.Mime.MediaType
+public import Lanes.Web.Http.MediaType
 public import Lanes.Lib.Net.UrlSound
 
 /-!

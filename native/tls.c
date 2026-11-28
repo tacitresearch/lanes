@@ -2,7 +2,7 @@
 Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 
-A TLS client from OpenSSL, declared in `Lanes/Web/IO/Tls.lean`. It does no IO: the caller hands
+A TLS client from OpenSSL, declared in `Lanes/Lib/Net/IO/Tls.lean`. It does no IO: the caller hands
 it the bytes that arrived and sends the bytes it gives back, so it sits on any socket. The
 server's certificate is always verified, against the certificates of a file the caller names,
 and so is the name or address it is for unless the caller asks for the chain only. It gives the

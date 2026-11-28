@@ -8,9 +8,14 @@ public import Lanes.Web.Auth.Password
 public import Lanes.Data.Declare
 
 /-!
-What an actor that lets users log in keeps, as pure data: the count of failed attempts that
-locks an account, and the bounded list of a user's sessions. A password's hash or digest is
+The policies of logging in, as pure data: the count of failed attempts that locks an account,
+and the bounded list of a user's sessions with their lifetimes. A password's hash or digest is
 `Lanes.Web.Auth.Password`'s.
+
+Kept in an actor, they last as long as the process and are known only to it: a restart signs
+everyone out and forgets failed attempts, and another instance knows none of them. An
+application that runs as more than one process, or must keep them across a restart, keeps them
+as rows (`Lanes/Web/Auth/Rows.lean`), which apply `Attempts` in each transaction.
 -/
 
 @[expose] public section
@@ -19,7 +24,7 @@ namespace Lanes.Auth
 
 /-- Failed log-ins since the account was last unlocked. At `limit` the account locks, and stays
 locked until the application unlocks it, by a timer or by hand. -/
-lanes_data structure Attempts where
+structure Attempts where
   failures : Nat := 0
   locked : Bool := false
   deriving DecidableEq, Repr, Hashable
@@ -90,7 +95,7 @@ structure Lifetime where
   deriving DecidableEq, Repr
 
 /-- A session: its number, when it began and when it was last used, in seconds. -/
-lanes_data structure Session where
+structure Session where
   id : Nat
   started_s : Nat := 0
   used_s : Nat := 0
@@ -114,7 +119,7 @@ theorem Session.expired_none {now_s : Nat} {e : Session} : e.expired {} now_s = 
 oldest. A session is named by a number the application never uses twice. Time is what the
 application passes, the time a request arrived; `seen_s`, the latest it passed to a write, is the
 earliest time expiry is judged at, so a clock that steps back does not bring a session back. -/
-lanes_data structure Sessions where
+structure Sessions where
   entries : List Session := []
   seen_s : Nat := 0
   deriving DecidableEq, Repr, Hashable

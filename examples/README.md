@@ -43,7 +43,7 @@ beside a PostgreSQL made for the run).
    in every database the store model allows; adding without looking first, and retrying a lost
    answer, stores a title twice, and the checker finds it. `lake exe todoLive` runs it on a real
    server.
-8. `sign-in`: the start of a video site whose members sign in with Google or GitHub. The
+8. `sign-in`: a site whose members sign in with Google or GitHub. The
    sign-in is Lanes' and runs before the system, which gets only the identity it verified and
    gives the member a session.
 9. `upload`: uploads of any size, handed to the system in pieces and answered with their size
@@ -64,7 +64,7 @@ beside a PostgreSQL made for the run).
 | Per-actor invariants (`actor_invariant`, `System.invariant_of_actor`) | `bank`, `upload` |
 | Refinement to a spec (`System.Implements`, `System.Refines`) | `kv-cache`, `upload` |
 | Invariants per transaction, in every database the store allows (`Db.invariant`, `Txn.All.others`) | `counter`, `todo-db`, `rookery` |
-| A request takes effect once (`Once.actor`, `Service.once`) | `kv-cache` |
+| A request takes effect once on an actor's own state (`Once.actor`, `Service.once`) | `kv-cache` |
 | Fairness and liveness | `watchdog` |
 | Work due later, an outbox, retried with a backoff, under an idempotency key (`Lanes.Db.Jobs`, `Lanes.Db.Worker`) | `reminders`, `payments` |
 | Acting once across restarts: a key stored in the transaction (`Lanes.Db.Keys`) | `payments`, `rookery` |

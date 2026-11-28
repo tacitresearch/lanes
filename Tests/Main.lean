@@ -76,8 +76,8 @@ import Tests.Oidc.Google
 import Tests.Oidc.GitHub
 
 /-!
-The test driver behind `lake test`: the pure tests and the live runtime tests, well under a
-second together. `lanesTest live` runs only the live tier, the one worth repeating; `--json`
+The test driver behind `lake test`: the pure tests and the live runtime tests (`AGENTS.md`,
+"Build and checks", says how long they take). `lanesTest live` runs only the live tier, the one worth repeating; `--json`
 prints the results as JSON (`lake test -- --json`). The larger
 model checks are a separate binary, `lanesCheck`, because their results are computed when the
 program starts.

@@ -4,8 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Lib.Mime.Multipart
-public import Lanes.Lib.Mime.MediaTypeSound
+public import Lanes.Web.Http.Multipart
+public import Lanes.Web.Http.MediaTypeSound
 public import Lanes.Proof.ByteArray
 public import Lanes.Proof.Utf8
 

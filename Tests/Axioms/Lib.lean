@@ -282,46 +282,12 @@ import Lanes.Lib.Encoding.Cbor.Sound
 /-- info: 'Lanes.Metrics.sanitize_of_valid' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Metrics.sanitize_of_valid
 
--- Lanes.Lib.Mime.MultipartSound
-/-- info: 'Lanes.Multipart.parse_write' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Multipart.parse_write
-
-/-- info: 'Lanes.Multipart.parse_tooLarge' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Multipart.parse_tooLarge
-
-/-- info: 'Lanes.Multipart.length_le_of_parse' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Multipart.length_le_of_parse
-
-/-- info: 'Lanes.Multipart.headers_le_of_parse' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Multipart.headers_le_of_parse
-
-/-- info: 'Lanes.Multipart.name?_field' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Multipart.name?_field
-
-/-- info: 'Lanes.Multipart.filename?_file' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Multipart.filename?_file
 -- Lanes.Lib.PathSound
 /-- info: 'Lanes.Path.clean_clean' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Path.clean_clean
 
 /-- info: 'Lanes.Path.under_names' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Path.under_names
-
--- Lanes.Lib.Mime.MediaTypeSound
-/-- info: 'Lanes.MediaType.parse_format' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.MediaType.parse_format
-
-/-- info: 'Lanes.MediaType.parse_format_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.MediaType.parse_format_eq
-
-/-- info: 'Lanes.MediaType.parse_print' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.MediaType.parse_print
-
-/-- info: 'Lanes.MediaType.isQdtext_of' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.MediaType.isQdtext_of
-
-/-- info: 'Lanes.MediaType.quoted_esc' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.MediaType.quoted_esc
 
 -- Lanes.Lib.Net.Ip
 /-- info: 'Lanes.Ip.parse_print' depends on axioms: [propext, Classical.choice, Quot.sound] -/

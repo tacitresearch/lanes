@@ -17,8 +17,6 @@ public import Lanes.Lib.Encoding.Json.BasicSound
 public import Lanes.Lib.Encoding.Json.ParserSound
 public import Lanes.Lib.Encoding.Json.PrinterSound
 public import Lanes.Lib.LogSound
-public import Lanes.Lib.Mime.MediaTypeSound
-public import Lanes.Lib.Mime.MultipartSound
 public import Lanes.Lib.Net.UrlSound
 public import Lanes.Outside.Store.Sound
 public import Lanes.Proof.JoinSound
@@ -34,6 +32,8 @@ public import Lanes.Web.Http.AdmitSound
 public import Lanes.Web.Http.ConnSound
 public import Lanes.Web.Http.CookieSound
 public import Lanes.Web.Http.FrontSound
+public import Lanes.Web.Http.MediaTypeSound
+public import Lanes.Web.Http.MultipartSound
 public import Lanes.Web.Http.OpsSound
 public import Lanes.Web.Http.ReadRequestSound
 public import Lanes.Web.Http.RouteSound

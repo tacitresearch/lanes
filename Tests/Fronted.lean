@@ -20,7 +20,7 @@ namespace Tests.Fronted
 
 open Lanes Lanes.Http
 
-lanes_data inductive Ask where
+inductive Ask where
   | ask (id : ReqId)
   | note (n : Nat)
   deriving DecidableEq, Repr, Hashable

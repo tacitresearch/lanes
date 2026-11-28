@@ -1,6 +1,6 @@
 # Roadmap
 
-The direction of Lanes is issue #93, and the work is the open issues; what is fixable and known
+The direction of Lanes is D110 and issue #239, and the work is the open issues; what is fixable and known
 is labelled `known-limit`. This file only says where those are and what the order of work rests
 on.
 

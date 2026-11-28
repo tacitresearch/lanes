@@ -17,7 +17,7 @@ open Lanes
 abbrev ReqId := Nat
 
 /-- Adler-32, as a running sum over bytes. -/
-lanes_data structure Sum where
+structure Sum where
   a : Nat := 1
   b : Nat := 0
   deriving DecidableEq, Repr, Hashable
@@ -38,7 +38,7 @@ def checksum (data : ByteArray) : Nat := ({} : Sum).feed data |>.value
 theorem Sum.feed_append (s : Sum) (x y : ByteArray) : s.feed (x ++ y) = (s.feed x).feed y := by
   simp [Sum.feed, ByteArray.data_append, List.foldl_append]
 
-lanes_data structure Progress where
+structure Progress where
   /-- The index of the next piece. -/
   next : Nat := 0
   size : Nat := 0
@@ -48,14 +48,14 @@ lanes_data structure Progress where
 def Progress.take (p : Progress) (data : ByteArray) : Progress :=
   { next := p.next + 1, size := p.size + data.size, sum := p.sum.feed data }
 
-lanes_data inductive Request where
+inductive Request where
   /-- The head of an upload, whose body follows in pieces. -/
   | start (req : ReqId)
   /-- Piece `index` of the body of the upload `head`. -/
   | piece (req head index : Nat) (data : ByteArray) (last : Bool)
   deriving DecidableEq, Repr, Hashable
 
-lanes_data inductive Answer where
+inductive Answer where
   | taken
   /-- Too many uploads at once. -/
   | busy
@@ -64,7 +64,7 @@ lanes_data inductive Answer where
   | done (size sum : Nat)
   deriving DecidableEq, Repr, Hashable
 
-lanes_data structure Response where
+structure Response where
   req : ReqId
   answer : Answer
   deriving DecidableEq, Repr, Hashable

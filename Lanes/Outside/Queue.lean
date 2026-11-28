@@ -32,7 +32,7 @@ a message deleted with its latest receipt is not received again unless it is sen
 
 namespace Lanes.Queue
 
-lanes_data structure Message (B : Type) where
+structure Message (B : Type) where
   id : Nat
   /-- The message group of a FIFO queue. -/
   group : Nat := 0

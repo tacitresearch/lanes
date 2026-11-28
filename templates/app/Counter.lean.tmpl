@@ -29,12 +29,12 @@ lanes_data structure Count where
 
 def schema : Schema := [counts.table]
 
-lanes_data inductive Request where
+inductive Request where
   | increment
   | read
   deriving DecidableEq, Repr, Hashable
 
-lanes_data structure Response where
+structure Response where
   value : Int64
   /-- Whether the request was applied. An increment at the limit is refused. -/
   applied : Bool

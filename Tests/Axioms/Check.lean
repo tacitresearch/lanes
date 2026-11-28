@@ -146,3 +146,7 @@ import Lanes.Semantics
 -- Lanes.Check.WorldEquiv
 /-- info: 'Lanes.World.Equiv.next' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.World.Equiv.next
+
+-- Lanes.Check.Once
+/-- info: 'Lanes.Check.OnceMonitor.withinFrom_eq' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Check.OnceMonitor.withinFrom_eq

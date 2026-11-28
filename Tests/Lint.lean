@@ -199,7 +199,7 @@ def layerTests (root : System.FilePath) : IO (List (String × Bool)) := do
         && Layers.Package.all.all (fun p => p == .services || !p.mayImport .services)
         && Layers.Package.all.all fun p => p.mayImport p),
     ("Layers.home?: the longest prefix wins",
-      Layers.home? "Lanes/Web/IO/Tls.lean" == some .std
+      Layers.home? "Lanes/Outside/IO/FileSystem.lean" == some .std
         && Layers.home? "Lanes/Web/Http/Basic.lean" == some .web
         && Layers.home? "Lanes/Services/Postgres/Conn.lean" == some .services
         && Layers.home? "Tests/Main.lean" == none),
