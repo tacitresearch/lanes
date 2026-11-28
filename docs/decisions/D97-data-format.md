@@ -1,6 +1,8 @@
 # D97. A data format that outlives its version: one schema per file, values read by name
 
-Status: Accepted. The owner set the direction; the details of section 8 are settled as stated
+Status: Superseded by D110-volatile-actors.md
+
+The owner set the direction; the details of section 8 are settled as stated
 there. This decision moves no code; the order of work (section 7) does.
 
 What Lanes writes to disk and sends between processes is the most expensive thing to change

@@ -1,6 +1,6 @@
 # D100. Each doc has one job, and is generated or tested where it can be
 
-Status: Accepted
+Status: Partly superseded by D110-volatile-actors.md (the inventory computed by `lanesInventory`)
 
 Issue #110. Agents do what the docs say, so a fact written in two places, or a list kept by
 hand, goes stale and misleads them. The docs had grown such overlaps: the status page, the

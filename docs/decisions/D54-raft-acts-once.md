@@ -1,6 +1,6 @@
 # D54. Raft acts once on a command its client names, and an answer it no longer keeps is not handed over
 
-Status: Accepted
+Status: Superseded by D110-volatile-actors.md
 
 `examples/raft-kv/RaftKV/Once.lean`, `examples/raft-kv/RaftKVProofs/Once.lean`,
 `examples/raft-kv/RaftKVProofs.lean`, `examples/raft-kv/Check.lean`, `Lanes/Semantics/Once.lean`.
