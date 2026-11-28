@@ -50,8 +50,6 @@ them by area.
 | `Jobs.Port.alone` | trusted | TRUSTED.md: The jobs pool |
 | `Jobs.handler` | trusted | TRUSTED.md: The jobs pool |
 | `Jobs.compute` | trusted | TRUSTED.md: The jobs pool |
-| `Jobs.withHeader` | trusted | TRUSTED.md: The jobs pool |
-| `Jobs.call` | trusted | TRUSTED.md: The jobs pool |
 
 ## `Lanes/Behaviours/Jobs/Sound.lean`
 
@@ -739,18 +737,6 @@ them by area.
 | `Journal.named?` | proved | `Journal.Disk.start_foreign` |
 | `Journal.file` | proved | `Journal.Disk.load_cut`, `Journal.open?_cut`, `Journal.open?_file` |
 | `Journal.open?` | proved | `Journal.Disk.open?_of_read`, `Journal.open?_cut`, `Journal.open?_file` |
-| `Journal.Entry.op?` | proved | through `Batch.flush`, `Batch.grown` and others: `Batch.flush_save`, `Batch.grown_eq` and others |
-| `Journal.Entry.marks` | proved | `Journal.recoverIds_handed`, `Journal.recover_handed` |
-| `Journal.ops` | proved | `Journal.recover_handed`, `Journal.recover_kernel`, `Journal.recover_outputs` and others |
-| `Journal.replay1` | proved | through `Journal.Begun.toFound`, `Journal.recover` and others: `Journal.Begun.resume_upgraded`, `Journal.Disk.Holds.load_append_crash` and others |
-| `Journal.recover` | proved | `Journal.Disk.load_cut`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.begin_torn` and others |
-| `Journal.replay` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and others |
-| `Journal.Entry.savedAt` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` and others |
-| `Journal.since` | proved | through `Journal.Begun.load`, `Journal.Begun.toFound` and others: `Journal.Begun.resume_upgraded`, `Journal.Upgrade.begin_crash` and others |
-| `Journal.resume` | proved | `Journal.Begun.resume_upgraded`, `Journal.resumeIds_erase`, `Journal.resume_eq_recover` and others |
-| `Journal.turn` | proved | `Journal.turn_placed` |
-| `Journal.turnAll` | proved | `Journal.turnAll_eq_exec`, `Journal.turnAll_placed`, `Journal.turnAll_spread` |
-| `Journal.turns` | spec | used only in statements |
 
 ## `Lanes/Durable/Migration.lean`
 
@@ -1254,6 +1240,18 @@ them by area.
 | `Ip.decimal?` | proved | through `Ip.Prefix.parse`: `Ip.Prefix.parse_print` |
 | `Ip.Prefix.parse` | proved | `Ip.Prefix.parse_print` |
 | `Ip.Addr.isLoopback` | proved | `Ip.isLoopback_v4`, `Ip.isLoopback_v6` |
+
+## `Lanes/Lib/Net/Percent.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Http.hexValue?` | proved | through `Http.Request.hexByte`, `Http.percentDecode` and others: `Http.Request.read_badChunkSize`, `Http.percentDecode_percentEncode` and others |
+| `Http.percentDecodeBytes` | proved | through `Http.percentDecode`, `SigV4.decodePath`: `Http.percentDecode_percentEncode`, `SigV4.decodePath_canonicalPath` |
+| `Http.percentDecode` | proved | `Http.percentDecode_percentEncode` |
+| `Http.hexDigit` | proved | through `Http.percentEncode`: `Http.percentDecode_percentEncode`, `Http.percentEncode_plain` |
+| `Http.unreserved` | proved | through `Http.percentEncode`: `Http.percentDecode_percentEncode`, `Http.percentEncode_plain` |
+| `Http.percentEncodeByte` | proved | through `Http.percentEncode`: `Http.percentDecode_percentEncode`, `Http.percentEncode_plain` |
+| `Http.percentEncode` | proved | `Http.percentDecode_percentEncode`, `Http.percentEncode_plain` |
 
 ## `Lanes/Lib/Net/Url.lean`
 
@@ -2169,6 +2167,23 @@ them by area.
 | `Kernel.Serves` | spec | a predicate |
 | `Kernel.Fires` | spec | a predicate |
 
+## `Lanes/Runtime/Log.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Journal.Entry.op?` | proved | through `Batch.flush`, `Batch.grown` and others: `Batch.flush_save`, `Batch.grown_eq` and others |
+| `Journal.Entry.marks` | proved | `Journal.recoverIds_handed`, `Journal.recover_handed` |
+| `Journal.ops` | proved | `Journal.recover_handed`, `Journal.recover_kernel`, `Journal.recover_outputs` and others |
+| `Journal.replay1` | proved | through `Journal.Begun.toFound`, `Journal.recover` and others: `Journal.Begun.resume_upgraded`, `Journal.Disk.Holds.load_append_crash` and others |
+| `Journal.recover` | proved | `Journal.Disk.load_cut`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.begin_torn` and others |
+| `Journal.replay` | proved | `Journal.Disk.Holds.load_append_crash`, `Journal.Disk.Holds.load_save_crash`, `Journal.Disk.Holds.save` and others |
+| `Journal.Entry.savedAt` | proved | `Journal.Disk.Holds.append`, `Journal.Disk.Holds.append_crash`, `Journal.Disk.Holds.load_append_crash` and others |
+| `Journal.since` | proved | through `Journal.Begun.load`, `Journal.Begun.toFound` and others: `Journal.Begun.resume_upgraded`, `Journal.Upgrade.begin_crash` and others |
+| `Journal.resume` | proved | `Journal.Begun.resume_upgraded`, `Journal.resumeIds_erase`, `Journal.resume_eq_recover` and others |
+| `Journal.turn` | proved | `Journal.turn_placed` |
+| `Journal.turnAll` | proved | `Journal.turnAll_eq_exec`, `Journal.turnAll_placed`, `Journal.turnAll_spread` |
+| `Journal.turns` | spec | used only in statements |
+
 ## `Lanes/Runtime/Mailbox.lean`
 
 | Definition | Status | Evidence |
@@ -2826,13 +2841,6 @@ them by area.
 | `Http.reprBody` | proved | through `Http.Request.field?`, `Http.Request.form`: `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` |
 | `Http.Method.codec` | proved | its type, `Codec` |
 | `Http.Request.codec` | proved | its type, `Codec` |
-| `Http.hexValue?` | proved | through `Http.Request.field?`, `Http.Request.form` and others: `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` and others |
-| `Http.percentDecodeBytes` | proved | through `Http.Request.field?`, `Http.Request.form` and others: `Http.Request.field?_eq_lookup`, `Http.Request.form_encodeForm` and others |
-| `Http.percentDecode` | proved | `Http.percentDecode_percentEncode` |
-| `Http.hexDigit` | proved | through `Http.encodeForm`, `Http.percentEncode`: `Http.Request.form_encodeForm`, `Http.parseForm_encodeForm` and others |
-| `Http.unreserved` | proved | through `Http.encodeForm`, `Http.percentEncode`: `Http.Request.form_encodeForm`, `Http.parseForm_encodeForm` and others |
-| `Http.percentEncodeByte` | proved | through `Http.encodeForm`, `Http.percentEncode`: `Http.Request.form_encodeForm`, `Http.parseForm_encodeForm` and others |
-| `Http.percentEncode` | proved | `Http.percentDecode_percentEncode`, `Http.percentEncode_plain` |
 | `Http.parseForm` | proved | `Http.parseForm_encodeForm` |
 | `Http.encodeForm` | proved | `Http.Request.form_encodeForm`, `Http.parseForm_encodeForm` |
 | `Http.Request.param?` | spec | used only in statements |
@@ -3319,6 +3327,13 @@ them by area.
 | `Http.Client.Call.keyed` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 | `Http.Client.handlerKeyed` | trusted | TRUSTED.md: The HTTP client adapter's handler |
 
+## `Lanes/Web/IO/Jobs.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Jobs.withHeader` | trusted | TRUSTED.md: The jobs pool |
+| `Jobs.call` | trusted | TRUSTED.md: The jobs pool |
+
 ## `Lanes/Web/IO/Ops.lean`
 
 | Definition | Status | Evidence |
@@ -3670,6 +3685,20 @@ them by area.
 | `Cli.Journal.usage` | none |  |
 | `Cli.Journal.run` | none |  |
 
+## `LanesCli/Layers.lean`
+
+| Definition | Status | Evidence |
+| --- | --- | --- |
+| `Cli.Layers.Package.all` | tested | `Tests/Lint.lean` |
+| `Cli.Layers.Package.name` | none |  |
+| `Cli.Layers.Package.requires` | tested | `Tests/Lint.lean` |
+| `Cli.Layers.Package.below` | tested | `Tests/Lint.lean` |
+| `Cli.Layers.Package.mayImport` | tested | `Tests/Lint.lean` |
+| `Cli.Layers.homes` | tested | `Tests/Lint.lean` |
+| `Cli.Layers.home?` | tested | `Tests/Lint.lean` |
+| `Cli.Layers.imported?` | tested | `Tests/Lint.lean` |
+| `Cli.Layers.pathOf` | none |  |
+
 ## `LanesCli/Lint.lean`
 
 | Definition | Status | Evidence |
@@ -3684,6 +3713,7 @@ them by area.
 | `Cli.Lint.checkFile` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.sourceFiles` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.checkC` | tested | `Tests/Lint.lean` |
+| `Cli.Lint.checkLayers` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.codeSpans` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.firstBraces` | tested | `Tests/Lint.lean` |
 | `Cli.Lint.expandBraces` | tested | `Tests/Lint.lean` |

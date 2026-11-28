@@ -23,7 +23,7 @@ proved function tells it to.
 | Proof tools for systems | `Lanes/Proof/{Lift,Ghost,Monotone,Equiv,Deed}.lean` | `System.invariant_of_actor`, `Inductive.of_monotone`, `System.Invariant.of_ghost` |
 | The kernel | `Lanes/Runtime/{Kernel,KernelSound,KernelTimers,Wave}.lean` | `Kernel.exec_reachable`, `Kernel.exec_outputs`, `Kernel.exec_wellFormed`, `Kernel.runWaves_eq` |
 | The shell | `Lanes/Runtime/IO/Shell.lean`, `Lanes/Runtime/{Batch,Mailbox,MailboxSound,Pace}.lean` | `Batch.run_kernel`, `Batch.run_sound`, `Batch.run_spread`, `Mailbox.batch_since_take`; the shell itself is trusted |
-| Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame,Reading}.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash`, `Journal.Disk.Torn.load_readings` |
+| Journal, snapshots, disk | `Lanes/Durable/{Journal,Snapshot,Disk,Frame,Reading}.lean`, `Lanes/Runtime/Log.lean`, `Lanes/Durable/IO/Journal.lean` | `Journal.open?_cut`, `Journal.recover_kernel`, `Journal.resume_eq_recover`, `Journal.Disk.Holds.save_crash`, `Journal.Disk.Torn.load_readings` |
 | Migrations | `Lanes/Durable/{Migration,Upgrade}.lean` | `Migration.inv_exec`, `Journal.Upgrade.begin_crash`, `Journal.Upgrade.holds`, `Journal.Upgrade.inv_load` |
 | Joins | `Lanes/Core/Join.lean`, `Lanes/Proof/{JoinSound,MapIOSound}.lean`, `Lanes/Semantics/FairJoin.lean` | `System.Reachable.left`, `SysState.run_left`, `System.Run.Fair.left`, `System.Run.Fair.right` |
 | Shards and the transport | `Lanes/Runtime/{Shard,ShardSound,ShardsSound}.lean`, `Lanes/Net/{Courier,CourierSound,Handshake,HandshakeSound}.lean`, `Lanes/Net/IO/{Peers,Node}.lean` | `System.ShardsReachable.unsharded`, `Peers.Courier.written_sublist_sent`, `Peers.Handshake.Reachable.ready_proved` |
@@ -124,10 +124,11 @@ trusted only for speed (`docs/decisions/D73-adaptive-waves.md`).
 
 Durability is a journal of what the kernel was asked, not of actor states (D24): replaying it
 through the same pure kernel gives the same state, so a restart is not a fault any proof has to
-account for. Pure, in `Lanes/Durable/Journal.lean` and `Lanes/Durable/Frame.lean`: a file reads back
-as the entries written (`Journal.open?_file`); a file cut at any byte opens and gives exactly the
-entries wholly written before the cut, and anything else wrong with it is refused, not repaired
-(`Journal.open?_cut`); recovery rebuilds exactly the kernel those entries lead to
+account for. Pure, in `Lanes/Durable/Journal.lean` and `Lanes/Durable/Frame.lean`: a file reads
+back as the entries written (`Journal.open?_file`); a file cut at any byte opens and gives exactly
+the entries wholly written before the cut, and anything else wrong with it is refused, not
+repaired (`Journal.open?_cut`). In `Lanes/Runtime/Log.lean`, what the entries ask of the kernel,
+which the runtime needs without a journal: recovery rebuilds exactly the kernel those entries lead to
 (`Journal.recover_kernel`), and hands over again exactly what was produced after the last mark
 (`Journal.recover_handed`).
 

@@ -200,12 +200,6 @@ import Lanes.Semantics
 #guard_msgs in #print axioms Lanes.Hx.render_plain
 
 -- Lanes.Web.Http.Basic
-/-- info: 'Lanes.Http.percentDecode_percentEncode' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Http.percentDecode_percentEncode
-
-/-- info: 'Lanes.Http.percentEncode_plain' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Http.percentEncode_plain
-
 /-- info: 'Lanes.Http.parseForm_encodeForm' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Http.parseForm_encodeForm
 

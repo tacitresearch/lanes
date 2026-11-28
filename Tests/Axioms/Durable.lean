@@ -69,12 +69,6 @@ import Lanes.Semantics
 #guard_msgs in #print axioms Lanes.Frame.decode_checksum_ne
 
 -- Lanes.Durable.Journal
-/-- info: 'Lanes.Journal.replay_kernel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Journal.replay_kernel
-
-/-- info: 'Lanes.Journal.resume_eq_replay' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Journal.resume_eq_replay
-
 /-- info: 'Lanes.Journal.header_inj' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.header_inj
 
@@ -86,27 +80,6 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Journal.open?_cut' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Journal.open?_cut
-
-/-- info: 'Lanes.Journal.recover_handed' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Journal.recover_handed
-
-/-- info: 'Lanes.Journal.resume_eq_recover' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Journal.resume_eq_recover
-
-/-- info: 'Lanes.Journal.turns_kernel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Journal.turns_kernel
-
-/-- info: 'Lanes.Journal.turnAll_eq_exec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Journal.turnAll_eq_exec
-
-/-- info: 'Lanes.Journal.turnAll_spread' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Journal.turnAll_spread
-
-/-- info: 'Lanes.Journal.recover_kernel' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Journal.recover_kernel
-
-/-- info: 'Lanes.Journal.recover_outputs' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in #print axioms Lanes.Journal.recover_outputs
 
 -- Lanes.Durable.Migration
 /-- info: 'Lanes.Migration.cell_kernel' depends on axioms: [propext, Classical.choice, Quot.sound] -/

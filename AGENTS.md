@@ -117,7 +117,13 @@ argument.
 
 1.6 **Layers run one way.** Runtime modules import `Std` only; Mathlib, CSLib and proof modules
 (`Lanes.Semantics`, `…Proofs`) are imported only by proof files (lint `layering`). No cycles.
-*Why:* executable code that imports the proof layer links all of Mathlib (over 150 MB).
+Each module of `Lanes/` is in one package of `docs/decisions/D99-layered-packages.md`, and imports modules of Lanes only from its
+package and those below it: the semantics and the checker; actors, and the standard library
+beside them; the runtime; durability; the web and PostgreSQL; the umbrella `Lanes`
+(`LanesCli/Layers.lean` gives each file's package, lint `layering`). A definition that a lower
+layer needs moves down, or the lower layer takes it as a parameter. *Why:* executable code
+that imports the proof layer links all of Mathlib (over 150 MB), and a layer that imports one
+above it cannot be used, or built, without it.
 
 1.7 **One concept, one name**, in code, specs and docs; names state units and bounds
 (`timeout_ms`, `maxBatch`).
@@ -228,11 +234,11 @@ that performs IO is in an `IO/` directory of its area and named in `TRUSTED.md`.
 | --- | --- | --- |
 | `Lanes/Core/` | `Actor`, `Signature`, `Effect`, `System`, the semantics' step (`World`), each event and run in closed form (`Step`, `Run`), joins, `Service`, `Inspect`, the deterministic and fair schedulers | `Std` only |
 | `Lanes/Proof/` | The proof toolkit: lifting per-actor invariants, `Monotone`, ghosts and `Past`, `SysState.Equiv`, deeds, loss; what survives a join (`JoinSound`, `MapIOSound`); lemmas about lists (`List/`), strings (`Utf8`) and byte arrays (`ByteArray`) | `Std` only |
-| `Lanes/Runtime/` | The kernel and its proofs, batches, the inbox, shards; the shell and the parker in `IO/` | `Std` only |
+| `Lanes/Runtime/` | The kernel and its proofs, the log of what a shard asks of it (`Log`), batches, the inbox, shards; the shell and the parker in `IO/` | `Std` only |
 | `Lanes/Durable/` | The journal, snapshots, the disk model, the framing of a file; the journal's files in `IO/` | `Std` only |
 | `Lanes/Net/` | The courier, every decision of the transport, and its proofs; the transport and a process with an HTTP front in `IO/` | `Std` only |
 | `Lanes/Outside/` | What the outside may do (`Outside`), the home of models of external systems (calls, idempotency keys, webhooks, payments, email, an object store, and transactional stores in `Store/`); the clock in `IO/` | `Std` only |
-| `Lanes/Web/` | HTTP as data, its grammar, the gate, routes, cookies, the wire format, the server's connections and Signature Version 4 (`Http/`); HTML values and templates (`Html/`); tokens, password digests, failed attempts, sessions (`Auth/`); the S3 client's calls and answers (`S3/`); the server, the client and the S3 client in `IO/` | `Std` only |
+| `Lanes/Web/` | HTTP as data, its grammar, the gate, routes, cookies, the wire format, the server's connections and Signature Version 4 (`Http/`); HTML values and templates (`Html/`); tokens, password digests, failed attempts, sessions (`Auth/`); the S3 client's calls and answers (`S3/`); the server, the client, the S3 client and the jobs pool's worker over HTTP in `IO/` | `Std` only |
 | `Lanes/Behaviours/` | Standard actors with their specs and proofs, by feature (`Server`, `Jobs/`, `Once/`, `Schedule/`) | `Std` only |
 | `Lanes/Check/` | Model checker | `Std` only |
 | `Lanes/Data/` | `Enum`, codecs and `lanes_data`, schemas and values, the body of a value (`Body`), the queue, quorums | `Std` only |

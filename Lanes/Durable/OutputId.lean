@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Lanes.Durable.Journal
+public import Lanes.Runtime.Log
 
 /-!
 Every output a shard hands over has an id, the same each time it is handed over
