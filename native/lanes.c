@@ -3,7 +3,8 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 
 What Lean cannot express or check, bound from C: OpenSSL's libcrypto for cryptography whose time
-must not depend on secrets, fsync for durability, and a timed wait for a thread. Each function
+must not depend on secrets and for random bytes, fsync for durability, and a timed wait for a
+thread. Each function
 is declared in `Lanes/Lib/Crypto/Native.lean`, `Lanes/Durable/IO/Journal.lean` or
 `Lanes/Runtime/IO/Park.lean`; arguments are borrowed.
 
@@ -33,6 +34,7 @@ unsigned char *HMAC(const EVP_MD *evp_md, const void *key, int key_len,
                     const unsigned char *data, size_t data_len,
                     unsigned char *md, unsigned int *md_len);
 int CRYPTO_memcmp(const void *in_a, const void *in_b, size_t len);
+int RAND_bytes(unsigned char *buf, int num);
 OSSL_PARAM_BLD *OSSL_PARAM_BLD_new(void);
 void OSSL_PARAM_BLD_free(OSSL_PARAM_BLD *bld);
 int OSSL_PARAM_BLD_push_uint32(OSSL_PARAM_BLD *bld, const char *key, uint32_t val);
@@ -73,6 +75,18 @@ LEAN_EXPORT uint8_t lanes_same(b_lean_obj_arg a, b_lean_obj_arg b) {
     size_t size = lean_sarray_size(a);
     return size == lean_sarray_size(b)
         && CRYPTO_memcmp(lean_sarray_cptr(a), lean_sarray_cptr(b), size) == 0;
+}
+
+/* OpenSSL's CSPRNG, which seeds itself from the operating system. */
+LEAN_EXPORT lean_obj_res lanes_random_bytes(size_t size) {
+    if (size > INT_MAX)
+        return lean_io_result_mk_error(lean_mk_io_user_error(lean_mk_string("lanes: too many random bytes")));
+    lean_object *out = lanes_bytes(size);
+    if (RAND_bytes(lean_sarray_cptr(out), (int)size) != 1) {
+        lean_dec(out);
+        return lean_io_result_mk_error(lean_mk_io_user_error(lean_mk_string("lanes: RAND_bytes failed")));
+    }
+    return lean_io_result_mk_ok(out);
 }
 
 static int lanes_push(OSSL_PARAM_BLD *bld, const char *key, b_lean_obj_arg bytes) {

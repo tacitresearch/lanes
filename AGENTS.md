@@ -15,7 +15,7 @@ a choice. Each rule says why, so a case it does not cover can be judged.
 ```bash
 lake exe cache get         # once, in a fresh clone: prebuilt Mathlib; never build Mathlib from source
 lake build --wfail         # the library, warnings as errors (as CI builds it)
-lake test                  # pure tests and live runtime tests, a few seconds
+lake test                  # pure tests and live runtime tests, about two minutes
 lake exe lanesCheck        # larger model checks, random runs and the scale benchmark, about 20 s: run once, never in a loop
 lake exe lanes lint        # the checks below, and that generated files are up to date
 lake exe lanes lint --fix  # rewrite the generated files: line counts, decisions' index, STATUS, INVENTORY
@@ -31,6 +31,15 @@ lake exe lanes docstrings  # how many public declarations of `import Lanes` have
   `examples/raft-kv`, `examples/ledger` and `examples/rookery` run as jobs of their own. A pull
   request that changes only documentation is built and linted, and the other jobs are skipped
   (the `changes` job of `.github/workflows/ci.yml` says which files count).
+- **Small bounds on every pull request, large bounds on a schedule.** A pull request's checks
+  are fast and exhaustive at small bounds: each example's `lake test` takes under a minute, and
+  a pull request's CI under ten minutes. A model-checking scenario has a small version, in `lake
+  test`, and its large version, run nightly by `.github/workflows/large.yml` (in
+  `examples/videos`, `Videos.Check.Size` and `lake exe videosTest large`). A small version still
+  reaches every witness it names (rule 5.3), and fails if one is not reached, so it cannot pass
+  by exploring nothing. Both are exact: the fingerprinted mode is not a pull request's check. A
+  check over its budget is made smaller, never moved to the schedule alone. *Why:* iteration
+  speed; a check that takes ten minutes is run less, and bugs wait for it.
 - `lanes lint` checks the text of a project: `no-sorry` (no `sorry` or `admit`), `trusted-listed`
   (`partial`, `unsafe`, `axiom`, `panic!`, `implemented_by`, `extern` and C only in files
   `TRUSTED.md` names), `trusted-size` (each trusted file has the line count `TRUSTED.md` gives),
@@ -231,7 +240,7 @@ that performs IO is in an `IO/` directory of its area and named in `TRUSTED.md`.
 | `Lanes/Testing/` | The test kit, for tests and never in `import Lanes`: a fake S3 that checks signatures, a fake identity provider, a scripted browser, a server of a handler and readers of a response (`docs/decisions/D77-a-test-kit.md`) | `Std` only |
 | `Lanes/Semantics/` | The semantics as a CSLib `LTS`, refinement, specs, fairness and leads-to, and the liveness of the gate, of jobs and of the scheduler | CSLib, Mathlib |
 | `native/` | The C that binds OpenSSL's hashes, comparison and Argon2id, `fsync`, a timed wait, OpenSSL's TLS client, its signature check and its signing, all of it trusted | OpenSSL, libc |
-| `LanesCli/` | The `lanes` command: `new`, `lint`, `check`, `changelog`, `stats`, `inventory`, `docstrings` | `Std` only; `Lean` in `Inventory` and `Docstrings`, which only `lanesInventory` links |
+| `LanesCli/` | The `lanes` command: `new`, `lint`, `check`, `changelog`, `stats`, `inventory`, `docstrings`, `journal` | `Std` only; `Lean` in `Inventory` and `Docstrings`, which only `lanesInventory` links |
 | `templates/app/` | The application `lanes new` creates, which is `examples/counter` | |
 | `examples/` | Applications to read, each its own Lake package (`examples/README.md`) | anything |
 | `integrations/` | A vendor's preset or client, each its own Lake package (D61): `google` and `github` for sign-in, `aws` for a role's credentials, SES and SQS's calls, and CloudFront's signed URLs | Lanes |
@@ -264,13 +273,19 @@ lanes_data inductive Id (F : Type) where
 ```
 
 - `Codable` gives `Entry.codec : Codec N → Codec C → Codec (Entry N C)` and an instance;
-  `Codec.of T` is the instance's codec, and its law holds by construction. Every field's type
+  `Codec.of T` is the instance's codec, and its law holds by construction. A codec also carries
+  its type's `Schema` (the names of its fields and constructors, their defaults and former
+  names) and a map each way to `Value`, with the law `ofValue (toValue a) = some a`
+  (`Lanes/Data/Schema.lean`); `lake exe lanes journal schema --type T` prints it. Every field's type
   needs `Codable`: `Nat`, `Int`, `String`, `Bool`, `Unit`, `ByteArray`, `Fin n`, `Option`,
   `List`, pairs, sums, sigma types, subtypes, `Std.ExtTreeMap`, and types declared this way.
 - `Enum` lists every value. `LawfulBEq` compares a structure field by field, for one that holds a
   function on an `Enum` type and so has no `DecidableEq`.
-- Arguments are `(x y : T)`, fields `x : T` or `x : T := default`, each with an optional
-  docstring; a constructor may be a keyword (`| open`). A value with a property is a subtype,
+- Arguments are `(x y : T)` or `(x : T := default)`, fields `x : T` or `x : T := default`,
+  each with an optional docstring; a constructor may be a keyword (`| open`). A default names
+  no other field. A renamed field, argument or constructor keeps its former names after its
+  name, `height (was y) : Int`, `| path (was line)`, `(closed (was shut) : Bool)`, so that data
+  written under them can be read by name (`docs/decisions/D103-lanes-data-aliases.md`). A value with a property is a subtype,
   read back only if the property holds. A field whose type names an earlier field is refused.
   `extends`, indices and recursive types are not accepted: write those with `structure` or
   `inductive` and the codec with `Codec.struct%` or `Codec.sum%`.

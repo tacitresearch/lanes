@@ -21,7 +21,7 @@ def guesses : Nat := 20000
 /-- `guesses` log-ins, each for a name nobody has, and how many were refused. -/
 def guessed : Kernel Sys × Nat :=
   (List.range guesses).foldl (init := ((Kernel.boot Sys).1, 0)) fun (k, refused) n =>
-    match k.exec [.input (.logIn n (n + 1) 1), .batch 8] with
+    match k.exec [.input (.logIn n (n + 1) 1 0), .batch 8] with
     | { kernel, outputs, .. } => (kernel, refused + outputs.countP (·.reply == .refused))
 
 /-- Every guess is refused, and the kernel holds only the ledger. -/
@@ -35,10 +35,10 @@ def answers (k : Kernel Sys) (requests : List (Request Nat Nat)) : List (Reply N
 /-- A user who signed up is kept; a stranger asked again is refused as before; a released name
 is still free to sign up. -/
 def kept : Bool :=
-  let k := (guessed.1.exec [.input (.signUp guesses 7 1), .input (.logIn (guesses + 1) 7 2),
+  let k := (guessed.1.exec [.input (.signUp guesses 7 1), .input (.logIn (guesses + 1) 7 2 0),
     .batch 40]).kernel
   k.cells.size == 2
-    && answers k [.logIn (guesses + 2) 5 1, .signUp (guesses + 3) 6 1] == [.refused, .signedUp]
+    && answers k [.logIn (guesses + 2) 5 1 0, .signUp (guesses + 3) 6 1] == [.refused, .signedUp]
 
 #guard kept
 

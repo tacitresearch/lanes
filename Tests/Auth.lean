@@ -57,19 +57,45 @@ def cookieTests : List (String × Bool) :=
           "http://127.0.0.1:8080"
         && (post []).sameOrigin "http://127.0.0.1:8080") ]
 
+def keys : Keys := { current := ⟨1, key⟩ }
+
+def otherKeys : Keys := { current := ⟨1, other⟩ }
+
 def tokenTests : List (String × Bool) :=
-  let token := sign key "session" "7.alice"
-  let flipped := String.ofList (token.toList.set 3 (if token.toList[3]? == some '0' then '1' else '0'))
-  [ ("token: a signed payload verifies", verify key "session" token == some "7.alice"),
-    ("token: a changed payload does not", verify key "session" (token ++ "x") == none),
-    ("token: a changed tag does not", verify key "session" flipped == none),
-    ("token: another key's token does not", verify other "session" token == none),
-    ("token: a token for another purpose does not", verify key "form" token == none),
-    ("token: a payload without a tag does not", verify key "session" "7.alice" == none),
+  let token := sign keys "session" 2000 "7.alice"
+  let flip (t : String) (i : Nat) :=
+    String.ofList (t.toList.set i (if t.toList[i]? == some '0' then '1' else '0'))
+  let rotated := keys.rotate ⟨2, other⟩
+  [ ("token: a signed payload verifies before its expiry", verify keys "session" 1999 token == some "7.alice"),
+    ("token: it reads v1, the key's id, the expiry, the tag and the payload",
+      (token.splitOn ".").take 3 == ["v1", "1", "2000"] && (token.splitOn ".")[3]!.length == 64
+        && token.endsWith ".7.alice"),
+    ("token: an expired token does not, at its expiry or after",
+      verify keys "session" 2000 token == none && verify keys "session" 3000 token == none),
+    ("token: a changed expiry does not", verify keys "session" 0 (token.replace ".2000." ".9000.") == none),
+    ("token: a changed payload does not", verify keys "session" 0 (token ++ "x") == none),
+    ("token: a changed tag does not", verify keys "session" 0 (flip token 15) == none),
+    ("token: another key's token does not", verify otherKeys "session" 0 token == none),
+    ("token: a token naming a key id the keys do not have does not",
+      verify keys "session" 0 (token.replace "v1.1." "v1.2.") == none),
+    ("token: another version does not", verify keys "session" 0 (token.replace "v1." "v2.") == none),
+    ("token: a token for another purpose does not", verify keys "form" 0 token == none),
+    ("token: a payload without a tag does not", verify keys "session" 0 "7.alice" == none),
+    ("token: after a rotation, a token of the old key verifies and new ones are of the new key",
+      verify rotated "session" 0 token == some "7.alice"
+        && (sign rotated "session" 2000 "7.alice").startsWith "v1.2.2000."
+        && verify rotated "session" 0 (sign rotated "session" 2000 "7.alice") == some "7.alice"
+        && verify keys "session" 0 (sign rotated "session" 2000 "7.alice") == none),
+    ("token: once the old key is dropped, its tokens do not verify",
+      verify { current := ⟨2, other⟩ } "session" 0 token == none),
     ("token: a form token is checked, and another session's is refused",
-      checkForm key token (formToken key token)
-        && !checkForm key token (formToken key (sign key "session" "8.alice"))
-        && !checkForm key token "") ]
+      checkForm keys token (formToken keys token)
+        && (formToken keys token).startsWith "v1.1."
+        && !checkForm keys token (formToken keys (sign keys "session" 2000 "8.alice"))
+        && !checkForm keys token ""),
+    ("token: a form token of the old key passes after a rotation, and none after the key is dropped",
+      checkForm rotated token (formToken keys token)
+        && !checkForm { current := ⟨2, other⟩ } token (formToken keys token)) ]
 
 def password : Password := { cost := { ops := 1, mem_kib := 64 }, pepper := "pepper".toUTF8 }
 
@@ -116,7 +142,46 @@ def loginTests : List (String × Bool) :=
       reprStr alice == "<digest " ++ String.ofList (alice.hex.toList.take 8) ++ ">"
         && hash alice == hash (password.digest "alice" "correct horse")) ]
 
+def salt16 (b : UInt8) : {s : ByteArray // s.size = 16} :=
+  ⟨⟨(List.replicate 16 b).toArray⟩, by simp [ByteArray.size]⟩
+
+def hashTests : List (String × Bool) :=
+  let stored := Stored.phc (password.hash (salt16 7).1 (salt16 7).2 "correct horse")
+  let raised : Password := { password with cost := { ops := 2, mem_kib := 64 } }
+  let repeppered : Password := { password with pepper := "another pepper".toUTF8 }
+  let legacy := Stored.raw (password.digest "alice" "correct horse")
+  [ ("password: a hash verifies its password, and no other",
+      password.verify "alice" "correct horse" stored == .ok
+        && password.verify "alice" "correct horsf" stored == .wrong),
+    ("password: it is a PHC string of its cost and salt, which reads back",
+      stored.text.startsWith "$argon2id$v=19$m=64,t=1,p=1$BwcHBwcHBwcHBwcHBwcHBw$"
+        && Stored.read? stored.text == some stored),
+    ("password: after the cost is raised, it still verifies, and asks to be hashed again",
+      raised.verify "alice" "correct horse" stored == .rehash
+        && raised.verify "alice" "wrong" stored == .wrong),
+    ("password: the pepper does not change a hash's verdict",
+      repeppered.verify "alice" "correct horse" stored == .ok),
+    ("password: a digest stored before verifies under its cost and pepper, and asks to be hashed again",
+      password.verify "alice" "correct horse" legacy == .rehash
+        && password.verify "alice" "correct horsf" legacy == .wrong
+        && password.verify "bob" "correct horse" legacy == .wrong
+        && repeppered.verify "alice" "correct horse" legacy == .wrong),
+    ("password: a digest reads back as a digest, and a PHC string as a hash",
+      Stored.read? legacy.text == some legacy && legacy.text.length == 64
+        && (match Stored.read? stored.text with | some (.phc _) => true | _ => false)),
+    ("password: a stored value that is neither does not read",
+      Stored.read? "$argon2i$v=19$m=64,t=1,p=1$BwcHBwcHBwcHBwcHBwcHBw$AAAA" == none
+        && Stored.read? "$argon2id$v=19$m=64,t=1,p=1$c2hvcnQ$AAAA" == none
+        && Stored.read? "$argon2id$v=19$m=4,t=1,p=1$BwcHBwcHBwcHBwcHBwcHBw$AAAA" == none
+        && Stored.read? "$argon2id$v=19$m=64,t=0,p=1$BwcHBwcHBwcHBwcHBwcHBw$AAAA" == none
+        && Stored.read? "$argon2id$v=19$t=1,m=64,p=1$BwcHBwcHBwcHBwcHBwcHBw$AAAA" == none
+        && Stored.read? "zz" == none),
+    ("password: a hash prints its cost only",
+      match stored with | .phc p => reprStr p == "<argon2id m=64,t=1,p=1>" | .raw _ => false),
+    ("password: two hashes of one password under two salts differ",
+      stored != Stored.phc (password.hash (salt16 8).1 (salt16 8).2 "correct horse")) ]
+
 def tests : List (String × Bool) :=
-  cookieTests ++ tokenTests ++ loginTests
+  cookieTests ++ tokenTests ++ loginTests ++ hashTests
 
 end Tests.Auth

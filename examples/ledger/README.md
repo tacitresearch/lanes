@@ -185,14 +185,18 @@ the bridge; the records come into them as fragments through the system.
 - Passwords: Argon2id from OpenSSL, two passes over 19 MiB by default (OWASP's figure),
   salted with an HMAC of the name under a pepper of the deployment; a random salt per user is
   not possible here (friction log). The digest is computed by the bridge's `prepare`, on the
-  request's own task, not on the shard's thread, and never again at a replay.
+  request's own task, not on the shard's thread, and never again at a replay. It is compared as
+  it is, so raising the cost or changing the pepper ends every password: an application that
+  checks a password where its stored hash is stores a PHC string instead, which carries its
+  cost and salt (`Auth.Password.hash`, `Auth.Password.verify`).
 - Sessions: a cookie `ledger_session` holding an HMAC-signed token of the session id (the id of
-  the log-in request, never reused) and the name; `HttpOnly`, `SameSite=Lax`, `Secure` behind
-  TLS. The session itself lives in the user's actor: at most four, the oldest closed by a fifth
+  the log-in request, never reused) and the name, under a key named by its id and refused 30
+  days after the log-in; `HttpOnly`, `SameSite=Lax`, `Secure` behind TLS. The time is the one
+  `arrive` wrote into the request (`stamp`). The session itself lives in the user's actor: at most four, the oldest closed by a fifth
   log-in, each ended by log-out or after a day.
 - Log-in attempts: five failures lock the account for five minutes; a locked account refuses
   even the right password.
-- Forms: each carries a token that is an HMAC of the session's token, and must come from this
+- Forms: each carries a token that is an HMAC of the session, and must come from this
   origin (`Origin`, `Sec-Fetch-Site`). Bodies are limited to 4 KB.
 
 ## Friction log
@@ -212,10 +216,11 @@ round of framework work is planned from this.
   not set. Also the origin check for forms, a per-route body limit and `Cache-Control:
   no-store`.
 - **Signed tokens and form tokens**: `Lanes/Web/Auth/Token.lean`, with a purpose so that a session
-  token is no form token; `Auth.verify_sign` proved.
-- **Login state**: `Lanes/Web/Auth/Login.lean`: a password `Digest` whose `DecidableEq` compares in
-  constant time (so `if c = stored` in a step leaks nothing), `Password.digest`, `Attempts`
-  (failures that lock, `bounded_fail`), `Sessions` (bounded, the oldest closed).
+  token is no form token, a key id and an expiry; `Auth.verify_sign` proved.
+- **Login state**: `Lanes/Web/Auth/Login.lean` and `Lanes/Web/Auth/Password.lean`: a password
+  `Digest` whose `DecidableEq` compares in constant time (so `if c = stored` in a step leaks
+  nothing), `Password.digest`, `Attempts` (failures that lock, `bounded_fail`), `Sessions`
+  (bounded, the oldest closed).
 - **Clients that wait**: `Driver.after` (`Lanes/Check/Clients.lean`). Neither `anyOrder` nor
   `script` gives real-time order, which is what makes a stale read a violation; it also keeps
   the state space small. Tested on the key-value store (`Tests/Clients.lean`).

@@ -197,10 +197,12 @@ asks for its posts every five seconds and whenever a post of the page's is answe
 
 - Passwords: Argon2id from OpenSSL in the bridge's `prepare`, salted with an HMAC of the name
   under a pepper of the deployment, as the ledger does (D44).
-- Sessions: a cookie holding a signed token of the session id and the name; `HttpOnly`,
-  `SameSite=Lax`. At most four sessions an account, each ended by log-out or after a day.
+- Sessions: a cookie holding a signed token of the session id and the name, which expires after
+  `session_s`; `HttpOnly`, `SameSite=Lax`. At most four sessions an account, each ended by
+  log-out or after a day.
 - API tokens: a signed token of the account's token generation and its name
-  (`Auth.sign`, purpose `api`); a new token ends every earlier one. The board stores only the
+  (`Auth.sign`, purpose `api`), which expires after `apiToken_s`; a new token ends every earlier
+  one. The board stores only the
   generation, so no token is on disk.
 - Forms carry a token bound to the session and must come from this origin.
 

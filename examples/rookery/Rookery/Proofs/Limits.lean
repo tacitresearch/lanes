@@ -119,14 +119,14 @@ theorem handle_window (b : Board N C) (r : Request N C) :
           windowOf_of_get? (p := { credential := c, bot }) (lookup_append_self hn _)
         rw [h, show b.windowOf n = 0 by simp [windowOf, hn]]
         exact .same
-  | logIn req n c =>
+  | logIn req n c at_s =>
     simp only [handle, Request.name]
     split
     · next p hp => exact same_set hp (logIn_window ..)
     · exact .same
   | logOut req n session =>
     exact withSession_window config (n := n) session fun p hp => same_set hp rfl
-  | newToken req n session =>
+  | newToken req n session at_s =>
     exact withSession_window config (n := n) session fun p hp => same_set hp rfl
   | web req n session op =>
     exact withSession_window config session fun p hp => act_window config hp op
@@ -387,8 +387,8 @@ theorem close_fine {p : Profile N C} (f : Fine config p) (session : Sid) :
     Fine config { p with sessions := p.sessions.close session } :=
   { f with sessions := Nat.le_trans (Auth.Sessions.length_close_le ..) f.sessions }
 
-theorem logIn_fine (n : N) (req : ReqId) {p : Profile N C} (c : C) (f : Fine config p) :
-    Fine config (logIn config n req p c).1 := by
+theorem logIn_fine (n : N) (req : ReqId) {p : Profile N C} (c : C) (at_s : Nat) (f : Fine config p) :
+    Fine config (logIn config n req p c at_s).1 := by
   unfold logIn
   split
   · exact f
@@ -415,14 +415,14 @@ theorem Bounded.handle {b : Board N C} (h : b.Bounded config) (r : Request N C) 
           subst hx
           exact ⟨Nat.zero_le _, Nat.zero_le _, Nat.zero_le _, Nat.zero_le _,
             by simp [Auth.Attempts.Bounded]; omega⟩
-  | logIn req n c =>
+  | logIn req n c at_s =>
     simp only [Board.handle]
     split
-    · next p hp => exact h.set config hp (logIn_fine config n req c)
+    · next p hp => exact h.set config hp (logIn_fine config n req c at_s)
     · exact h
   | logOut req n session =>
     exact h.withSession config fun p hp => h.set config hp fun f => close_fine config f session
-  | newToken req n session =>
+  | newToken req n session at_s =>
     exact h.withSession config fun p hp => h.set config hp fun f => { f with }
   | web req n session op => exact h.withSession config fun p hp => act_bounded config h hp op
   | api req n token seq op =>

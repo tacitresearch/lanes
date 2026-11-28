@@ -129,7 +129,8 @@ def provider (origin : String) : IO (OAuth.Provider × OAuth.Client) := do
 
 A member is the identity's issuer and subject, which do not change; the address can. The
 callback does not enter the system: the bridge answers it with a session cookie signed with the
-site's key, and a redirect home:
+site's current key, which expires `session_s` after the request arrived, and a
+redirect home:
 
 ```lean
 def memberOf (who : OAuth.Identity) : Member := OAuth.b64 (who.issuer ++ " " ++ who.subject).toUTF8
@@ -137,7 +138,8 @@ def memberOf (who : OAuth.Identity) : Member := OAuth.b64 (who.issuer ++ " " ++ 
 
 ```lean
     Routes.callback.handle fun _ r => match OAuth.identity? r with
-      | some who => .error (home.setCookie (cookie s (Auth.sign s.key "session" (memberOf who))))
+      | some who => .error (home.setCookie
+          (cookie s (Auth.sign s.keys "session" (arrived r + s.session_s) (memberOf who))))
       | none => .error notFound,
 ```
 
@@ -148,7 +150,7 @@ drops the cookies, so none is journalled:
 ```lean
 def prepare (s : Settings) (r : Http.Request) : Http.Request :=
   let kept := r.headers.filter fun (name, _) => name != "cookie" && name != memberHeader
-  let member := (r.cookie? s.cookieName).bind (Auth.verify s.key "session")
+  let member := (r.cookie? s.cookieName).bind (Auth.verify s.keys "session" (arrived r))
   { r with headers := kept ++ (member.map (memberHeader, ·)).toList }
 ```
 
@@ -167,14 +169,16 @@ site's origin (`signed` in `Tests/TutorialWeb/Web.lean`).
 - `OAuth.identity?_strip` and `OAuth.identity?_withIdentity`: identity headers a client sends are
   dropped, so the system reads back only what the sign-in wrote.
 - `Auth.verify_eq_some` and `Auth.checkForm_iff`: a cookie is accepted exactly when it is the
-  key's signature of its payload, and a form token exactly when it is the member's.
+  signature of its payload by a key of the site's, before it expires, and a form token exactly
+  when it is the member's.
 
 **What is trusted.** The sign-in's IO, which performs those decisions in order and calls only the
 provider it was given (its row in `TRUSTED.md`); the signature check, OpenSSL's
 (`native/verify.c`); HMAC-SHA-256, so that nobody without the key makes a cookie; the provider
-itself; and the bridge, which is tested in step 4, not proved. Sessions here never end. For
-sessions that do, with a lifetime judged at each request, see `Auth.Sessions` in
-`examples/videos`.
+itself; and the bridge, which is tested in step 4, not proved. A session ends when its cookie's
+token expires, `session_s` after the sign-in (`Auth.verify_expired`), or when the site's keys
+drop the key that signed it. For sessions the system keeps, which a log-out closes and an idle
+lifetime ends, see `Auth.Sessions` in `examples/videos`.
 
 In the test, the provider is the test kit's (`Lanes/Testing/OAuth.lean`): an OpenID Connect
 provider on a local port, which signs ID tokens with an RSA key that the `openssl` command makes.
@@ -250,7 +254,7 @@ place of AWS and the provider:
 ```lean
 def deployment (store : Testing.S3.Fake) (creds : SigV4.Credentials)
     (provider : Testing.OAuth.Fake) (journal : System.FilePath) : Deployment :=
-  { settings := { key := .of "the key of the test".toUTF8, origin, bucket := store.bucket, creds
+  { settings := { keys := .of (.of "the key of the test".toUTF8), origin, bucket := store.bucket, creds
                   providers := ["id"], length := ⟨1, 1024, by decide, by decide⟩ }
     server := { port := 0, journal := some journal, system := "shelf 1" }
     signIn := { providers := [(provider.oidc "id", provider.client origin "id")], secure := false

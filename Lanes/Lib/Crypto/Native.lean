@@ -37,8 +37,9 @@ def Bytes.same (a b : @& ByteArray) : Bool := sameReference a b
 
 theorem Bytes.same_iff (a b : ByteArray) : same a b = true ↔ a = b := sameReference_iff a b
 
-/-- Bytes from the operating system's secure source: Lean's runtime reads `/dev/urandom`, or
-calls `BCryptGenRandom` on Windows. -/
+/-- Bytes from OpenSSL's cryptographically secure generator (`RAND_bytes`), which seeds itself
+from the operating system. It throws if the generator cannot be had. -/
+@[extern "lanes_random_bytes"]
 def randomBytes (size : USize) : IO ByteArray := IO.getRandomBytes size
 
 /-- The cost of an Argon2id hash: `ops` passes over `mem_kib` KiB of memory, at least what
@@ -49,15 +50,19 @@ structure Argon2id where
   ops_pos : 0 < ops := by decide
   mem_min : 8 ≤ mem_kib := by decide
 
+theorem Argon2id.oneLane (cost : Argon2id) :
+    0 < (1 : UInt32).toNat ∧ (1 : UInt32).toNat < 2 ^ 24 ∧ 8 * (1 : UInt32).toNat ≤ cost.mem_kib.toNat :=
+  ⟨by decide, by decide, by have := UInt32.le_iff_toNat_le.mp cost.mem_min; simpa using this⟩
+
 @[extern "lanes_argon2id"]
 private opaque argon2id (password salt secret ad : @& ByteArray) (ops mem_kib lanes : UInt32) :
   ByteArray
 
-/-- The 32-byte Argon2id tag of RFC 9106, version 19, with every input: `lanes` lanes, which need
-`8 * lanes` KiB, a secret key and associated data. -/
+/-- The 32-byte Argon2id tag of RFC 9106, version 19, with every input: a salt of at least 8
+bytes, `lanes` lanes, which need `8 * lanes` KiB, a secret key and associated data. -/
 @[no_expose]
 def Argon2id.derive (cost : Argon2id) (lanes : UInt32) (password salt secret ad : ByteArray)
-    (_ : salt.size = 16)
+    (_ : 8 ≤ salt.size)
     (_ : 0 < lanes.toNat ∧ lanes.toNat < 2 ^ 24 ∧ 8 * lanes.toNat ≤ cost.mem_kib.toNat) :
     ByteArray :=
   argon2id password salt secret ad cost.ops cost.mem_kib lanes
@@ -66,7 +71,6 @@ def Argon2id.derive (cost : Argon2id) (lanes : UInt32) (password salt secret ad 
 as libsodium's `crypto_pwhash` computes it. It is slow by design: run it where a request
 arrives, not in a shard. The process ends if the memory cannot be had. -/
 def Argon2id.hash (cost : Argon2id) (password salt : ByteArray) (h : salt.size = 16) : ByteArray :=
-  cost.derive 1 password salt .empty .empty h
-    ⟨by decide, by decide, by have := UInt32.le_iff_toNat_le.mp cost.mem_min; simpa using this⟩
+  cost.derive 1 password salt .empty .empty (by omega) cost.oneLane
 
 end Lanes

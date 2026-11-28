@@ -66,10 +66,11 @@ lanes_data inductive Op (N : Type) where
 API token it has verified, or from the form of a sign-up or a log-in. -/
 lanes_data inductive Request (N C : Type) where
   | signUp (req : ReqId) (name : N) (credential : C) (bot : Bool)
-  | logIn (req : ReqId) (name : N) (credential : C)
+  /-- `at_s` is when the request arrived, in seconds: the session's cookie is signed then. -/
+  | logIn (req : ReqId) (name : N) (credential : C) (at_s : Nat)
   | logOut (req : ReqId) (name : N) (session : Sid)
-  /-- A new API token for the account; every earlier one stops working. -/
-  | newToken (req : ReqId) (name : N) (session : Sid)
+  /-- A new API token for the account, signed at `at_s`; every earlier one stops working. -/
+  | newToken (req : ReqId) (name : N) (session : Sid) (at_s : Nat)
   | web (req : ReqId) (name : N) (session : Sid) (op : Op N)
   /-- `token` is the generation of the token the request carried; `seq` its sequence number. -/
   | api (req : ReqId) (name : N) (token : Nat) (seq : Nat) (op : Op N)
@@ -82,13 +83,15 @@ lanes_data inductive Reply (N : Type) where
   | signedUp
   | nameTaken
   | full
-  | loggedIn (name : N) (session : Sid)
+  /-- A session opened at `at_s`, when its cookie is signed. -/
+  | loggedIn (name : N) (session : Sid) (at_s : Nat)
   /-- Wrong name or wrong credential: which one is not said. -/
   | refused
   | locked
   | loggedOut
   | noSession
-  | token (name : N) (generation : Nat)
+  /-- A new API token, signed at `at_s`. -/
+  | token (name : N) (generation : Nat) (at_s : Nat)
   | badToken
   | stale
   /-- The sequence number was used for another change. -/
@@ -226,12 +229,12 @@ def signUp (config : Config) (b : Board N C) (n : N) (c : C) (bot : Bool) :
     if config.maxAccounts ≤ b.accounts.length then (b, .full, {})
     else ({ b with accounts := b.accounts ++ [(n, { credential := c, bot })] }, .signedUp, {})
 
-def logIn (config : Config) (n : N) (req : ReqId) (p : Profile N C) (c : C) :
+def logIn (config : Config) (n : N) (req : ReqId) (p : Profile N C) (c : C) (at_s : Nat) :
     Profile N C × Reply N × Timers :=
   if p.attempts.locked then (p, .locked, {})
   else if c = p.credential then
     let (sessions, closed) := p.sessions.start config.maxSessions req
-    ({ p with attempts := p.attempts.succeed, sessions }, .loggedIn n req,
+    ({ p with attempts := p.attempts.succeed, sessions }, .loggedIn n req at_s,
       { opened := some req, closed })
   else
     let attempts := p.attempts.fail config.maxFailures
@@ -298,14 +301,14 @@ def api (config : Config) (b : Board N C) (n : N) (p : Profile N C) (token seq :
 
 def handle (config : Config) (b : Board N C) : Request N C → Board N C × Reply N × Timers
   | .signUp _ n c bot => b.signUp config n c bot
-  | .logIn req n c =>
+  | .logIn req n c at_s =>
     match b.get? n with
-    | some p => let (p, reply, timers) := logIn config n req p c; (b.set n p, reply, timers)
+    | some p => let (p, reply, timers) := logIn config n req p c at_s; (b.set n p, reply, timers)
     | none => (b, .refused, {})
   | .logOut _ n session => b.withSession n session fun p =>
     (b.set n { p with sessions := p.sessions.close session }, .loggedOut, { closed := [session] })
-  | .newToken _ n session => b.withSession n session fun p =>
-    (b.set n { p with token := p.token + 1 }, .token n (p.token + 1), {})
+  | .newToken _ n session at_s => b.withSession n session fun p =>
+    (b.set n { p with token := p.token + 1 }, .token n (p.token + 1) at_s, {})
   | .web _ n session op => b.withSession n session fun p => b.act config n p op
   | .api _ n token seq op =>
     match b.get? n with
@@ -357,7 +360,7 @@ end Board
 
 /-- The account whose secrets a reply carries: a session or the generation of a token. -/
 def Reply.secretOf {N : Type} : Reply N → Option N
-  | .loggedIn n _ | .token n _ => some n
+  | .loggedIn n .. | .token n .. => some n
   | _ => none
 
 end Rookery

@@ -184,8 +184,8 @@ theorem Quiet.handle {b : Board N C} (h : b.Quiet) (r : Request N C) :
     · split
       · exact h
       · exact h
-  | logIn req n c => simp only [Board.handle]; split; exact h; exact h
-  | logOut req n session | newToken req n session => exact h.withSession fun _ => rfl
+  | logIn req n c at_s => simp only [Board.handle]; split; exact h; exact h
+  | logOut req n session | newToken req n session at_s => exact h.withSession fun _ => rfl
   | web req n session op => exact h.withSession fun p => act_memo config b n p op
   | api req n token seq op =>
     simp only [Board.handle]
@@ -233,13 +233,13 @@ theorem handle_feed {b : Board N C} (hq : b.Quiet) {r : Request N C} {list : Lis
   cases r with
   | signUp req n c bot =>
     simp only [handle, signUp] at h; split at h; cases h; split at h <;> cases h
-  | logIn req n c =>
+  | logIn req n c at_s =>
     simp only [handle, logIn] at h; split at h
     · split at h; cases h; split at h <;> cases h
     · cases h
   | logOut req n session =>
     simp only [handle, withSession] at h; split at h; split at h <;> cases h; cases h
-  | newToken req n session =>
+  | newToken req n session at_s =>
     simp only [handle, withSession] at h; split at h; split at h <;> cases h; cases h
   | web req n session op =>
     simp only [handle, withSession] at h
@@ -316,7 +316,7 @@ theorem handle_secret {b : Board N C} (hq : b.Quiet) {r : Request N C} {m : N}
   cases r with
   | signUp req n c bot =>
     simp only [Board.handle, signUp] at h; split at h; cases h; split at h <;> cases h
-  | logIn req n c =>
+  | logIn req n c at_s =>
     simp only [Board.handle, logIn] at h; split at h
     · split at h
       · cases h
@@ -327,7 +327,7 @@ theorem handle_secret {b : Board N C} (hq : b.Quiet) {r : Request N C} {m : N}
     · cases h
   | logOut req n session =>
     simp only [Board.handle, withSession] at h; split at h; split at h <;> cases h; cases h
-  | newToken req n session =>
+  | newToken req n session at_s =>
     simp only [Board.handle, withSession] at h; split at h
     · split at h
       · simp only [Reply.secretOf, Option.some.injEq] at h
