@@ -139,14 +139,14 @@ Lost or changed:
 
 From a scan of every `.lean` and template file outside `.lake/`:
 
-- 116 `lanes_data` declarations: 35 in `Lanes/`, 38 in `Tests/`, 41 in `examples/`, 2 in
-  `templates/`. 90 of them derive only Lean's classes (`DecidableEq`, `Repr`, `Hashable`): for
+- 84 `lanes_data` declarations: 17 in `Lanes/`, 38 in `Tests/`, 27 in `examples/`, 2 in
+  `templates/`. 58 of them derive only Lean's classes (`DecidableEq`, `Repr`, `Hashable`): for
   those the command passes the declaration through unchanged, and the word can be dropped today.
   The other 26 derive ours: 12 `Enum` or `LawfulBEq` only, 11 JSON (10 in `Tests/`, 1 in
   `examples/`), 3 tables.
 - Prose: `AGENTS.md` (3 mentions), `docs/ARCHITECTURE.md` (7), `docs/TUTORIAL.md` (1),
   `docs/TUTORIAL-WEB.md` (3), `examples/README.md` (1). Decisions record the past and stay.
-- The module system: the template's 4 Lean files, the examples' 66 files, 136 of the 137 files
+- The module system: the template's 4 Lean files, the examples' 65 files, 135 of the 136 files
   of `Tests/` and the 4 of `LanesCli/` are not modules. Each gets `module`, `public import` and
   `@[expose] public section` (proofs need the bodies), and `main` becomes `public`. This is most
   of the cost, and a concept every newcomer then meets.
@@ -165,7 +165,7 @@ Two things are worth doing whatever is chosen:
 
 - Correct the record: D15's 137 MB and D38's "even through `meta import`" hold for an executable
   whose root is not a module, and not otherwise. This decision is that correction.
-- Drop `lanes_data` from the 90 declarations that derive only Lean's classes, and say in
+- Drop `lanes_data` from the 58 declarations that derive only Lean's classes, and say in
   `AGENTS.md` that the word is for deriving Lanes' classes. The word then appears only where it
   does something.
 
