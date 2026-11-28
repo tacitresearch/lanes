@@ -3,6 +3,8 @@ Copyright (c) 2026 The Lanes Authors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lanes.Semantics
+import Lanes.Lib.Encoding.Cbor
+import Lanes.Lib.Encoding.Cbor.Sound
 
 /-! The axiom gate (rule 5.5, see `Tests/Axioms.lean`) for the theorems of `Lanes/Lib/`. -/
 
@@ -42,6 +44,42 @@ import Lanes.Semantics
 
 /-- info: 'Lanes.Base64.decode_eq_none_of_length' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in #print axioms Lanes.Base64.decode_eq_none_of_length
+
+-- Lanes.Lib.Encoding.Cbor.Classes
+/-- info: 'Lanes.Cbor.nat?_ofNat' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Cbor.nat?_ofNat
+
+/-- info: 'Lanes.Cbor.int?_ofInt' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Cbor.int?_ofInt
+
+-- Lanes.Lib.Encoding.Cbor.Derive
+/-- info: 'Lanes.Cbor.Fields.readObject_object' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Cbor.Fields.readObject_object
+
+/-- info: 'Lanes.Cbor.Codec.ofAlts' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Cbor.Codec.ofAlts
+
+-- Lanes.Lib.Encoding.Cbor.Sound
+/-- info: 'Lanes.Cbor.decode_encode' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Cbor.decode_encode
+
+/-- info: 'Lanes.Cbor.decode_encodeDeterministic' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Cbor.decode_encodeDeterministic
+
+/-- info: 'Lanes.Cbor.encodeDeterministic_eq_of_equiv' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Cbor.encodeDeterministic_eq_of_equiv
+
+/-- info: 'Lanes.Cbor.eq_of_decode_strict' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Cbor.eq_of_decode_strict
+
+/-- info: 'Lanes.Cbor.fits_of_decode' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Cbor.fits_of_decode
+
+/-- info: 'Lanes.Cbor.decode_tooLarge' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Cbor.decode_tooLarge
+
+/-- info: 'Lanes.Cbor.size_of_decode' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in #print axioms Lanes.Cbor.size_of_decode
 
 -- Lanes.Lib.Encoding.Digits
 /-- info: 'Lanes.Digits.ofChars?_toChars' depends on axioms: [propext, Classical.choice, Quot.sound] -/

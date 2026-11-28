@@ -128,7 +128,8 @@ public import Lanes.Web.IO.Tls
 
 /-!
 The Lanes API: everything an application's executable code needs, and the tools its proofs use.
-It imports only `Std`, so binaries stay small. It leaves out the services (`Lanes.Services`):
-an application imports the ones it calls, such as `Lanes.Services.Postgres`. The framework's own
+It imports only `Std`, so binaries stay small. It leaves out the services (`Lanes.Services`) and
+CBOR (`Lanes.Lib.Encoding.Cbor`): an application imports the ones it uses, such as
+`Lanes.Services.Postgres`. The framework's own
 soundness theorems are `Lanes.Proofs`, and the proof layer is `Lanes.Semantics`.
 -/

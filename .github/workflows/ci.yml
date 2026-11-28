@@ -131,7 +131,7 @@ jobs:
           clean: false
       - uses: ./.github/actions/lean
       # The pure oracles (oracles/README.md): our parsers and encoders against Go's standard
-      # library, expfmt, botocore and jwcrypto on generated inputs. Go fetches the toolchain
+      # library, expfmt, botocore, jwcrypto and cbor2 on generated inputs. Go fetches the toolchain
       # `oracles/go/go.mod` pins; the Python references get virtual environments made from their
       # requirements.txt. It fails only on a difference no decision covers. The service
       # oracles run in services.yml.
